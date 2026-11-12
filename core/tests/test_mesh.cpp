@@ -15,6 +15,8 @@
  */
 
 #include "roadmaker/edit/operations.hpp"
+#include "roadmaker/road/defaults.hpp"
+#include "roadmaker/road/object.hpp"
 #include "roadmaker/mesh/mesh_builder.hpp"
 #include "roadmaker/road/authoring.hpp"
 #include "roadmaker/xodr/reader.hpp"
@@ -26,6 +28,7 @@
 #include <cmath>
 #include <filesystem>
 #include <numbers>
+#include <optional>
 #include <stdexcept>
 
 using roadmaker::NetworkMesh;
@@ -111,6 +114,182 @@ TEST(Mesh, PrawkoRaisedSidewalksHaveRealCurbVolumeAndOptionalLegacyMode) {
   EXPECT_EQ(sidewalk_patches, 2U);
   EXPECT_EQ(curb_patches, 4U); // 2 walls and 2 chamfers
   EXPECT_GT(road.positions.size(), flat.roads[0].positions.size());
+}
+
+TEST(Mesh, AuthoredCrosswalkDropsCurbAtBothSidesAndRemeshesOnObjectEdits) {
+  roadmaker::RoadNetwork network;
+  const std::array<roadmaker::Waypoint, 2> points{{{0.0, 0.0}, {80.0, 0.0}}};
+  const auto road_id = roadmaker::author_clothoid_road(
+      network, points, roadmaker::LaneProfile::local_road(), "crossing", "r1");
+  ASSERT_TRUE(road_id.has_value());
+
+  roadmaker::MeshOptions options;
+  options.raised_sidewalks = true;
+  options.markings = false;
+  NetworkMesh live = roadmaker::build_network_mesh(network, options);
+  ASSERT_EQ(live.roads.size(), 1U);
+
+  roadmaker::Object crossing;
+  crossing.odr_id = "cw1";
+  crossing.type = roadmaker::ObjectType::Crosswalk;
+  crossing.type_str = "crosswalk";
+  crossing.hdg = std::numbers::pi / 2.0;
+  crossing.s = 40.0;
+  crossing.t = 0.0;
+  crossing.length = 2.0 * roadmaker::defaults::kLocalLaneWidth;
+  crossing.width = 4.0; // s0=38, s1=42, 3 m ramps each side
+  auto add = roadmaker::edit::add_object(network, *road_id, crossing);
+  ASSERT_NE(add, nullptr);
+  ASSERT_TRUE(add->apply(network).has_value());
+
+  // An object edit has to update the curb as well as the paint. The prior
+  // marking-only fast path would leave the old sidewalk at 15 cm forever.
+  const std::array<roadmaker::RoadId, 1> changed{*road_id};
+  roadmaker::remesh_objects(network, live, changed, options);
+  const NetworkMesh fresh = roadmaker::build_network_mesh(network, options);
+  ASSERT_EQ(fresh.roads.size(), 1U);
+  ASSERT_EQ(live.roads.size(), 1U);
+  EXPECT_EQ(live.roads[0].positions, fresh.roads[0].positions);
+  EXPECT_EQ(live.roads[0].lanes.size(), fresh.roads[0].lanes.size());
+  const RoadMesh& road = live.roads[0];
+
+  const auto top_at = [&](double station, int side) -> std::optional<double> {
+    for (const auto& patch : road.lanes) {
+      if (patch.material != roadmaker::LaneType::Sidewalk ||
+          (patch.odr_lane_id > 0 ? +1 : -1) != side) {
+        continue;
+      }
+      for (const std::uint32_t v : patch.indices) {
+        if (std::abs(road.uvs[2 * v] - station) < 1e-6) {
+          return road.positions[(3 * v) + 2];
+        }
+      }
+    }
+    return std::nullopt;
+  };
+
+  for (const int side : {-1, +1}) {
+    for (const auto [station, height] :
+         {std::pair{35.0, 0.15}, std::pair{36.5, 0.075},
+          std::pair{38.0, 0.0}, std::pair{40.0, 0.0},
+          std::pair{42.0, 0.0}, std::pair{43.5, 0.075},
+          std::pair{45.0, 0.15}}) {
+      const auto z = top_at(station, side);
+      ASSERT_TRUE(z.has_value()) << "missing s=" << station << ", side=" << side;
+      EXPECT_NEAR(*z, height, 1e-6) << "station " << station << " side " << side;
+    }
+  }
+
+  // At each transition the normal must tilt toward the actual slope,
+  // not remain the horizontal normal of the underlying reference road.
+  for (const int side : {-1, +1}) {
+    const auto normal_x_at = [&](double station) -> std::optional<double> {
+      for (const auto& patch : road.lanes) {
+        if (patch.material != roadmaker::LaneType::Sidewalk ||
+            (patch.odr_lane_id > 0 ? +1 : -1) != side) {
+          continue;
+        }
+        for (const std::uint32_t v : patch.indices) {
+          if (std::abs(road.uvs[2 * v] - station) < 1e-6) {
+            return road.normals[3 * v];
+          }
+        }
+      }
+      return std::nullopt;
+    };
+    const auto down = normal_x_at(36.5);
+    const auto up = normal_x_at(43.5);
+    ASSERT_TRUE(down.has_value());
+    ASSERT_TRUE(up.has_value());
+    EXPECT_GT(*down, 0.05); // falling sidewalk: normal points ahead
+    EXPECT_LT(*up, -0.05);  // rising sidewalk: normal points back
+  }
+
+  // The zero-height part must not emit zero-area curb triangles.
+  for (const auto& patch : road.lanes) {
+    if (patch.material != roadmaker::LaneType::Curb) {
+      continue;
+    }
+    for (std::size_t t = 0; t + 2 < patch.indices.size(); t += 3) {
+      const auto at = [&](std::size_t k, int axis) {
+        return road.positions[(3 * patch.indices[t + k]) + axis];
+      };
+      const double ax = at(1, 0) - at(0, 0);
+      const double ay = at(1, 1) - at(0, 1);
+      const double az = at(1, 2) - at(0, 2);
+      const double bx = at(2, 0) - at(0, 0);
+      const double by = at(2, 1) - at(0, 1);
+      const double bz = at(2, 2) - at(0, 2);
+      const double cx = (ay * bz) - (az * by);
+      const double cy = (az * bx) - (ax * bz);
+      const double cz = (ax * by) - (ay * bx);
+      EXPECT_GT((cx * cx) + (cy * cy) + (cz * cz), 1e-18);
+    }
+  }
+
+  // The plain-OpenDRIVE-compatible display is still completely flat.
+  const NetworkMesh legacy = roadmaker::build_network_mesh(network);
+  for (std::size_t v = 2; v < legacy.roads[0].positions.size(); v += 3) {
+    EXPECT_NEAR(legacy.roads[0].positions[v], 0.0, 1e-10);
+  }
+
+  // Deleting the crosswalk must restore the curb during object-only remesh.
+  roadmaker::ObjectId crossing_id;
+  network.for_each_object([&](roadmaker::ObjectId id, const roadmaker::Object& obj) {
+    if (obj.odr_id == "cw1") {
+      crossing_id = id;
+    }
+  });
+  ASSERT_TRUE(network.erase_object(crossing_id));
+  roadmaker::remesh_objects(network, live, changed, options);
+  const NetworkMesh restored = roadmaker::build_network_mesh(network, options);
+  EXPECT_EQ(live.roads[0].positions, restored.roads[0].positions);
+  for (const auto& patch : live.roads[0].lanes) {
+    if (patch.material == roadmaker::LaneType::Sidewalk) {
+      for (const auto v : patch.indices) {
+        EXPECT_NEAR(live.roads[0].positions[3 * v + 2], 0.15, 1e-6);
+      }
+    }
+  }
+}
+
+TEST(Mesh, CrosswalkDoesNotLowerUnreachedCurb) {
+  roadmaker::RoadNetwork network;
+  const std::array<roadmaker::Waypoint, 2> points{{{0.0, 0.0}, {80.0, 0.0}}};
+  const auto road_id = roadmaker::author_clothoid_road(
+      network, points, roadmaker::LaneProfile::local_road(), "short paint", "r2");
+  ASSERT_TRUE(road_id.has_value());
+  roadmaker::Object crossing;
+  crossing.odr_id = "cw2";
+  crossing.type = roadmaker::ObjectType::Crosswalk;
+  crossing.hdg = std::numbers::pi / 2.0;
+  crossing.s = 40.0;
+  crossing.width = 4.0;
+  crossing.length = 1.0; // doesn't reach either driving-lane boundary
+  auto add = roadmaker::edit::add_object(network, *road_id, crossing);
+  ASSERT_NE(add, nullptr);
+  ASSERT_TRUE(add->apply(network).has_value());
+  // Even a full-width marking must not cut a curb when it is oriented
+  // along the road rather than across it.
+  roadmaker::Object longitudinal = crossing;
+  longitudinal.odr_id = "cw-longitudinal";
+  longitudinal.s = 55.0;
+  longitudinal.hdg = 0.0;
+  longitudinal.length = 2.0 * roadmaker::defaults::kLocalLaneWidth;
+  auto add_longitudinal = roadmaker::edit::add_object(network, *road_id, longitudinal);
+  ASSERT_NE(add_longitudinal, nullptr);
+  ASSERT_TRUE(add_longitudinal->apply(network).has_value());
+  roadmaker::MeshOptions options;
+  options.raised_sidewalks = true;
+  const NetworkMesh mesh = roadmaker::build_network_mesh(network, options);
+  ASSERT_EQ(mesh.roads.size(), 1U);
+  for (const auto& patch : mesh.roads[0].lanes) {
+    if (patch.material == roadmaker::LaneType::Sidewalk) {
+      for (const auto v : patch.indices) {
+        EXPECT_NEAR(mesh.roads[0].positions[3 * v + 2], 0.15, 1e-6);
+      }
+    }
+  }
 }
 
 TEST(Mesh, StraightRoadMeshesWithCorrectExtentsAndAreas) {

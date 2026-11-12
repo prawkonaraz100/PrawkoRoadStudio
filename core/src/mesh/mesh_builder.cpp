@@ -34,6 +34,7 @@
 #include <cstddef>
 #include <numbers>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -810,12 +811,113 @@ void build_signal_instances(const RoadNetwork& network,
   }
 }
 
+// The raised-pavement presentation can use an existing crosswalk as the
+// location of a flush kerb. All dimensions are derived from the authored road
+// object; the OpenDRIVE geometry itself is not modified.
+constexpr double kCurbRampRun = 3.0; // smooth 15 cm rise, max slope 7.5 %
+constexpr double kCurbEdgeReach = 0.35; // crosswalk extent must actually reach the kerb
+struct CrosswalkCurbZone {
+  double s0, s1;
+  double t0, t1;
+};
+
+std::vector<CrosswalkCurbZone> curb_zones(const RoadNetwork& network,
+                                          RoadId road_id,
+                                          const MeshOptions& options) {
+  std::vector<CrosswalkCurbZone> result;
+  if (!options.raised_sidewalks) {
+    return result;
+  }
+  for (const ObjectId id : objects_of(network, road_id)) {
+    const Object& object = *network.object(id);
+    // Free-form marking curves are painted stripes, not ordinary rectangular
+    // pedestrian crossings. A lateral span is essential to identify the curb.
+    if (object.type != ObjectType::Crosswalk || object.marking_curve.has_value() ||
+        !object.length.has_value() || !object.width.has_value() ||
+        *object.length <= tol::kLength || *object.width <= tol::kLength ||
+        std::abs(std::sin(object.hdg)) < 0.95) {
+      // A crossing drawn along the road cannot be treated as a lateral
+      // pedestrian crossing; do not cut a curb just from its box dimensions.
+      continue;
+    }
+    result.push_back(CrosswalkCurbZone{
+        .s0 = object.s - (*object.width / 2.0),
+        .s1 = object.s + (*object.width / 2.0),
+        .t0 = object.t - (*object.length / 2.0),
+        .t1 = object.t + (*object.length / 2.0)});
+  }
+  return result;
+}
+
+// A raised kerb is kept at full height before the taper, lowered to road
+// level throughout the painted crossing, and restored afterwards. The smooth
+// cubic has zero slope at both ends of each transition.
+struct CurbFade {
+  double scale = 1.0;
+  double derivative = 0.0; // change of scale per metre along the road
+};
+
+CurbFade crosswalk_curb_fade(double s, double curb_t,
+                             std::span<const CrosswalkCurbZone> zones,
+                             bool raised_start, bool raised_end, double road_length) {
+  CurbFade chosen;
+  const auto smooth = [](double t) {
+    const double x = std::clamp(t, 0.0, 1.0);
+    return x * x * (3.0 - (2.0 * x));
+  };
+  const auto gradient = [](double t) {
+    const double x = std::clamp(t, 0.0, 1.0);
+    return (6.0 * x * (1.0 - x)) / kCurbRampRun;
+  };
+  for (const CrosswalkCurbZone& crossing : zones) {
+    if (std::min(std::abs(curb_t - crossing.t0), std::abs(curb_t - crossing.t1)) >
+        kCurbEdgeReach) {
+      continue; // the crossing does not meet this side of the road
+    }
+    // S2.1's junction band expects full height at its arm seam. A crossing
+    // too close to that seam needs a junction-corner ramp, not a road-only
+    // ramp that would leave a visible vertical tear. That is a separate step.
+    if ((raised_start && crossing.s0 < kCurbRampRun - tol::kLength) ||
+        (raised_end && crossing.s1 > road_length - kCurbRampRun + tol::kLength)) {
+      continue;
+    }
+    if (s < crossing.s0 - kCurbRampRun || s > crossing.s1 + kCurbRampRun) {
+      continue;
+    }
+    CurbFade candidate;
+    if (s < crossing.s0) {
+      const double t = (crossing.s0 - s) / kCurbRampRun;
+      candidate = {smooth(t), -gradient(t)};
+    } else if (s <= crossing.s1) {
+      candidate = {0.0, 0.0};
+    } else {
+      const double t = (s - crossing.s1) / kCurbRampRun;
+      candidate = {smooth(t), gradient(t)};
+    }
+    if (candidate.scale < chosen.scale) {
+      chosen = candidate;
+    }
+  }
+  return chosen;
+}
+
 /// Sampling stations for one road (mandatory profile knots + adaptive fill).
-std::vector<double>
-road_stations(const RoadNetwork& network, const Road& road, const MeshOptions& options) {
+std::vector<double> road_stations(const RoadNetwork& network, const Road& road,
+                                  const MeshOptions& options,
+                                  std::span<const CrosswalkCurbZone> zones = {}) {
   SamplingOptions sampling = options.sampling;
   const std::vector<double> extra = mandatory_stations(network, road);
   sampling.extra_stations.insert(sampling.extra_stations.end(), extra.begin(), extra.end());
+  for (const CrosswalkCurbZone& zone : zones) {
+    // Explicit knots keep the ramp deterministic even for coarse sampling.
+    for (const double s : {zone.s0 - kCurbRampRun, zone.s0 - kCurbRampRun / 2.0,
+                           zone.s0, (zone.s0 + zone.s1) / 2.0, zone.s1,
+                           zone.s1 + kCurbRampRun / 2.0, zone.s1 + kCurbRampRun}) {
+      if (s >= 0.0 && s <= road.plan_view.length()) {
+        sampling.extra_stations.push_back(s);
+      }
+    }
+  }
   return sample_stations(road.plan_view, sampling);
 }
 
@@ -831,7 +933,8 @@ RoadMesh build_one_road(const RoadNetwork& network,
     return mesh; // parser already diagnosed these
   }
 
-  const std::vector<double> stations = road_stations(network, road, options);
+  const std::vector<CrosswalkCurbZone> crosswalks = curb_zones(network, road_id, options);
+  const std::vector<double> stations = road_stations(network, road, options, crosswalks);
 
   mesh.name = road.name.empty() ? fmt::format("road {}", road.odr_id) : road.name;
 
@@ -966,6 +1069,14 @@ RoadMesh build_one_road(const RoadNetwork& network,
             fade = std::min(
                 fade, std::clamp((road.plan_view.length() - s) / kJoinRampM, 0.0, 1.0));
           }
+          // Lower the entire sidewalk lane to the crossing datum and ease the
+          // 15 cm curb over three metres. Skip crossings that do not reach
+          // this side's curb or cannot safely rejoin a raised junction band.
+          const CurbFade crosswalk = crosswalk_curb_fade(
+              s, inner_t, crosswalks, raised_predecessor, raised_successor,
+              road.plan_view.length());
+          const double road_fade = fade;
+          fade = std::min(fade, crosswalk.scale);
           const double height = defaults::kCurbHeight * fade;
           // The junction's first 3-D curb pass has a vertical face. At the
           // shared arm face, taper the road's 5 cm chamfer down to zero over
@@ -985,7 +1096,22 @@ RoadMesh build_one_road(const RoadNetwork& network,
           const double top_inner_t = inner_t + side * bevel_width;
           const double top_left_t = side > 0.0 ? t_left : top_inner_t;
           const double top_right_t = side > 0.0 ? top_inner_t : t_right;
-          const auto top_normal = surface_normal(frame);
+          // The curb drop tilts the walking surface along s. Its normal must
+          // reflect that longitudinal grade for correct light response; the
+          // ordinary road-frame normal alone would falsely shade it as flat.
+          const auto base_normal = surface_normal(frame);
+          const double extra_grade =
+              crosswalk.scale <= road_fade + tol::kLength
+                  ? defaults::kCurbHeight * crosswalk.derivative
+                  : 0.0;
+          const std::array<double, 3> tilted{
+              base_normal[0] - (extra_grade * frame.cos_h),
+              base_normal[1] - (extra_grade * frame.sin_h),
+              base_normal[2]};
+          const double normal_length = std::hypot(tilted[0], tilted[1], tilted[2]);
+          const std::array<double, 3> top_normal{
+              tilted[0] / normal_length, tilted[1] / normal_length,
+              tilted[2] / normal_length};
           const std::array<double, 3> inward{
               side * frame.sin_h, -side * frame.cos_h, 0.0};
           const double slope = height - wall_height;
@@ -1084,10 +1210,29 @@ RoadMesh build_one_road(const RoadNetwork& network,
           RoadMesh::LanePatch face = new_patch("concrete");
           face.material = LaneType::Curb;
           (void)part; // the material class names the two strips consistently
+          const auto add_non_degenerate = [&](std::uint32_t a, std::uint32_t b,
+                                              std::uint32_t c) {
+            const auto p = [&](std::uint32_t i, int axis) {
+              return mesh.positions[(3 * i) + static_cast<std::uint32_t>(axis)];
+            };
+            const double x1 = p(b, 0) - p(a, 0);
+            const double y1 = p(b, 1) - p(a, 1);
+            const double z1 = p(b, 2) - p(a, 2);
+            const double x2 = p(c, 0) - p(a, 0);
+            const double y2 = p(c, 1) - p(a, 1);
+            const double z2 = p(c, 2) - p(a, 2);
+            const double nx = (y1 * z2) - (z1 * y2);
+            const double ny = (z1 * x2) - (x1 * z2);
+            const double nz = (x1 * y2) - (y1 * x2);
+            if ((nx * nx) + (ny * ny) + (nz * nz) > 1e-18) {
+              face.indices.insert(face.indices.end(), {a, b, c});
+            }
+          };
           for (std::uint32_t row = 0; row + 1 < rows.size(); ++row) {
             const auto [a, b] = edge[row];
             const auto [d, c] = edge[row + 1];
-            face.indices.insert(face.indices.end(), {a, b, c, a, c, d});
+            add_non_degenerate(a, b, c);
+            add_non_degenerate(a, c, d);
           }
           if (!face.indices.empty()) {
             mesh.lanes.push_back(std::move(face));
@@ -1280,10 +1425,19 @@ void remesh_objects(const RoadNetwork& network,
       }
       continue;
     }
-    // Object-layer re-mesh: regenerate ONLY the marking submeshes (lane marks
-    // re-anchor with the object markings), leaving the road surface grid and
-    // lane patches untouched — the editor re-uploads only the markings
-    // (docs/design/m3a/01 §2.4, first consumer of DirtySet::objects).
+    // A crosswalk is also the source of the S2.2 sidewalk curb-drop shape.
+    // Object edits can add, move, or REMOVE a crossing. Rebuild the whole
+    // shaped road even when none remain, or an old curb depression would stay
+    // stuck in the viewport until an unrelated edit triggers a full remesh.
+    if (options.raised_sidewalks) {
+      if (road != nullptr) {
+        *existing = build_one_road(network, road_id, *road, options);
+      } else {
+        mesh.roads.erase(existing);
+      }
+      continue;
+    }
+    // Legacy object-layer fast path: regenerate ONLY marking submeshes.
     existing->markings.clear();
     if (road != nullptr && options.markings && !road->plan_view.empty() &&
         !road->sections.empty()) {
