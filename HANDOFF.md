@@ -36,6 +36,16 @@ Punkt kontrolny sprzed tego dokumentu:
 
 ## Co robimy dalej — najbliższe zadanie
 
+**Uzgodniony standard wizualny (12.11.2026):** szczegółowe wymagania
+bryły, materiałów PBR, skali tekstur, detali proceduralnych, oświetlenia
+i wizualnej regresji zapisano w `docs/PRAWKO-ROAD-STUDIO.md`, sekcja
+`Standard jakości wizualnej`. To wymaganie obowiązuje wszystkich kolejnych
+agentów. Samo poprawne działanie geometrii **nie wystarcza** do zatwierdzenia
+wyglądu; wymagane są oględziny uruchomionego programu z perspektywy
+kierowcy i na zbliżeniach. Żaden etap PBR/oświetlenia nie jest jeszcze
+potwierdzony jako ukończony. Najpierw należy wykonać S2 (ciągła bryła
+narożników i krawężników), później materiały, detale i światło.
+
 **Etap S2 — po audycie kodu w bieżącej sesji (12.11.2026).**
 Pracę nad S2 rozpoczęto od odczytu aktualnych źródeł. Nie wykonano jeszcze
 zmian w geometrii ani nowego wizualnego testu GUI, więc S2 nie jest ukończony.

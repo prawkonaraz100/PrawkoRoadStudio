@@ -47,6 +47,61 @@ każda funkcja projektowania musi również działać w interfejsie myszką.
 - Zasoby Qt i CMake/Python mogą być używane z instalacji
   `F:\PrawkoRoadStudio\reference\RoadMaker` bez kosztownego kopiowania.
 
+## Standard jakości wizualnej (decyzja projektowa, 12.11.2026)
+
+**Cel:** sceny dróg w Polsce mają wyglądać wiarygodnie z kamery kierowcy,
+a nie jak płaski, sterylny prototyp lub przypadkowy zestaw gotowych modeli.
+Stonowany, spójny wygląd; bez przesadnych efektów, sztucznego połysku,
+losowych ozdobników i powtarzalnego „growego kiczu”. Kierunek docelowy:
+wiarygodny realizm symulatorowy, nie deklarowany z góry fotorealizm.
+
+Nie wystarczy poprawna siatka 3D ani sama wymiana tekstur. Wymagane są
+**jednocześnie bryła, materiały, światło, detale i weryfikacja w edytorze**.
+
+### Kolejność wdrażania
+
+1. **Geometria i proporcje:** spadki jezdni, realistyczne profile chodników
+   i krawężników, ciągłość na łukach i skrzyżowaniach T/X, obniżenia przy
+   przejściach, brak szczelin, przenikania powierzchni i z-fightingu.
+2. **Materiały PBR:** asfalt, beton chodnikowy, beton krawężników, kostka,
+   oznakowanie i grunt. Każdy materiał ma naturalną, niezbyt nasyconą
+   kolorystykę, poprawną skalę UV w metrach, normal map i roughness.
+   Wdrożenie wymaga potwierdzenia obsługi tych parametrów w rendererze Qt;
+   samo dodanie plików tekstur nie oznacza ukończenia.
+3. **Detale proceduralne:** dyskretne dylatacje, łączenia i segmenty
+   krawężników, wpusty deszczowe, studzienki, niewielkie różnice
+   nawierzchni, strefy przy krawężnikach i polskie oznakowanie.
+   Nie rozmieszczać dekoracji przypadkowo ani jednakowo w każdej scenie.
+4. **Oświetlenie i prezentacja:** spójne światło dzienne, wiarygodne miękkie
+   cienie i kontakt cienia w miejscach styku, kontrolowane odbicia,
+   ekspozycja bez przepaleń; delikatne AO tylko gdy jest obsługiwane.
+5. **Regresja wizualna:** stałe sceny referencyjne — prosta, łuk, T, X,
+   przejście z obniżeniem, zmiana materiału, ujęcie z wysokości kierowcy.
+   Porównywać ujęcia z jedną ustaloną kamerą i światłem, przy różnych
+   odległościach, oraz kontrolować wydajność.
+
+### Kryterium odbioru wyglądu
+
+- Wrzucenie tekstury lub zmiana koloru **nie oznacza** ukończenia etapu.
+- Nie raportować „realistycznie”, „premium” ani „fotorealistycznie”
+  bez oględzin uruchomionego edytora i porównania ze zdjęciami
+  referencyjnymi polskich ulic (legalnie pozyskanymi).
+- Na zbliżeniu krawężnik ma czytelny profil i kontakt z jezdnią,
+  bez widocznego zawieszenia; z perspektywy kierowcy prawidłowe
+  proporcje, skala tekstur i brak rażącej powtarzalności.
+- Sprawdzić zachowanie na prostych, łukach i skrzyżowaniach T/X
+  oraz w warunkach bez dodatkowych materiałów (tryb awaryjny).
+- Wymagane nadal testy geometrii, zapis/odczyt, Undo/Redo,
+  wspólne C++/Python/GUI i testy z prawdziwego programu Windows.
+- Każdą ukończoną część zatwierdzać w Git, odnotowywać dowody
+  wizualne i aktualizować `HANDOFF.md`, aby kolejny agent wiedział,
+  co jest wykonane, a co pozostaje planem.
+
+**Stan na 12.11.2026:** podstawowa geometria wyniesionego chodnika na
+odcinkach dróg jest zaimplementowana (S1). Wyniesione naroża, obniżenia
+przy przejściach, zestaw PBR i dopracowane światło są **planowane**,
+nie oznaczone jako gotowe.
+
 ## Środowisko Windows
 
 - MSVC: `F:\PrawkoRoadStudio\toolchain\VS2022`
