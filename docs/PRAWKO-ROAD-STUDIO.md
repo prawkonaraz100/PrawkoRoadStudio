@@ -170,13 +170,13 @@ Nie jest to jeszcze pełny realizm wizualny ani gotowe przejścia dla pieszych.
   `archive/visual-regression/s2-first-pass-close.png`.
   Osobne okno testowe zostało zamknięte bez modyfikowania oryginalnych scen.
 
-**Pozostaje otwarte S2.2:** pełny profil fazowanego krawężnika przez naroże,
-obniżenia przy przejściach, warianty z pochyleniem, dodatkowa kontrola
-siatki z bliska i z wysokości kierowcy, eksport glTF/UV oraz niezależna
-wizualna ocena jakości. Obecne kolory, materiały i drzewa nadal są
-uproszczone. **Nie uznawać jakości wizualnej za odebraną** na podstawie
-samej zielonej kompilacji/testów. Szczegółowa kolejność kontynuacji
-znajduje się w `HANDOFF.md`.
+**Pozostaje otwarte S2.2c:** pełny profil fazowanego krawężnika przez
+naroże, warianty z pochyleniem, dodatkowa kontrola siatki z bliska i
+z wysokości kierowcy, eksport glTF/UV oraz niezależna wizualna ocena
+jakości. Obniżenia śródodcinkowe (S2.2a) i ich połączenie z narożnikiem
+(S2.2b) mają osobne wpisy poniżej. Materiały i modele drzew pozostają
+uproszczone. **Nie uznawać wizualnej jakości za odebraną** na podstawie
+samej zielonej kompilacji/testów. Szczegółowa kolejność jest w `HANDOFF.md`.
 
 ## Implementacja S2.2a — obniżenia na przejściach śródodcinkowych (12.11.2026)
 
@@ -199,11 +199,10 @@ geometrii. Przy edycji/wymazaniu obiektów w trybie 3D
 ponieważ funkcja nie jest już niezależna od oznakowania
 (koszt większy niż dotychczasowy remesh samej farby).
 
-**Nieobsługiwane w tym podetapie:** przejścia tuż przed
-skrzyżowaniem, gdy nie ma 3 m na zakończenie rampy
-przed końcem wyniesionego narożnika; ciągła faza przez
-naroże, łagodne obniżenia na łuku narożnika i
-pełny odbiór wizualny. One należą do S2.2b.
+**Nieobsługiwane w podetapie S2.2a:** przejścia tuż przed
+skrzyżowaniem, gdy brakuje miejsca na rampę przed wlotem
+(ich połączenie z narożnikiem dodano w S2.2b poniżej).
+Nadal otwarte S2.2c: ciągła faza przez naroże i pełny odbiór wizualny.
 
 Dwa testy `Mesh` kontrolują obniżenia obu stron,
 zbieżność z przejściem, nachylenie normalnych,
@@ -214,3 +213,43 @@ i orientacji. Scena kontrolna (niepublikowana
 w repo): `archive/visual-regression/s2-midblock-curb-drop.xodr`.
 Szczegółowy bieżący stan testów i następne zadanie:
 `HANDOFF.md`.
+
+## Implementacja S2.2b — obniżenia połączone z narożnikami (13.11.2026)
+
+- Gdy przejście poprzeczne zaczyna się blisko wlotu, chodnik
+  **dochodzi do granicy skrzyżowania na poziomie jezdni**,
+  zamiast sztucznie kończyć zjazd na ostatnim metrze drogi.
+  Siatka narożnika przyjmuje ten poziom na kapie wlotu
+  i wznosi się od niego profilem smoothstep na 3 m.
+- Wartości wysokości są wyznaczane z istniejącego
+  `JunctionSidewalkBand` i tego samego OpenDRIVE object,
+  bez dodawania odrębnej mapy wysokości w pliku.
+- Ściany krawężnika korzystają z tej samej funkcji
+  wysokości co chodniki, mają odrębne normalne/UV,
+  a trójkąty o zerowej wysokości nie są generowane.
+  Na pochylonych częściach chodnika normalne są przeliczane.
+- `remesh_objects` odświeża zarówno drogi, jak i narożniki,
+  a `Document::after_kernel_mutation` przekazuje tym funkcjom
+  `studio_mesh_options()` — w GUI również podczas Undo/Redo.
+- `raised_sidewalks=false` pozostaje trybem kompatybilnym.
+  Podstawowy regresyjny scenariusz X przechodzi test zgodności
+  wierzchołków i pełnego/przyrostowego meshu, również po
+  usunięciu przejść. Ogólne testy C++: **2059 PASS**,
+  testy agenta: **6 PASS**, 10 testów C++ wyłączonych.
+- Scena z rzeczywistym przykładowym skrzyżowaniem X:
+  `archive/visual-regression/s2.2b-crosswalks-junction.xodr`
+  (walidator: 0 błędów), zrzut testowy GUI:
+  `archive/visual-regression/s2.2b-gui-window-print.png`
+  (pliki lokalne, poza publicznym Git).
+- Test Qt w `editor/tests/test_document_commands.cpp` sprawdza
+  usuwanie przejścia, Undo i Redo oraz zgodność z pełną siatką
+  3D. Kod testowy **kompiluje się, lecz nie zaliczono wykonania**:
+  proces `roadmaker_editor_tests.exe` blokuje się przy wykrywaniu
+  testów (timeout) nawet po dostarczeniu bibliotek Qt w PATH.
+  Diagnostyczne obejścia nie pomogły i zostały cofnięte.
+  Dokładny stan i kolejny krok opisano w `HANDOFF.md`.
+
+**Nadal nieukończone:** fazowany (5 cm) profil przez sam łuk
+narożnika, przejścia w nietypowych T/Y i przy zmianach niwelety,
+kontrola glTF i wizualny odbiór z wysokości kierowcy. Materiały
+nie spełniają jeszcze docelowego standardu realizmu.

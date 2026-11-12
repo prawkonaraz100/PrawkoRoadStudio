@@ -2,7 +2,7 @@
 
 > **Jedyny aktualizowany dziennik przekazania między rozmowami.**
 > Kolejny agent ma czytać ten plik **przed edycją kodu**.
-> Stan dokumentu: 2026-11-12, po wdrożeniu i testach geometrii S2.2a.
+> Stan dokumentu: 2026-11-13, po wdrożeniu S2.2b i weryfikacji silnika; testy Qt zidentyfikowane jako blokada środowiskowa.
 > Poniższe SHA to punkt kontrolny, nie zamiennik aktualnego `git status`.
 
 ## Gotowe polecenie do nowej rozmowy
@@ -129,22 +129,73 @@ ujęciu profil krawężnika jest nadal bardzo słabo czytelny,
 a materiały pozostają uproszczone. **Nie zaliczono jeszcze
 wizualnego odbioru w zbliżeniu ani glTF.**
 
-**Następny krok S2.2b — skrzyżowania:** zbudować
-bezprzerwową fazę krawężnika na łuku narożnika oraz
-obniżenia przy przejściach położonych 1–3 m przed
-skrzyżowaniem (łączone z siatką narożnika). Zweryfikować
-ich połączenie z 3D drogą przy różnych promieniach
-i pochyleniu. Potem rozszerzyć testy OpenDRIVE / glTF,
-Undo/Redo i zbliżenia z kamery kierowcy. Nie mylić
-funkcjonalnych testów z odbiorem wizualnym PBR.
+**S2.2b — zjazdy połączone z narożnikami (13.11.2026):**
+`core/src/mesh/mesh_builder.cpp` utrzymuje poziom 0 cm na granicy
+wlotu, jeżeli prostokątne przejście jest za blisko skrzyżowania
+na pełne przywrócenie wysokości 15 cm. Resztę 3-metrowego
+wzniesienia przejmuje siatka `core/src/mesh/junction_surface.cpp`
+według gładkiego profilu liczonego od dokładnej krawędzi
+ramienia. Ta sama funkcja wysokości kształtuje chodnik
+i pionową ścianę; zerowe trójkąty są pomijane, normalne
+nachylonego chodnika są aktualizowane. Wciąż korzystamy
+z istniejących poligonów/trójkątów; pliki OpenDRIVE nie są
+przekształcane, legacy `raised_sidewalks=false` pozostaje
+bez zmian.
+
+`remesh_objects` odtwarza sąsiednie narożniki przy
+dodawaniu/usuwaniu przejścia. Naprawiono ważną niezgodność
+w `editor/src/document/document.cpp`: **remesh_junctions
+i remesh_objects** używają teraz `studio_mesh_options()`,
+tak samo jak `Document::load`; wcześniej edycja mogła
+przywrócić płaską geometrię. Dodano test dla czterowlotowego
+skrzyżowania: porównanie wysokości na wspólnych wierzchołkach,
+pełnego i przyrostowego meshu, usunięcia przejść
+— **1/1 PASS**. Pełna kontrola silnika: **2059/2059
+aktywnych C++ PASS**, 10 wyłączonych; testy agenta **6/6 PASS**
+(`QUALITY_GATE_PASS`). Scena testowa z 4 przejściami:
+`archive/visual-regression/s2.2b-crosswalks-junction.xodr`
+— walidator zgłasza **0 błędów**.
+
+**Weryfikacja GUI:** potwierdzony `BUILD_PASS: editor`
+oraz ponownie zlinkowany `roadmaker-editor.exe` po poprawce
+`Document`. Osobna kopia sceny X została otwarta w edytorze
+bez awarii; obraz aplikacji pobrano bez przejmowania okna użytkownika
+do `archive/visual-regression/s2.2b-gui-window-print.png`.
+Widok ogólny działa, ale nie zastępuje odbioru z kamery kierowcy.
+Osobne okno testowe zamknięte bez zapisania zmian.
+
+**Blokada dodatkowych testów Qt (NIE PASS):** skompilowano
+`roadmaker_editor_tests.exe`, lecz `gtest_discover_tests`
+nie potrafi uruchomić go na tym Windows: początkowo brak
+biblioteki (`0xc0000135`) bez PATH Qt, następnie przy
+prawidłowym PATH start procesów utykał (timeout 5 i 60 s),
+a diagnostyczna próba pominięcia `QApplication` podczas
+listowania dała `0xc0000409`. Zmiany eksperymentalne
+w `qt_gtest_main.cpp` i `editor/tests/CMakeLists.txt`
+cofnięto do stanu repo, aby nie włączać niedziałającego obejścia.
+`DocumentCommands.NearJunctionCrosswalkDeleteAndUndoKeepRaisedMeshParity`
+oraz rozszerzone `test_mesh_parity.cpp` kompilowały się,
+ale **nie zostały uruchomione i nie są zaliczone**.
+Należy ustalić dokładną przyczynę startu dużej binarki Qt
+(m.in. pluginy/DLL/ustawienia procesu/Windows event logs)
+i dopiero wtedy zaliczyć testy GUI. Zestaw 2059 C++
+i 6 agenta jest osobno potwierdzony PASS.
+
+**Następny krok S2.2c:** dokończyć 5 cm fazę krawężnika
+przez cały łuk narożnika (obecna ściana narożnika jest
+pionowa, a faza drogi zwęża się przed wlotem), zszyć
+górną krawędź i sprawdzić profile z nachyleniem oraz
+przejścia na ciasnych T/Y. Następnie eksport glTF,
+test wizualny z kamery kierowcy i dopiero później PBR.
+Nie uznawać obecnych materiałów za realistycznie odebrane.
 
 **Kontynuować przebudowę realistycznej geometrii dróg i chodników.** Nie zaczynać ponownie od konfiguracji Git ani migracji folderów.
 
 1. Uruchomić `scripts/prawko-resume.ps1` i sprawdzić oba repozytoria oraz otwarte sceny. Nie przeładowywać niezapisanych dokumentów.
-2. **S2.2b priorytet:** połączyć 3-metrowy spadek ramienia z wyniesioną siatką narożnika, tak aby typowe przejście w odległości 1 m od skrzyżowania miało obniżenie i nie pozostawiało szczeliny.
-3. Zrealizować ciągłą 5-centymetrową fazę przez łuk narożnika, używając istniejących ograniczeń triangulacji i ścian z `junction_surface.cpp`. Chronić kompatybilny tryb legacy.
-4. Dopisać testy T/X, łuków i pochylenia; sprawdzić eksport glTF/UV, Undo/Redo, OpenDRIVE i widok kamery kierowcy. Zwracać uwagę na poprawne normalne, brak z-fightingu i wydajność `remesh_objects` po przejściu na pełny remesh w 3D.
-5. Dopiero po poprawnej geometrii i odbiorze GUI przejść do PBR, skali UV, oświetlenia i detali ulicznych.
+2. **NAJPIERW odblokować testy Qt Windows:** `roadmaker_editor_tests.exe` nie przechodzi odkrywania GTest (po naprawie PATH nadal timeout i diagnostyczny fastfail 0xc0000409). Uruchomić `DocumentCommands.NearJunctionCrosswalkDeleteAndUndoKeepRaisedMeshParity` i `MeshParity.*` z `QT_QPA_PLATFORM=offscreen`, sprawdzić wyniki, nie oznaczać testów GUI jako PASS na podstawie samej kompilacji.
+3. **S2.2c:** zrealizować ciągłą 5-centymetrową fazę na łuku narożnika, wykorzystując constrained edges i wspólne wierzchołki. Chronić kompatybilny tryb `raised_sidewalks=false`.
+4. Dopisać testy ciasnych T/Y, nachylonych ulic i przejść, brak z-fightingu, eksport glTF/UV, pełny Undo/Redo i widok kamery kierowcy. Sprawdzić koszt przebudowy `remesh_objects` w trybie 3D.
+5. Dopiero po poprawnej geometrii i odbiorze GUI przejść do PBR, skali UV, oświetlenia i proceduralnych detali.
 
 **Kryterium ukończenia:** kod + testy + rzeczywista ocena GUI; potem commity, push i aktualizacja TEGO pliku. Bez zgadywania stanu na podstawie dawnych raportów.
 
