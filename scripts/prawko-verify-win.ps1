@@ -1,8 +1,8 @@
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
 $tests=Join-Path $root 'build\dev-windows\core\tests\roadmaker_core_tests.exe'
-$python='F:\RoadMaker-evaluation\toolchain\Python312\python.exe'
-$agent='F:\RoadMakerAgent'
+$python=Join-Path $root 'reference\RoadMaker\toolchain\Python312\python.exe'
+$agent=Join-Path $root 'agent'
 $launcher=Join-Path $PSScriptRoot 'prawko-agent.cmd'
 if(!(Test-Path $tests)){throw "Missing C++ tests: $tests. First build -Target tests."}
 if(!(Test-Path $python) -or !(Test-Path $launcher)){throw 'Missing agent tools'}

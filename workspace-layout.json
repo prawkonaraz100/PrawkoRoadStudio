@@ -1,0 +1,9 @@
+﻿{
+    "migrated_at":  "2026-11-12T21:43:58.8855333+01:00",
+    "root":  "F:\\PrawkoRoadStudio",
+    "editor":  ".",
+    "agent":  "agent",
+    "reference":  "reference\\RoadMaker",
+    "compiler":  "toolchain",
+    "legacy":  "archive\\legacy-backup"
+}

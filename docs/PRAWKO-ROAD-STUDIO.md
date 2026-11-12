@@ -38,24 +38,24 @@ każda funkcja projektowania musi również działać w interfejsie myszką.
 ### Reguły architektoniczne
 
 - Nie korzystać z projektów Unreal Engine.
-- Nie modyfikować klona porównawczego `F:\RoadMaker-evaluation`.
+- Nie modyfikować klona porównawczego `F:\PrawkoRoadStudio\reference\RoadMaker`.
 - Zmiany C++ robić w tym repo, w osobnych commitach po testach.
-- Dotychczasowy interfejs agenta znajduje się w `F:\RoadMakerAgent`;
+- Dotychczasowy interfejs agenta znajduje się w `F:\PrawkoRoadStudio\agent`;
   podczas budowania nowej wersji trzeba przełączyć go na nowe EXE i
   natywne bindingi Python po ich przekompilowaniu.
 - Zasilanie projektu scenami dla człowieka i AI pozostaje wspólne.
 - Zasoby Qt i CMake/Python mogą być używane z instalacji
-  `F:\RoadMaker-evaluation` bez kosztownego kopiowania.
+  `F:\PrawkoRoadStudio\reference\RoadMaker` bez kosztownego kopiowania.
 
 ## Środowisko Windows
 
-- MSVC: `F:\PrawkoRoadStudio-toolchain\VS2022`
-- CMake/Ninja/Python/Qt: `F:\RoadMaker-evaluation\toolchain` i `F:\RoadMaker-evaluation\.qt`
+- MSVC: `F:\PrawkoRoadStudio\toolchain\VS2022`
+- CMake/Ninja/Python/Qt: `F:\PrawkoRoadStudio\reference\RoadMaker\toolchain` i `F:\PrawkoRoadStudio\reference\RoadMaker\.qt`
 - Qt przez junction: `F:\PrawkoRoadStudio\.qt`
 - Budowanie: `scripts\prawko-build-win.ps1` (kompilator lokalny).
 - Stary projekt Unreal `F:\RoadSceneEditor` przeznaczony do usunięcia.
   Przed usuwaniem archiwizowane są poprawki Git w
-  `F:\PrawkoRoadStudio-legacy-backup\2026-11-12`.
+  `F:\PrawkoRoadStudio\archive\legacy-backup\2026-11-12`.
 
 **Uwaga:** priorytety powyżej to wymagania rozwojowe, a nie lista
 ukończonych funkcji. Dopiero kod i testy potwierdzają realizację.
@@ -75,7 +75,7 @@ To nie oznacza ukończenia docelowego stylu.
   przy eksporcie do glTF.
 - Testy: wybrana grupa Mesh 11/11 PASS i RoadMakerAgent 6/6 PASS.
 - GUI Windows: PrawkoRoadStudio uruchomione ze sceną miejskiej drogi w łuku.
-- Pliki: F:\RoadMakerAgent\projects\prawko_urban_curve\scene.xodr,
+- Pliki: F:\PrawkoRoadStudio\agent\projects\prawko_urban_curve\scene.xodr,
   scene.xosc, scene.glb i preview.png.
 
 ### Pozostałe prace

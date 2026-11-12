@@ -69,3 +69,10 @@ scale-metrics.json
 docs-site/dist/
 docs-site/node_modules/
 docs-site/.astro/
+
+# Local integrated workspace: all components live below this root but retain
+# their own private history, generated projects and licensed SDK binaries.
+/agent/
+/reference/
+/toolchain/
+/archive/

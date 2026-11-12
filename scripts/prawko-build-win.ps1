@@ -4,12 +4,12 @@ param(
 )
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
-$qt='F:\RoadMaker-evaluation\.qt\6.8.3\msvc2022_64'
-$tools='F:\RoadMaker-evaluation\toolchain'
+$qt=Join-Path $root '.qt\6.8.3\msvc2022_64'
+$tools=Join-Path $root 'reference\RoadMaker\toolchain'
 $cmake="$tools\cmake-3.31.6-windows-x86_64\bin\cmake.exe"
 $ninja="$tools\ninja\ninja.exe"
 $py="$tools\Python312\python.exe"
-$vc='F:\PrawkoRoadStudio-toolchain\VS2022\VC\Auxiliary\Build\vcvars64.bat'
+$vc=Join-Path $root 'toolchain\VS2022\VC\Auxiliary\Build\vcvars64.bat'
 foreach($file in @($cmake,$ninja,$py,$vc)){
   if(!(Test-Path $file)){ throw "Missing build prerequisite: $file" }
 }
