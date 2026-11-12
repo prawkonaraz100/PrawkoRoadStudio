@@ -188,5 +188,25 @@ if(WIN32 AND RM_BUILD_SHARED)
             $<TARGET_FILE_DIR:roadmaker_editor_tests>)
 endif()
 
+# The installed Qt has qoffscreen.dll, but windeployqt packages only the
+# 'windows' platform beside roadmaker-editor.exe. The test executable lives
+# in that same directory and explicitly requests offscreen in qt_gtest_main.
+# Deploy the matching Qt plugin BEFORE GTest discovers tests at link time,
+# otherwise QApplication shows "Available platform plugins are: windows"
+# and discovery hangs behind a modal error dialog on Windows.
+if(WIN32)
+  if(NOT TARGET Qt6::QOffscreenIntegrationPlugin)
+    message(FATAL_ERROR "Qt offscreen platform plugin target is required for editor tests")
+  endif()
+  add_custom_command(TARGET roadmaker_editor_tests POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+            "$<TARGET_FILE_DIR:roadmaker_editor_tests>/platforms"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:Qt6::QOffscreenIntegrationPlugin>"
+            "$<TARGET_FILE_DIR:roadmaker_editor_tests>/platforms"
+    COMMENT "Deploying Qt offscreen plugin for headless editor tests"
+    VERBATIM)
+endif()
+
 gtest_discover_tests(roadmaker_editor_tests
   PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
