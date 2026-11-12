@@ -2,7 +2,7 @@
 
 > **Jedyny aktualizowany dziennik przekazania między rozmowami.**
 > Kolejny agent ma czytać ten plik **przed edycją kodu**.
-> Stan dokumentu: 2026-11-12, po konfiguracji publicznych repozytoriów GitHub.
+> Stan dokumentu: 2026-11-12, po wdrożeniu i testach geometrii S2.1.
 > Poniższe SHA to punkt kontrolny, nie zamiennik aktualnego `git status`.
 
 ## Gotowe polecenie do nowej rozmowy
@@ -46,46 +46,67 @@ kierowcy i na zbliżeniach. Żaden etap PBR/oświetlenia nie jest jeszcze
 potwierdzony jako ukończony. Najpierw należy wykonać S2 (ciągła bryła
 narożników i krawężników), później materiały, detale i światło.
 
-**Etap S2 — po audycie kodu w bieżącej sesji (12.11.2026).**
-Pracę nad S2 rozpoczęto od odczytu aktualnych źródeł. Nie wykonano jeszcze
-zmian w geometrii ani nowego wizualnego testu GUI, więc S2 nie jest ukończony.
+**Etap S2.1 — częściowo wdrożony i sprawdzony (12.11.2026).**
+W trybie `raised_sidewalks=true` silnik podnosi o 0,15 m chodniki
+na skrzyżowaniu i generuje rzeczywiste pionowe ściany krawężników
+tylko na wspólnej granicy chodnika z jezdnią. Wykorzystuje triangulację
+i obrysy istniejącego generatora. Podniesione chodniki dróg dochodzą
+do skrzyżowania bez dawnego 4-metrowego wygaszenia; ich 5-centymetrowa
+faza krawężnika zwęża się do zera na ostatnim metrze dla zgodności
+z pionową ścianką narożnika. Tryb legacy `raised_sidewalks=false`
+pozostaje bez zmian.
 
-**Konkretna przyczyna wykrytej różnicy wysokości:**
-- `core/src/mesh/mesh_builder.cpp` w `build_one_road()`: chodnik jezdni ma osobną
-  siatkę z `defaults::kCurbHeight` (0,15 m), ścianą i fazą krawężnika.
-- Ten sam moduł przy końcu drogi prowadzącym do skrzyżowania stosuje rampę
-  `kJoinRampM = 4.0` i wygasza wysokość do zera, bo na skrzyżowaniu nie ma
-  jeszcze prawdziwego krawężnika.
-- `core/src/mesh/junction_surface.cpp` w `build_junction_floor_split()`:
-  chodniki na skrzyżowaniach są tylko klasyfikacją trójkątów bazowego
-  `SubMesh` jako `LaneType::Sidewalk` — bez podniesienia ich geometrii i
-  bez siatki pionowej ściany.
-- `core/src/mesh/junction_sidewalk_bands.cpp` dostarcza istniejące obrysy
-  naroży i ścieżki materiału; należy je **wykorzystać**, nie budować osobnego
-  generatora OpenDRIVE.
-- `core/tests/test_junction_sidewalk_bands.cpp` ma macierz T/X/Y, kąty,
-  profile mieszane i chodnik za poboczem; nowe testy 3D muszą korzystać z tych
-  przypadków i sprawdzać ciągłość wysokości na styku.
-- **Edytor jest uruchomiony z tytułem `scene.xodr*`**: gwiazdka oznacza
-  niezapisane zmiany. Nie zamykaj, nie nadpisuj i nie uruchamiaj automatycznego
-  przeładowania tej sceny. Zrzut całego ekranu pokazuje okno przeglądarki na
-  pierwszym planie, zatem nie potwierdza jeszcze wyglądu sceny w edytorze.
+**Weryfikacja S2.1:** `BUILD_PASS: editor` (po korekcie konfliktu
+linkowania z uruchomionym testowym EXE), `BUILD_PASS: tests`,
+2056 testów C++ PASS, 10 wyłączonych, 6 testów agenta PASS,
+`QUALITY_GATE_PASS`; 8 nowych testów sprawdziło T/X/Y, ciasne
+i szerokie łuki narożników, warianty chodnika i dopasowanie obu
+krawędzi na wlotach. Uruchomiono osobną kopię `gs1_urban_intersection.xodr`
+w GUI, potwierdzono załadowanie bez crashu i wykonano zrzuty
+`archive/visual-regression/s2-verified-gui.png` oraz
+`s2-first-pass-close.png` (lokalne, ignorowane przez Git).
+**Nie potwierdzono jeszcze wizualnie jakości z wysokości kierowcy
+ani braku wszystkich artefaktów w zbliżeniu. S2 jako całość NIE jest
+zakończone.** Zrzuty pokazują nadal uproszczone materiały, drzewa
+i mało czytelny detal krawężnika.
 
-**Następny krok kodowy:** opracować i przetestować wspólną siatkę wyniesionych
-narożników i ścian krawężników na skrzyżowaniach, zachowując stary płaski
-tryb `raised_sidewalks=false`; dopiero po zszyciu topów i ścian usunąć
-dotychczasowe wygaszenie przy wlotach. Weryfikować na T, X, ostrych kątach,
-łukach i profilach mieszanych. Oceny GUI dokonać bez ingerencji w niezapisaną
-scenę, np. w oddzielnej kopii testowej.
+**Architektura po S2.1 — sprawdzony kod:**
+- `mesh_builder.cpp`: pasy chodników na odcinku korzystają ze wspólnej
+  wysokości `defaults::kCurbHeight`. Przy zidentyfikowanym połączeniu
+  z wyniesionym narożem nie wygasza się już wysokości przed wlotem;
+  faza 5 cm przechodzi płynnie w pionową ściankę na ostatnim metrze.
+- `junction_surface.cpp` / `junction_surface.hpp`: naroża
+  wykorzystują istniejący podział triangulacji. W trybie 3D ich
+  wierzchołki otrzymują +0,15 m, a wspólne krawędzie z jezdnią
+  tworzą pionowe ściany z oddzielnymi normalnymi i UV.
+- `junction_sidewalk_bands.cpp` pozostaje źródłem geometrii obrysów
+  (bez kopiowania generatora i modyfikacji OpenDRIVE).
+- `test_junction_sidewalk_bands.cpp` ma 8 nowych testów parametrycznych
+  S2.1 z kontrolą wysokości, normalnych, ścian i łączenia przy wlotach.
+- W tej sesji otwarto jedynie odrębną kopię testową
+  `archive/visual-regression/s2-urban-intersection.xodr`, którą
+  zamknięto po zrzucie. Wcześniejszy stan `scene.xodr*` użytkownika
+  nie został w tej sesji nadpisany ani zamknięty przez agenta.
+  Przed kolejnymi działaniami trzeba **na nowo** sprawdzić otwarte procesy
+  i niezapisane sceny.
+
+**Następny krok S2.2:** sprawdzić i domknąć górne profile naroży
+na skrzyżowaniach — obecnie mają pionową ściankę, ale **nie mają jeszcze
+ciągłej fazy** takiej jak na drogach. Przeprowadzić weryfikację siatki
+z perspektywy kierowcy i przy przejściach, dodać obniżenia krawężników
+i rampy w obrębie narożnika (obecne obniżenia przy przejściach NIE są
+zaimplementowane). Potwierdzić geometrię na łuku i skrzyżowaniach
+z pochyleniem, brak z-fightingu i poprawny eksport glTF. Wprowadzić
+odpowiednie testy na profil 3D i odtworzenie scen. Dopiero po tym
+rozpoczynać pracę nad PBR i oświetleniem.
 
 **Kontynuować przebudowę realistycznej geometrii dróg i chodników.** Nie zaczynać ponownie od konfiguracji Git ani migracji folderów.
 
-1. Sprawdzić aktualny stan **obu** repozytoriów, obu zdalnych gałęzi, otwartych procesów i scen. Uruchomić `scripts/prawko-resume.ps1`.
-2. Obejrzeć w GUI drogę na prostej, łuku i skrzyżowaniach T/X. Ustalić, które krawężniki/narożniki nadal tworzą płaskie pasma, szczeliny, nakładanie powierzchni lub z-fighting. **Brak nowego potwierdzonego przeglądu GUI wszystkich tych przypadków**.
-3. Rozpocząć od kodu `core/src/mesh/junction_sidewalk_bands.cpp`, `junction_corners.cpp`, `junction_corner_detail.cpp`, `mesh_builder.cpp` oraz odpowiednich testów. Najpierw przeanalizować istniejące algorytmy i testy, nie przepisywać ich w ciemno.
-4. Zaimplementować **ciągłą przestrzenną geometrię wyniesionych naroży chodnika i obniżeń przy przejściach**, spójną na łukach i skrzyżowaniach. Zrobić to w tym samym modelu C++, którego używa GUI oraz Python/agent. Nie zastępować geometrii samą teksturą.
-5. Weryfikacja: kompilacja Windows, testy C++ i agenta, zapis/odczyt OpenDRIVE, Undo/Redo, walidacja scen, ręczna kontrola GUI na prostej, łuku, T i X, brak widocznych przerw/kolizji siatki.
-6. Przegląd wizualny nawierzchni (materiały, normal/roughness, skala tekstur i oświetlenie) jest kolejnym etapem po geometrii. Nie raportować tego jako wykonane.
+1. Uruchomić `scripts/prawko-resume.ps1` i sprawdzić dwa repozytoria oraz otwarte sceny. Nie przeładowywać niezapisanych dokumentów.
+2. W `core/src/mesh/junction_surface.cpp` i `mesh_builder.cpp` skontrolować spójność profilu krawężnika 3D na przejściu drogi w narożnik — aktualnie ściana skrzyżowania jest pionowa, a faza drogi zanika na metr przed wlotem.
+3. Dodać pełną fazę i obniżenia przy przejściach, bez zmieniania danych OpenDRIVE i zachowując `raised_sidewalks=false`; w razie potrzeby poszerzyć istniejący wspólny model C++.
+4. Dopisać testy krzywych, pochylenia i przejść oraz sprawdzić eksport glTF, Undo/Redo, OpenDRIVE, GUI T/X i widok kamery kierowcy.
+5. Gdy jakość geometrii jest potwierdzona, przejść do PBR, realnej skali UV, oświetlenia i proceduralnych detali; nie raportować tego jako gotowe bez zrzutów i odbioru.
 
 **Kryterium ukończenia:** kod + testy + rzeczywista ocena GUI; potem commity, push i aktualizacja TEGO pliku. Bez zgadywania stanu na podstawie dawnych raportów.
 

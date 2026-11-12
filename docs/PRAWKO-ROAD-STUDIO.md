@@ -140,3 +140,38 @@ Chodniki narożne w skrzyżowaniach nadal są płaskimi pasmami.
 Potrzebne są spójne wzniesione naroża, zjazdy i obniżone krawężniki
 przy przejściach, normalne i oświetlenie oraz regulacja wysokości
 i profilu krawężnika myszką. Nie opisywać tych funkcji jako wykonanych.
+
+## Potwierdzone wykonanie — etap S2.1 (12.11.2026)
+
+Pierwsza wersja przestrzennej geometrii **narożników skrzyżowań**
+została zaimplementowana w tym samym C++ co GUI i binding Python.
+Nie jest to jeszcze pełny realizm wizualny ani gotowe przejścia dla pieszych.
+
+- `MeshOptions.raised_sidewalks=true` podnosi części chodnikowe
+  wspólnej siatki skrzyżowania o `defaults::kCurbHeight` (0,15 m).
+  Wykorzystuje istniejące obrysy i triangulację, bez zmian w OpenDRIVE.
+- Krawędź wspólna chodnika z jezdnią otrzymuje pionową ścianę
+  `LaneType::Curb`, własne normalne i UV; nie generuje się sztucznej ściany
+  przy zewnętrznej granicy i między sąsiednimi chodnikami.
+- Na wlotach dróg istniejący krawężnik zachowuje pełną wysokość,
+  a jego faza 5 cm zwęża się do pionowego profilu na ostatnim metrze.
+  Wariant bez meshowanej części chodnikowej nadal ma dotychczasowy zjazd.
+- `raised_sidewalks=false` pozostaje zgodny z poprzednim płaskim sposobem
+  generowania; siatka jezdni nie zmienia geometrii.
+- Testy S2.1: **8/8 PASS** na wariantach T/X/Y, w tym mieszanych i ciasnych,
+  kontrola obu krawędzi na wlotach, pionowych normalnych i wysokości.
+  Po pełnym przebudowaniu testów Quality Gate: **2056 C++ PASS**,
+  **6 testów agenta PASS**, 10 wyłączonych C++.
+- Edytor Windows: **BUILD_PASS: editor**. W GUI uruchomiono kopię
+  `gs1_urban_intersection.xodr`; screenshoty lokalne:
+  `archive/visual-regression/s2-verified-gui.png` i
+  `archive/visual-regression/s2-first-pass-close.png`.
+  Osobne okno testowe zostało zamknięte bez modyfikowania oryginalnych scen.
+
+**Pozostaje otwarte S2.2:** pełny profil fazowanego krawężnika przez naroże,
+obniżenia przy przejściach, warianty z pochyleniem, dodatkowa kontrola
+siatki z bliska i z wysokości kierowcy, eksport glTF/UV oraz niezależna
+wizualna ocena jakości. Obecne kolory, materiały i drzewa nadal są
+uproszczone. **Nie uznawać jakości wizualnej za odebraną** na podstawie
+samej zielonej kompilacji/testów. Szczegółowa kolejność kontynuacji
+znajduje się w `HANDOFF.md`.
