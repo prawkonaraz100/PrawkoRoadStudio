@@ -36,6 +36,38 @@ Punkt kontrolny sprzed tego dokumentu:
 
 ## Co robimy dalej — najbliższe zadanie
 
+**Etap S2 — po audycie kodu w bieżącej sesji (12.11.2026).**
+Pracę nad S2 rozpoczęto od odczytu aktualnych źródeł. Nie wykonano jeszcze
+zmian w geometrii ani nowego wizualnego testu GUI, więc S2 nie jest ukończony.
+
+**Konkretna przyczyna wykrytej różnicy wysokości:**
+- `core/src/mesh/mesh_builder.cpp` w `build_one_road()`: chodnik jezdni ma osobną
+  siatkę z `defaults::kCurbHeight` (0,15 m), ścianą i fazą krawężnika.
+- Ten sam moduł przy końcu drogi prowadzącym do skrzyżowania stosuje rampę
+  `kJoinRampM = 4.0` i wygasza wysokość do zera, bo na skrzyżowaniu nie ma
+  jeszcze prawdziwego krawężnika.
+- `core/src/mesh/junction_surface.cpp` w `build_junction_floor_split()`:
+  chodniki na skrzyżowaniach są tylko klasyfikacją trójkątów bazowego
+  `SubMesh` jako `LaneType::Sidewalk` — bez podniesienia ich geometrii i
+  bez siatki pionowej ściany.
+- `core/src/mesh/junction_sidewalk_bands.cpp` dostarcza istniejące obrysy
+  naroży i ścieżki materiału; należy je **wykorzystać**, nie budować osobnego
+  generatora OpenDRIVE.
+- `core/tests/test_junction_sidewalk_bands.cpp` ma macierz T/X/Y, kąty,
+  profile mieszane i chodnik za poboczem; nowe testy 3D muszą korzystać z tych
+  przypadków i sprawdzać ciągłość wysokości na styku.
+- **Edytor jest uruchomiony z tytułem `scene.xodr*`**: gwiazdka oznacza
+  niezapisane zmiany. Nie zamykaj, nie nadpisuj i nie uruchamiaj automatycznego
+  przeładowania tej sceny. Zrzut całego ekranu pokazuje okno przeglądarki na
+  pierwszym planie, zatem nie potwierdza jeszcze wyglądu sceny w edytorze.
+
+**Następny krok kodowy:** opracować i przetestować wspólną siatkę wyniesionych
+narożników i ścian krawężników na skrzyżowaniach, zachowując stary płaski
+tryb `raised_sidewalks=false`; dopiero po zszyciu topów i ścian usunąć
+dotychczasowe wygaszenie przy wlotach. Weryfikować na T, X, ostrych kątach,
+łukach i profilach mieszanych. Oceny GUI dokonać bez ingerencji w niezapisaną
+scenę, np. w oddzielnej kopii testowej.
+
 **Kontynuować przebudowę realistycznej geometrii dróg i chodników.** Nie zaczynać ponownie od konfiguracji Git ani migracji folderów.
 
 1. Sprawdzić aktualny stan **obu** repozytoriów, obu zdalnych gałęzi, otwartych procesów i scen. Uruchomić `scripts/prawko-resume.ps1`.
