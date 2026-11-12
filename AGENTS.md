@@ -46,37 +46,52 @@ Weryfikuj najnowszy kod i procesy: nie zakładaj, że build już przeszedł,
 jeżeli nie widzisz wyjścia PASS. Przed końcem podaj sprawdzone artefakty,
 wersję Git i ewentualne ograniczenia.
 
-## Rytual Git dla kazdej sesji (obowiazkowy)
+## Procedura Git dla każdej sesji (obowiązkowa)
 
-W folderze glownym sa **dwa oddzielne repozytoria Git**:
-- edytor: `F:\PrawkoRoadStudio` (aktywny branch: `feature/realistic-road-surfaces`),
-- agent AI: `F:\PrawkoRoadStudio\agent` (branch: `main`).
+W folderze głównym znajdują się **dwa niezależne repozytoria Git**:
+- edytor: `F:\PrawkoRoadStudio` (gałąź `feature/realistic-road-surfaces`),
+- agent AI: `F:\PrawkoRoadStudio\agent` (gałąź `main`).
 
-Katalog `agent/` jest celowo ignorowany przez Git edytora. Nie oznacza to,
-ze kod agenta jest zapisywany w historii edytora. Kazde repo wymaga
-**wlasnego commita i wlasnego backupu**.
+`agent/` jest celowo ignorowany przez Git edytora. **Kod i historia agenta
+nie są częścią commitów edytora.** Oba repozytoria wymagają osobnych
+commitów, testów i kopii historii.
 
-1. **START:** `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prawko-git.ps1 -Action status`.
-   Odczytaj oba HEAD, branch, dirty paths i remote. Nie nadpisuj cudzych zmian.
-2. **PRACA:** jedna funkcja = jedna galaz zadaniowa lub logiczny commit.
-   Przed zmiana sprawdz `git diff`, po zmianie kompilacje i testy
-   stosowne do zakresu. Sceny z otwartego GUI zapisuj za zgoda uzytkownika.
-3. **COMMIT:** dla obu repozytoriow osobno: `git diff --check`,
-   przeglad `git status`, selektywne `git add <pliki>`, opisowy commit.
-   Nie uzywaj `git add -A` bez audytu, nie uzywaj `git reset --hard`,
-   `git clean -fdx`, force-push ani `git push upstream`.
-4. **BACKUP:** `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prawko-git.ps1 -Action backup`.
-   Tworzy i weryfikuje osobne `git bundle` + SHA256/manifest w
-   `archive/git-backups/` (katalog poza historia repo, ale na tym samym dysku).
-5. **KONIEC:** po doprowadzeniu obu repo do czystego stanu uruchom
+1. **START:** z katalogu głównego uruchom
+   `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prawko-git.ps1 -Action status`.
+   Sprawdź oba HEAD, gałęzie, zmienione pliki oraz remotes. Nie nadpisuj
+   nieswoich zmian ani niezapisanej sceny.
+2. **PRACA:** jedna funkcja lub logiczny krok = osobny commit (w razie potrzeby
+   osobna gałąź). Przed edycją sprawdź `git diff`. Po zmianie sprawdź
+   kompilację, właściwe testy i działanie GUI, jeżeli funkcja dotyczy edytora.
+3. **COMMIT:** dla każdego zmienionego repozytorium osobno uruchom
+   `git diff --check`, przejrzyj `git status`, użyj selektywnego
+   `git add <pliki>` i opisz commit. Gdy brak konfiguracji autora,
+   techniczny commit agenta wykonaj z lokalnymi parametrami
+   `git -c user.name="PrawkoRoadStudio Agent" -c user.email="agent@prawkoroadstudio.invalid" commit -m "..."`.
+   Nie zgaduj tożsamości użytkownika ani nie zmieniaj globalnego Git.
+   Bez `git reset --hard`, `git clean -fdx`, `git push --force`
+   i automatycznego `git add -A`.
+4. **BACKUP:** po ważnych commitach uruchom
+   `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prawko-git.ps1 -Action backup`.
+   Skrypt tworzy osobne `git bundle`, testuje ich odtworzenie w pustym
+   repozytorium, zapisuje SHA-256 i manifest. Kopiuje też **zapisane pliki**
+   z `agent/projects/` do `archive/git-backups/`.
+5. **KONIEC:** oba repozytoria muszą być czyste. Uruchom
    `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prawko-git.ps1 -Action finish`.
-   Przeprowadzi Quality Gate i kopie Git, odmowi PASS gdy sa zmiany bez commita.
-6. **PRZEKAZANIE:** podaj dokladne SHA obu HEAD, wyniki build/test,
-   lokalizacje backupow, istniejace niezapisane sceny i otwarte zadania.
+   Skrypt blokuje zakończenie przy niezacommitowanych zmianach, wykonuje
+   Quality Gate oraz kontrolę archiwów. Osobno potwierdź pełny build/GUI,
+   jeśli był wymagany.
+6. **PRZEKAZANIE:** odnotuj pełne SHA obu HEAD, wyniki kompilacji i testów,
+   lokalizacje backupów, niewykonane kroki oraz stan otwartych scen.
 
-`git bundle` NIE obejmuje niezacommitowanych zmian, ignorowanych `agent/projects/`,
-zaleznosci ani scen niezapisanych w GUI. Sceny wymagaja osobnej kopii katalogu.
-Backup `archive/git-backups/` jest lokalny; utrata dysku F: nadal oznacza ryzyko.
-Trwaly backup wymaga prywatnych repozytoriow zdalnych (osobno dla edytora
-i agenta) oraz potwierdzonego `git push` kazdego brancha. Nigdy nie publikuj
-naszego kodu na zewnetrznych `upstream` bez wyraznej zgody.
+Archiwa Git **nie zawierają niezacommitowanych zmian** ani ignorowanych
+narzędzi i bibliotek; zapisy scen z `agent/projects/` są kopiowane osobno.
+Sceny niezapisanej w GUI nie da się zabezpieczyć bez jej wcześniejszego
+zapisu. Backupy lokalne na F: nie chronią przed awarią tego dysku.
+
+**Docelowo:** dwa prywatne repozytoria `origin` na zewnętrznym serwerze
+(np. GitHub), potwierdzony `git push` obu gałęzi oraz druga kopia scen poza
+dyskiem F:. `source-local` to wyłącznie lokalna kopia referencyjna,
+`upstream` to oryginalny publiczny RoadMaker; **nie wysyłaj tam zmian
+naszego projektu**. Nie usuwaj lokalnych archiwów przed potwierdzeniem
+zewnętrznej kopii.

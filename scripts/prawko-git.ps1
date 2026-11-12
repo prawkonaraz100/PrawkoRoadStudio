@@ -92,6 +92,27 @@ foreach ($repo in $repos) {
   $target = Join-Path $BackupRoot "$($repo.Name)-$stamp.bundle"
   Invoke-CheckedGit $repo.Path @('bundle', 'create', $target, '--all') | Out-Null
   Invoke-CheckedGit $repo.Path @('bundle', 'verify', $target) | Out-Null
+  # A bundle may verify in its source repo yet miss history for an empty clone.
+  $restoreCheck = Join-Path $BackupRoot "_restore-check-$($repo.Name)-$stamp.git"
+  if (Test-Path $restoreCheck) { throw "Restore check path exists: $restoreCheck" }
+  $previousPreference = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try {
+    $cloneOutput = & git.exe clone --bare --quiet $target $restoreCheck 2>&1
+    $cloneExit = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $previousPreference
+  }
+  if ($cloneExit -ne 0) {
+    throw "Standalone restore failed: $target : $cloneOutput"
+  }
+  $expected = @($records | Where-Object { $_.component -eq $repo.Name })[0]
+  $restored = (Invoke-CheckedGit $restoreCheck @('rev-parse', "refs/heads/$($expected.branch)") | Out-String).Trim()
+  if ($restored -ne $expected.commit) {
+    throw "Restore SHA mismatch for $($repo.Name): $restored vs $($expected.commit)"
+  }
+  Remove-Item -LiteralPath $restoreCheck -Force -Recurse
+  Write-Host "STANDALONE_RESTORE_PASS: $($repo.Name) @ $restored"
   $sha256 = [System.Security.Cryptography.SHA256]::Create()
   $stream = [System.IO.File]::OpenRead($target)
   try {
