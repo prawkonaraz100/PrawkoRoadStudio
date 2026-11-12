@@ -21,6 +21,7 @@
 #include "roadmaker/road/lane.hpp"
 #include "roadmaker/road/lane_section.hpp"
 #include "roadmaker/road/defaults.hpp"
+#include "roadmaker/road/object.hpp"
 #include "roadmaker/tol.hpp"
 
 #include <CDT.h>
@@ -479,7 +480,86 @@ struct BandDef {
   Clipper2Lib::PathsD region;
   std::vector<Clipper2Lib::PathD> seams;
   std::string surface;
+  JunctionSidewalkBand source; // preserves the exact arm-face caps after clipping
 };
+
+// A near-junction crosswalk requires both the road-side kerb and the
+// corresponding arm-face cap of the corner to share the *same* flush height.
+// Mirror S2.2a's conservative crosswalk conditions (true rectangular crossing,
+// lateral reach <=35 cm, transverse orientation) on the exact band cap.
+constexpr double kCornerRampRun = 3.0;
+constexpr double kCornerCurbReach = 0.35;
+
+bool arm_crosswalk_reaches_curb(const RoadNetwork& network, const RoadEnd& arm,
+                                const std::array<double, 2>& curb_xy) {
+  const Road* road = network.road(arm.road);
+  if (road == nullptr || road->plan_view.empty()) {
+    return false;
+  }
+  const double road_length = road->plan_view.length();
+  const double end_s = arm.contact == ContactPoint::Start ? 0.0 : road_length;
+  const StationFrame frame = make_frame(*road, end_s);
+  const auto center = lateral_point(frame, 0.0);
+  const double curb_t =
+      ((curb_xy[0] - center[0]) * -frame.sin_h) +
+      ((curb_xy[1] - center[1]) * frame.cos_h);
+  for (const ObjectId id : objects_of(network, arm.road)) {
+    const Object& object = *network.object(id);
+    if (object.type != ObjectType::Crosswalk || object.marking_curve.has_value() ||
+        !object.length.has_value() || !object.width.has_value() ||
+        *object.length <= tol::kLength || *object.width <= tol::kLength ||
+        std::abs(std::sin(object.hdg)) < 0.95) {
+      continue;
+    }
+    const double s0 = object.s - (*object.width / 2.0);
+    const double s1 = object.s + (*object.width / 2.0);
+    if (s1 < 0.0 || s0 > road_length) {
+      continue;
+    }
+    const bool near_face = arm.contact == ContactPoint::Start
+                               ? s0 < kCornerRampRun
+                               : s1 > road_length - kCornerRampRun;
+    const double t0 = object.t - (*object.length / 2.0);
+    const double t1 = object.t + (*object.length / 2.0);
+    if (near_face &&
+        std::min(std::abs(curb_t - t0), std::abs(curb_t - t1)) <= kCornerCurbReach) {
+      return true;
+    }
+  }
+  return false;
+}
+
+struct CornerRampCap {
+  std::array<double, 2> outer{};
+  std::array<double, 2> inner{};
+  bool active = false;
+};
+
+double cap_distance(const CornerRampCap& cap, double x, double y) {
+  const double dx = cap.inner[0] - cap.outer[0];
+  const double dy = cap.inner[1] - cap.outer[1];
+  const double len_sq = (dx * dx) + (dy * dy);
+  const double u = len_sq > 1e-18
+                       ? std::clamp((((x - cap.outer[0]) * dx) +
+                                      ((y - cap.outer[1]) * dy)) / len_sq, 0.0, 1.0)
+                       : 0.0;
+  return std::hypot(x - (cap.outer[0] + (u * dx)),
+                    y - (cap.outer[1] + (u * dy)));
+}
+
+double corner_curb_height(const std::array<CornerRampCap, 2>& caps,
+                          double x, double y) {
+  double height = defaults::kCurbHeight;
+  for (const CornerRampCap& cap : caps) {
+    if (!cap.active) {
+      continue;
+    }
+    const double t = std::clamp(cap_distance(cap, x, y) / kCornerRampRun, 0.0, 1.0);
+    const double profile = t * t * (3.0 - (2.0 * t));
+    height = std::min(height, defaults::kCurbHeight * profile);
+  }
+  return height;
+}
 
 /// Distance from `pt` to the outline of `paths` — used to tell an edge that
 /// merely COINCIDES with the floor boundary from one that runs through the
@@ -526,6 +606,7 @@ BandDef clip_band(const JunctionSidewalkBand& band, const Clipper2Lib::PathsD& f
 
   BandDef out;
   out.surface = band.surface;
+  out.source = band;
   const Clipper2Lib::PathsD ring{band_ring(band)};
   out.region = Clipper2Lib::Intersect(ring, floor, Clipper2Lib::FillRule::NonZero, kUnionPrecision);
 
@@ -1046,6 +1127,29 @@ JunctionFloorSplit build_junction_floor_split(const RoadNetwork& network,
 
   result.carriageway =
       emit_floor_region(floor, assignment, -1, LaneType::Driving, floor.surface, floor.name);
+
+  // A band may touch two arm faces. Each mouth is lowered independently when
+  // a transverse crossing reaches that side's curb within three metres of
+  // the face. The very same height field drives BOTH the sidewalk triangles
+  // and the curb walls, preventing an exposed seam between the two meshes.
+  std::vector<std::array<CornerRampCap, 2>> corner_caps(built.bands.size());
+  if (raised_sidewalks) {
+    for (std::size_t k = 0; k < built.bands.size(); ++k) {
+      const JunctionSidewalkBand& band = built.bands[k].source;
+      if (band.inner.size() < 2 || band.outer.size() != band.inner.size()) {
+        continue;
+      }
+      corner_caps[k][0] = CornerRampCap{
+          band.outer.front(), band.inner.front(),
+          arm_crosswalk_reaches_curb(network, band.arm_a, band.inner.front())};
+      corner_caps[k][1] = CornerRampCap{
+          band.outer.back(), band.inner.back(),
+          arm_crosswalk_reaches_curb(network, band.arm_b, band.inner.back())};
+    }
+  }
+  const auto corner_height = [&](std::size_t k, double x, double y) {
+    return corner_curb_height(corner_caps[k], x, y);
+  };
   for (std::size_t k = 0; k < built.bands.size(); ++k) {
     SubMesh band = emit_floor_region(floor,
                                      assignment,
@@ -1055,8 +1159,42 @@ JunctionFloorSplit build_junction_floor_split(const RoadNetwork& network,
                                      fmt::format("junction {} corner sidewalk", junction.odr_id));
     if (!band.indices.empty()) {
       if (raised_sidewalks) {
-        for (std::size_t i = 2; i < band.positions.size(); i += 3) {
-          band.positions[i] += defaults::kCurbHeight;
+        for (std::size_t i = 0; i < band.positions.size(); i += 3) {
+          band.positions[i + 2] += corner_height(k, band.positions[i], band.positions[i + 1]);
+        }
+        if (corner_caps[k][0].active || corner_caps[k][1].active) {
+          // Recompute geometric vertex normals only on sloping corner bands.
+          // Reusing the unmodified road-floor normals incorrectly lights the
+          // 3 m transition as a flat surface.
+          std::vector<double> accum(band.normals.size(), 0.0);
+          for (std::size_t t = 0; t < band.indices.size(); t += 3) {
+            const auto a = static_cast<std::size_t>(band.indices[t]) * 3;
+            const auto b = static_cast<std::size_t>(band.indices[t + 1]) * 3;
+            const auto c = static_cast<std::size_t>(band.indices[t + 2]) * 3;
+            const double abx = band.positions[b] - band.positions[a];
+            const double aby = band.positions[b + 1] - band.positions[a + 1];
+            const double abz = band.positions[b + 2] - band.positions[a + 2];
+            const double acx = band.positions[c] - band.positions[a];
+            const double acy = band.positions[c + 1] - band.positions[a + 1];
+            const double acz = band.positions[c + 2] - band.positions[a + 2];
+            const std::array<double, 3> n{
+                (aby * acz) - (abz * acy),
+                (abz * acx) - (abx * acz),
+                (abx * acy) - (aby * acx)};
+            for (const std::size_t v : {a, b, c}) {
+              for (std::size_t axis = 0; axis < 3; ++axis) {
+                accum[v + axis] += n[axis];
+              }
+            }
+          }
+          for (std::size_t v = 0; v < accum.size(); v += 3) {
+            const double len = std::hypot(accum[v], accum[v + 1], accum[v + 2]);
+            if (len > 1e-12) {
+              for (std::size_t axis = 0; axis < 3; ++axis) {
+                band.normals[v + axis] = accum[v + axis] / len;
+              }
+            }
+          }
         }
       }
       result.sidewalk_bands.push_back(std::move(band));
@@ -1118,19 +1256,30 @@ JunctionFloorSplit build_junction_floor_split(const RoadNetwork& network,
       if (length < tol::kLength) {
         continue;
       }
+      const double height_a =
+          corner_height(region, floor.positions[3 * a], floor.positions[(3 * a) + 1]);
+      const double height_b =
+          corner_height(region, floor.positions[3 * b], floor.positions[(3 * b) + 1]);
+      if (height_a <= tol::kLength && height_b <= tol::kLength) {
+        continue; // no zero-area wall where the pedestrian crossing is flush
+      }
       const std::array<double, 3> normal{uy / length, -ux / length, 0.0};
       const std::uint32_t first = static_cast<std::uint32_t>(wall.positions.size() / 3);
-      for (const auto [v, top] : {std::pair{a, false}, std::pair{b, false},
-                                  std::pair{b, true}, std::pair{a, true}}) {
+      for (const auto [v, lift] : {std::pair{a, 0.0}, std::pair{b, 0.0},
+                                   std::pair{b, height_b}, std::pair{a, height_a}}) {
         wall.positions.insert(wall.positions.end(),
                               {floor.positions[3 * v], floor.positions[(3 * v) + 1],
-                               floor.positions[(3 * v) + 2] + (top ? defaults::kCurbHeight : 0.0)});
+                               floor.positions[(3 * v) + 2] + lift});
         wall.normals.insert(wall.normals.end(), normal.begin(), normal.end());
       }
-      wall.uvs.insert(wall.uvs.end(), {0.0, 0.0, length, 0.0, length, defaults::kCurbHeight,
-                                       0.0, defaults::kCurbHeight});
-      wall.indices.insert(wall.indices.end(),
-                          {first, first + 1, first + 2, first, first + 2, first + 3});
+      wall.uvs.insert(wall.uvs.end(),
+                      {0.0, 0.0, length, 0.0, length, height_b, 0.0, height_a});
+      if (height_b > tol::kLength) {
+        wall.indices.insert(wall.indices.end(), {first, first + 1, first + 2});
+      }
+      if (height_a > tol::kLength) {
+        wall.indices.insert(wall.indices.end(), {first, first + 2, first + 3});
+      }
     }
     for (std::size_t k = 0; k < curbs.size(); ++k) {
       if (!curbs[k].indices.empty()) {

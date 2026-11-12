@@ -31,6 +31,7 @@
 // the mesh is the realization.
 
 #include "roadmaker/edit/operations.hpp"
+#include "roadmaker/edit/markings.hpp"
 #include "roadmaker/mesh/fill_params.hpp"
 #include "roadmaker/mesh/junction_sidewalk_bands.hpp"
 #include "roadmaker/mesh/mesh.hpp"
@@ -556,6 +557,114 @@ TEST_P(SidewalkBandMatrix, RaisedCornerHasElevatedTopAndTrueCurbWall) {
     }
   }
   EXPECT_GT(mouths_checked, 0U);
+}
+
+// S2.2b: a zebra placed 1 m before a junction used to be ignored because
+// the road-only ramp could not climb back to 15 cm before the arm face. The
+// junction band must now take over the ascent without an open vertical seam.
+TEST(JunctionSidewalkBands, NearJunctionCrosswalksJoinCornerRampsAndRemeshTogether) {
+  RoadNetwork network;
+  const auto walk = LaneProfile::local_road();
+  const JunctionId junction = build_radial(
+      network, even_angles(4), 20.0, {walk});
+  roadmaker::MeshOptions options;
+  options.raised_sidewalks = true;
+  NetworkMesh incremental = roadmaker::build_network_mesh(network, options);
+  ASSERT_EQ(incremental.junction_floors.size(), 1U);
+
+  roadmaker::edit::CrosswalkParams params;
+  params.setback_m = 1.0;
+  params.depth_m = 3.0;
+  const auto crossings = roadmaker::edit::junction_crosswalks(network, junction, params);
+  ASSERT_EQ(crossings.size(), 4U);
+  std::vector<RoadId> changed;
+  for (const auto& [road, obj] : crossings) {
+    auto edit = roadmaker::edit::add_object(network, road, obj);
+    ASSERT_NE(edit, nullptr);
+    ASSERT_TRUE(edit->apply(network).has_value());
+    changed.push_back(road);
+  }
+  roadmaker::remesh_objects(network, incremental, changed, options);
+  const NetworkMesh fresh = roadmaker::build_network_mesh(network, options);
+  ASSERT_EQ(fresh.junction_floors.size(), 1U);
+  ASSERT_EQ(incremental.junction_floors.size(), 1U);
+  ASSERT_EQ(incremental.roads.size(), fresh.roads.size());
+  for (std::size_t i = 0; i < fresh.roads.size(); ++i) {
+    EXPECT_EQ(incremental.roads[i].positions, fresh.roads[i].positions);
+  }
+  const auto& corner = fresh.junction_floors.front();
+  const auto& refreshed = incremental.junction_floors.front();
+  ASSERT_EQ(corner.details.size(), refreshed.details.size());
+  for (std::size_t i = 0; i < corner.details.size(); ++i) {
+    EXPECT_EQ(corner.details[i].positions, refreshed.details[i].positions);
+    EXPECT_EQ(corner.details[i].indices, refreshed.details[i].indices);
+  }
+
+  std::size_t top_count = 0;
+  double min_top = 1.0, max_top = -1.0;
+  for (const auto& detail : corner.details) {
+    if (detail.material != LaneType::Sidewalk) {
+      continue;
+    }
+    ++top_count;
+    for (std::size_t i = 2; i < detail.positions.size(); i += 3) {
+      min_top = std::min(min_top, detail.positions[i]);
+      max_top = std::max(max_top, detail.positions[i]);
+    }
+  }
+  EXPECT_GT(top_count, 0U);
+  EXPECT_LE(min_top, 0.015); // junction arm face is now at crossing level
+  EXPECT_GE(max_top, 0.10);  // rises towards the middle of the corner
+
+  // Exact matching XY vertices at a street/junction seam must have the same
+  // Z on both independently emitted sidewalk surfaces (no vertical cracks).
+  std::size_t matched = 0;
+  for (const auto& road : fresh.roads) {
+    for (const auto& patch : road.lanes) {
+      if (patch.material != LaneType::Sidewalk) {
+        continue;
+      }
+      for (const auto rv : patch.indices) {
+        const double rx = road.positions[3 * rv];
+        const double ry = road.positions[3 * rv + 1];
+        const double rz = road.positions[3 * rv + 2];
+        for (const auto& detail : corner.details) {
+          if (detail.material != LaneType::Sidewalk) {
+            continue;
+          }
+          for (std::size_t v = 0; v + 2 < detail.positions.size(); v += 3) {
+            if (std::hypot(rx - detail.positions[v], ry - detail.positions[v + 1]) < 1e-5) {
+              ++matched;
+              EXPECT_NEAR(rz, detail.positions[v + 2], 1e-5);
+              EXPECT_LT(rz, 0.015);
+            }
+          }
+        }
+      }
+    }
+  }
+  EXPECT_GT(matched, 0U);
+
+  // Deleting the crossings must update the corner as well as the road, with
+  // no residual depression in incremental 3-D geometry.
+  std::vector<roadmaker::ObjectId> to_erase;
+  network.for_each_object([&](roadmaker::ObjectId id, const roadmaker::Object& obj) {
+    if (obj.type == roadmaker::ObjectType::Crosswalk) {
+      to_erase.push_back(id);
+    }
+  });
+  for (const auto id : to_erase) {
+    ASSERT_TRUE(network.erase_object(id));
+  }
+  roadmaker::remesh_objects(network, incremental, changed, options);
+  const NetworkMesh restored = roadmaker::build_network_mesh(network, options);
+  ASSERT_EQ(incremental.junction_floors.size(), restored.junction_floors.size());
+  ASSERT_EQ(incremental.junction_floors.front().details.size(),
+            restored.junction_floors.front().details.size());
+  for (std::size_t i = 0; i < restored.junction_floors.front().details.size(); ++i) {
+    EXPECT_EQ(incremental.junction_floors.front().details[i].positions,
+              restored.junction_floors.front().details[i].positions);
+  }
 }
 
 } // namespace

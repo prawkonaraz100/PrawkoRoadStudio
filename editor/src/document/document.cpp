@@ -872,11 +872,13 @@ void Document::cancel_preview() {
 
 void Document::after_kernel_mutation(const edit::DirtySet& dirty) {
   remesh_roads(network_, mesh_, dirty.roads, studio_mesh_options());
-  remesh_junctions(network_, mesh_, dirty.junctions);
-  // Prop layer: regenerate only the owning roads' instances (no road-surface
-  // re-tessellation) via the reserved objects channel.
+  remesh_junctions(network_, mesh_, dirty.junctions, studio_mesh_options());
+  // In raised-sidewalk mode a crosswalk also shapes the curb ramp. Object
+  // edits must rebuild that road AND its adjacent junction floor, with the
+  // same 3-D options as the initial load. The kernel retains the faster
+  // marking-only path for consumers using legacy flat geometry.
   if (!dirty.objects.empty()) {
-    remesh_objects(network_, mesh_, dirty.objects);
+    remesh_objects(network_, mesh_, dirty.objects, studio_mesh_options());
   }
   // A prop or signal stores no world pose — its transform is DERIVED from the
   // owning road's frame at mesh time (#400). So a road that moved invalidates

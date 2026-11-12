@@ -51,6 +51,15 @@ std::filesystem::path tee_sample() {
   return std::filesystem::path(RM_SAMPLES_DIR) / "t_attach.xodr";
 }
 
+// The editor requests raised sidewalks on load AND every incremental update.
+// Parity against the kernel's flat default misses precisely the curb geometry
+// the editor now renders.
+NetworkMesh editor_fresh_mesh(const Document& document) {
+  roadmaker::MeshOptions options;
+  options.raised_sidewalks = true;
+  return roadmaker::build_network_mesh(document.network(), options);
+}
+
 /// Buffers must match per road id / junction id (order may differ between
 /// incremental and from-scratch builds).
 void expect_mesh_parity(const NetworkMesh& editor_mesh, const NetworkMesh& fresh) {
@@ -80,6 +89,12 @@ void expect_mesh_parity(const NetworkMesh& editor_mesh, const NetworkMesh& fresh
     EXPECT_EQ(found->mesh.normals, expected.mesh.normals);
     EXPECT_EQ(found->mesh.indices, expected.mesh.indices);
     EXPECT_EQ(found->mesh.material, expected.mesh.material);
+    ASSERT_EQ(found->details.size(), expected.details.size());
+    for (std::size_t i = 0; i < expected.details.size(); ++i) {
+      EXPECT_EQ(found->details[i].positions, expected.details[i].positions);
+      EXPECT_EQ(found->details[i].normals, expected.details[i].normals);
+      EXPECT_EQ(found->details[i].indices, expected.details[i].indices);
+    }
   }
   // The derived placement layer (#400): a prop stores no world pose, so any edit
   // that moves its road must re-derive it. Comparing it here makes that a
@@ -117,7 +132,7 @@ void expect_mesh_parity(const NetworkMesh& editor_mesh, const NetworkMesh& fresh
 TEST(MeshParity, LoadedDocumentMatchesKernelBuild) {
   Document document;
   ASSERT_TRUE(document.load(tee_sample()).has_value());
-  expect_mesh_parity(document.mesh(), roadmaker::build_network_mesh(document.network()));
+  expect_mesh_parity(document.mesh(), editor_fresh_mesh(document));
 }
 
 TEST(MeshParity, AttachEditKeepsIncrementalMeshIdenticalToScratchBuild) {
@@ -151,11 +166,11 @@ TEST(MeshParity, AttachEditKeepsIncrementalMeshIdenticalToScratchBuild) {
                       target,
                       60.0))
                   .has_value());
-  expect_mesh_parity(document.mesh(), roadmaker::build_network_mesh(document.network()));
+  expect_mesh_parity(document.mesh(), editor_fresh_mesh(document));
 
   // Undo runs the incremental path in reverse — parity must survive it too.
   document.undo_stack()->undo();
-  expect_mesh_parity(document.mesh(), roadmaker::build_network_mesh(document.network()));
+  expect_mesh_parity(document.mesh(), editor_fresh_mesh(document));
 }
 
 // #400 in its most general form: an edit that moves a road must leave the
@@ -198,18 +213,18 @@ TEST(MeshParity, MovingARoadKeepsItsPropsAndSignsInParity) {
   ASSERT_TRUE(
       document.push_command(roadmaker::edit::translate_road(document.network(), road, 15.0, -8.0))
           .has_value());
-  expect_mesh_parity(document.mesh(), roadmaker::build_network_mesh(document.network()));
+  expect_mesh_parity(document.mesh(), editor_fresh_mesh(document));
 
   ASSERT_TRUE(
       document.push_command(roadmaker::edit::rotate_road(document.network(), road, 0.4, 10.0, 10.0))
           .has_value());
-  expect_mesh_parity(document.mesh(), roadmaker::build_network_mesh(document.network()));
+  expect_mesh_parity(document.mesh(), editor_fresh_mesh(document));
 
   // Undo walks the same incremental path backwards.
   document.undo_stack()->undo();
-  expect_mesh_parity(document.mesh(), roadmaker::build_network_mesh(document.network()));
+  expect_mesh_parity(document.mesh(), editor_fresh_mesh(document));
   document.undo_stack()->undo();
-  expect_mesh_parity(document.mesh(), roadmaker::build_network_mesh(document.network()));
+  expect_mesh_parity(document.mesh(), editor_fresh_mesh(document));
 }
 
 TEST(MeshParity, SceneItemsPassKernelBuffersThroughUnchanged) {

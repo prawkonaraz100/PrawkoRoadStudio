@@ -874,18 +874,21 @@ CurbFade crosswalk_curb_fade(double s, double curb_t,
         kCurbEdgeReach) {
       continue; // the crossing does not meet this side of the road
     }
-    // S2.1's junction band expects full height at its arm seam. A crossing
-    // too close to that seam needs a junction-corner ramp, not a road-only
-    // ramp that would leave a visible vertical tear. That is a separate step.
-    if ((raised_start && crossing.s0 < kCurbRampRun - tol::kLength) ||
-        (raised_end && crossing.s1 > road_length - kCurbRampRun + tol::kLength)) {
+    const bool reaches_start = raised_start && crossing.s0 < kCurbRampRun;
+    const bool reaches_end = raised_end && crossing.s1 > road_length - kCurbRampRun;
+    // When a crossing is near a raised junction arm, the kerb stays flush
+    // from the zebra to the end face. The adjacent junction band creates the
+    // remaining 3 m ascent. Never leave a partially raised mouth vertex.
+    if (s < crossing.s0 - kCurbRampRun && !reaches_start) {
       continue;
     }
-    if (s < crossing.s0 - kCurbRampRun || s > crossing.s1 + kCurbRampRun) {
+    if (s > crossing.s1 + kCurbRampRun && !reaches_end) {
       continue;
     }
     CurbFade candidate;
-    if (s < crossing.s0) {
+    if ((reaches_start && s <= crossing.s1) || (reaches_end && s >= crossing.s0)) {
+      candidate = {0.0, 0.0};
+    } else if (s < crossing.s0) {
       const double t = (crossing.s0 - s) / kCurbRampRun;
       candidate = {smooth(t), -gradient(t)};
     } else if (s <= crossing.s1) {
@@ -1410,6 +1413,7 @@ void remesh_objects(const RoadNetwork& network,
   // An object was added, moved or removed: the placements go first (independent
   // of the road's surface mesh), then the marking-only fast path below.
   remesh_object_instances(network, mesh, roads);
+  std::vector<JunctionId> affected_junctions;
   for (const RoadId road_id : roads) {
     const auto existing = std::ranges::find(mesh.roads, road_id, &RoadMesh::road);
     const Road* road = network.road(road_id);
@@ -1432,6 +1436,17 @@ void remesh_objects(const RoadNetwork& network,
     if (options.raised_sidewalks) {
       if (road != nullptr) {
         *existing = build_one_road(network, road_id, *road, options);
+        // The adjoining corner band also derives its height from this
+        // road's crosswalk objects. Mark both ends dirty, including a
+        // crossing that has just been deleted (no object remains to query).
+        for (const ContactPoint contact : {ContactPoint::Start, ContactPoint::End}) {
+          const auto junction = edit::junction_at_end(
+              network, RoadEnd{.road = road_id, .contact = contact});
+          if (junction.has_value() &&
+              std::ranges::find(affected_junctions, *junction) == affected_junctions.end()) {
+            affected_junctions.push_back(*junction);
+          }
+        }
       } else {
         mesh.roads.erase(existing);
       }
@@ -1446,6 +1461,9 @@ void remesh_objects(const RoadNetwork& network,
       build_object_markings(network, *road, road_id, *existing);
       build_stopline_markings(network, *road, road_id, *existing);
     }
+  }
+  if (options.raised_sidewalks && !affected_junctions.empty()) {
+    remesh_junctions(network, mesh, affected_junctions, options);
   }
 }
 

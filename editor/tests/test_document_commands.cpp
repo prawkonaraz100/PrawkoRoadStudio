@@ -18,11 +18,14 @@
 // the kernel, failed applies never pushed, stack cleared on load.
 
 #include "roadmaker/edit/operations.hpp"
+#include "roadmaker/mesh/mesh_builder.hpp"
+#include "roadmaker/road/object.hpp"
 
 #include <gtest/gtest.h>
 
 #include <QSignalSpy>
 #include <filesystem>
+#include <optional>
 #include <string>
 
 #include "document/document.hpp"
@@ -183,4 +186,56 @@ TEST(DocumentCommands, UndoStackClearsOnLoad) {
   ASSERT_TRUE(document.load(sample()).has_value());
   EXPECT_FALSE(document.undo_stack()->canUndo());
   EXPECT_FALSE(document.undo_stack()->canRedo());
+}
+
+TEST(DocumentCommands, NearJunctionCrosswalkDeleteAndUndoKeepRaisedMeshParity) {
+  Document document;
+  ASSERT_TRUE(document.load(std::filesystem::path(RM_SAMPLES_DIR) /
+                            "gs1_urban_intersection.xodr").has_value());
+  roadmaker::ObjectId first_crosswalk;
+  document.network().for_each_object([&](roadmaker::ObjectId id,
+                                         const roadmaker::Object& object) {
+    if (!first_crosswalk.is_valid() &&
+        object.type == roadmaker::ObjectType::Crosswalk) {
+      first_crosswalk = id;
+    }
+  });
+  ASSERT_TRUE(first_crosswalk.is_valid());
+
+  // Unlike the legacy flat kernel default, the editor always requests the
+  // realistic 15 cm curbs. The result of an object edit and Undo/Redo must
+  // match a full fresh 3-D build — including every corner-detail mesh.
+  const auto expect_parity = [&]() {
+    roadmaker::MeshOptions options;
+    options.raised_sidewalks = true;
+    const auto fresh = roadmaker::build_network_mesh(document.network(), options);
+    const auto& cached = document.mesh();
+    ASSERT_EQ(cached.roads.size(), fresh.roads.size());
+    for (std::size_t i = 0; i < fresh.roads.size(); ++i) {
+      EXPECT_EQ(cached.roads[i].positions, fresh.roads[i].positions);
+      EXPECT_EQ(cached.roads[i].normals, fresh.roads[i].normals);
+      ASSERT_EQ(cached.roads[i].lanes.size(), fresh.roads[i].lanes.size());
+    }
+    ASSERT_EQ(cached.junction_floors.size(), fresh.junction_floors.size());
+    for (std::size_t i = 0; i < fresh.junction_floors.size(); ++i) {
+      const auto& a = cached.junction_floors[i].details;
+      const auto& b = fresh.junction_floors[i].details;
+      ASSERT_EQ(a.size(), b.size());
+      for (std::size_t k = 0; k < a.size(); ++k) {
+        EXPECT_EQ(a[k].positions, b[k].positions);
+        EXPECT_EQ(a[k].normals, b[k].normals);
+        EXPECT_EQ(a[k].indices, b[k].indices);
+      }
+    }
+  };
+  expect_parity();
+  QSignalSpy spy(&document, &Document::mesh_changed);
+  ASSERT_TRUE(document.push_command(
+      roadmaker::edit::delete_object(document.network(), first_crosswalk)).has_value());
+  expect_parity();
+  document.undo_stack()->undo();
+  expect_parity();
+  document.undo_stack()->redo();
+  expect_parity();
+  EXPECT_GE(spy.count(), 3);
 }
