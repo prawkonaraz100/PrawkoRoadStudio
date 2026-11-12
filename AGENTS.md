@@ -32,8 +32,10 @@ drogowych do nauki jazdy oraz poprawie jakości wizualnej siatki 3D.
   dokumentacji.
 - Nie zmieniaj oryginalnego `F:\RoadMaker-evaluation`, który pozostaje
   źródłem Qt, Pythona, CMake i kopią porównawczą.
-- Interfejs AI i generowania scen: `F:\RoadMakerAgent` (zaktualizuj
-  wskazanie EXE i moduł Python, kiedy kompilacja nowego forka się powiedzie).
+- Interfejs AI i generowania scen: `F:\RoadMakerAgent`.
+  Wywołuj go przez `F:\PrawkoRoadStudio\scripts\prawko-agent.cmd`,
+  które wybiera nowy edytor i wspólne OpenDRIVE/OpenSCENARIO.
+  Moduł Python należy zaktualizować po kompilacji nowego forka.
 - Stary `F:\RoadSceneEditor` Unreal został usunięty 12.11.2026,
   więc nie zakładaj jego istnienia ani nie przywracaj go.
 - Historyczny Git bundle/patch: `F:\PrawkoRoadStudio-legacy-backup\2026-11-12`.

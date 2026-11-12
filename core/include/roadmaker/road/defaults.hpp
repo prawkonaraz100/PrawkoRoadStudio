@@ -68,7 +68,7 @@ inline constexpr double kShoulderWidth = 1.8; ///< arterial/collector shoulder
 inline constexpr double kParkingLaneWidth = 2.4;
 inline constexpr double kBikeLaneWidth = 1.5;
 inline constexpr double kSidewalkWidth = 1.8;
-inline constexpr double kCurbHeight = 0.15; ///< canonical; not yet extruded
+inline constexpr double kCurbHeight = 0.15; ///< canonical height; the studio mesh can extrude it
 inline constexpr double kMedianWidth = 1.2; ///< raised median, minimum
 inline constexpr double kTwoWayLeftTurnLaneWidth = 3.6;
 

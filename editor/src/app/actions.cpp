@@ -536,7 +536,7 @@ Actions::Actions(QUndoStack& undo_stack, QObject* parent) : QObject(parent) {
   open_manual->setShortcuts(shortcuts::sequences(shortcuts::Id::OpenManual));
   open_manual->setToolTip(tr("Open the full illustrated manual in your web browser"));
 
-  about = new QAction(tr("&About RoadMaker"), this);
+  about = new QAction(tr("&About PrawkoRoadStudio"), this);
   about->setMenuRole(QAction::AboutRole);
 
   apply_icons();

@@ -269,8 +269,8 @@ int main(int argc, char** argv) {
   // locations from them, and crash capture must cover the WHOLE session —
   // including QApplication construction (the name setters are static, so
   // they work before the instance exists).
-  QCoreApplication::setOrganizationName(QStringLiteral("Robomous"));
-  QCoreApplication::setApplicationName(QStringLiteral("RoadMaker"));
+  QCoreApplication::setOrganizationName(QStringLiteral("PrawkoNaRaz"));
+  QCoreApplication::setApplicationName(QStringLiteral("PrawkoRoadStudio"));
   const QString session = roadmaker::editor::logging::make_session_id();
   const std::filesystem::path log_file =
       roadmaker::editor::logging::init(roadmaker::editor::logging::default_log_dir(), session);

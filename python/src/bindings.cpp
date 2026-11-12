@@ -7027,6 +7027,8 @@ NB_MODULE(_roadmaker, m) {
       .def(nb::init<>())
       .def_rw("markings", &roadmaker::MeshOptions::markings)
       .def_rw("junction_floors", &roadmaker::MeshOptions::junction_floors)
+      .def_rw("raised_sidewalks", &roadmaker::MeshOptions::raised_sidewalks,
+              "Sweep a raised sidewalk and realistic curb wall/chamfer along road lanes.")
       .def_rw(
           "terrain", &roadmaker::MeshOptions::terrain, "Emit the scene terrain channel (p5-s2).")
       .def_rw("terrain_skirt",

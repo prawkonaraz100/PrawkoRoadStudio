@@ -2831,7 +2831,7 @@ void MainWindow::check_recovery() {
 
 void MainWindow::show_about_dialog() {
   QMessageBox about(this);
-  about.setWindowTitle(tr("About RoadMaker"));
+  about.setWindowTitle(tr("About PrawkoRoadStudio"));
   about.setTextFormat(Qt::RichText);
   about.setIconPixmap(Icons::app_icon().pixmap(64, 64));
   about.setText(tr("<b>RoadMaker</b> — open source road-network authoring toolkit.<br>"
@@ -3058,9 +3058,9 @@ void MainWindow::update_window_title() {
   const QString name =
       document_.has_file() ? QFileInfo(document_.file_path()).fileName() : tr("Untitled");
   if (project_.has_value()) {
-    setWindowTitle(tr("%1[*] — %2 — RoadMaker").arg(name, project_->name()));
+    setWindowTitle(tr("%1[*] — %2 — PrawkoRoadStudio").arg(name, project_->name()));
   } else {
-    setWindowTitle(tr("%1[*] — RoadMaker").arg(name));
+    setWindowTitle(tr("%1[*] — PrawkoRoadStudio").arg(name));
   }
 }
 

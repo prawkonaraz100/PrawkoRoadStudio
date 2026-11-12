@@ -79,9 +79,10 @@ p2-s8's road-style assets). The junction sidewalk band inherits the
 sidewalk lane width by construction, so it follows this table
 automatically.
 
-*Curb height note:* curbs are not vertically extruded by the current mesh
-pipeline; the value above is canonical for when they are, and for any
-feature (e.g. clearance checks) that needs the number meanwhile.
+*Curb height note (PrawkoRoadStudio fork):* the studio renderer can now
+extrude sidewalk and curb geometry by enabling `MeshOptions::raised_sidewalks`.
+The default kernel mode remains flat for compatibility with existing exports;
+the editor uses the raised variant. The canonical height above is unchanged.
 
 ## 1.3 Markings (MUTCD Ch. 3)
 

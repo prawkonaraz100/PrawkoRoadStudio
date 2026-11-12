@@ -120,7 +120,7 @@ WelcomeWidget::WelcomeWidget(Settings& settings, QWidget* parent)
   // Left column: identity + primary actions + links.
   auto* intro = new QVBoxLayout;
   intro->setSpacing(8);
-  auto* hero = new QLabel(QStringLiteral("RoadMaker"), this);
+  auto* hero = new QLabel(QStringLiteral("PrawkoRoadStudio"), this);
   hero->setObjectName(QStringLiteral("welcomeHero"));
   intro->addWidget(hero);
   auto* tagline = new QLabel(tr("Open-source road-network authoring —\n"

@@ -43,6 +43,14 @@ namespace roadmaker::editor {
 
 namespace {
 
+// PrawkoRoadStudio uses true vertical geometry for sidewalks while preserving
+// the same canonical road/lane data and the same Undo/Redo command stack.
+MeshOptions studio_mesh_options() {
+  MeshOptions options;
+  options.raised_sidewalks = true;
+  return options;
+}
+
 // The crash-report command trail (#84): every executed command logs its name
 // plus the dirty-set parameters, so a report's session log reconstructs what
 // the user did. Kernel commands expose no richer parameter view than the
@@ -126,7 +134,7 @@ Expected<void> Document::load(const std::filesystem::path& path) {
   network_ = std::move(result->network);
   diagnostics_ = std::move(result->diagnostics);
   file_path_ = QString::fromStdString(path.string());
-  mesh_ = build_network_mesh(network_);
+  mesh_ = build_network_mesh(network_, studio_mesh_options());
   // Layer 2 (fmt-s1, #325): comfort state, read AFTER the network is in place
   // and never able to fail the load — the .xodr alone is the scene.
   read_scene_sidecar(path);
@@ -383,7 +391,7 @@ void Document::reset() {
   file_path_.clear();
   scene_state_ = SceneState{};
   scene_state_from_disk_ = false;
-  mesh_ = build_network_mesh(network_);
+  mesh_ = build_network_mesh(network_, studio_mesh_options());
 
   emit loaded();
   emit mesh_changed({});
@@ -863,7 +871,7 @@ void Document::cancel_preview() {
 }
 
 void Document::after_kernel_mutation(const edit::DirtySet& dirty) {
-  remesh_roads(network_, mesh_, dirty.roads);
+  remesh_roads(network_, mesh_, dirty.roads, studio_mesh_options());
   remesh_junctions(network_, mesh_, dirty.junctions);
   // Prop layer: regenerate only the owning roads' instances (no road-surface
   // re-tessellation) via the reserved objects channel.

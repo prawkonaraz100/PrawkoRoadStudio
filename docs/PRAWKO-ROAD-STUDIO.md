@@ -59,3 +59,29 @@ każda funkcja projektowania musi również działać w interfejsie myszką.
 
 **Uwaga:** priorytety powyżej to wymagania rozwojowe, a nie lista
 ukończonych funkcji. Dopiero kod i testy potwierdzają realizację.
+
+## Potwierdzone wykonanie — etap S1 (12.11.2026)
+
+Pierwsza zmiana w generatorze geometrii jest zaimplementowana i potwierdzona na Windows.
+To nie oznacza ukończenia docelowego stylu.
+
+- MeshOptions.raised_sidewalks: w API domyślnie false dla kompatybilności,
+  ale Qt PrawkoRoadStudio włącza true podczas budowania i aktualizacji siatki.
+- Chodniki: osobna powierzchnia na wysokości 0,15 m, dopasowana do krzywej drogi.
+- Krawężniki: pionowa ścianka i faza do 5 cm z własnymi normalnymi i UV.
+- Przy styku ze skrzyżowaniem zastosowano krótki zjazd do poziomu starych pasm.
+- OpenDRIVE pozostaje formatem nadrzędnym; nie przekształcano danych mapy.
+- Nowy Python binding zawiera raised_sidewalks, a roadctl włącza geometrię
+  przy eksporcie do glTF.
+- Testy: wybrana grupa Mesh 11/11 PASS i RoadMakerAgent 6/6 PASS.
+- GUI Windows: PrawkoRoadStudio uruchomione ze sceną miejskiej drogi w łuku.
+- Pliki: F:\RoadMakerAgent\projects\prawko_urban_curve\scene.xodr,
+  scene.xosc, scene.glb i preview.png.
+
+### Pozostałe prace
+
+Domyślne modele drzew, podłoże i materiały nadal są uproszczone.
+Chodniki narożne w skrzyżowaniach nadal są płaskimi pasmami.
+Potrzebne są spójne wzniesione naroża, zjazdy i obniżone krawężniki
+przy przejściach, normalne i oświetlenie oraz regulacja wysokości
+i profilu krawężnika myszką. Nie opisywać tych funkcji jako wykonanych.

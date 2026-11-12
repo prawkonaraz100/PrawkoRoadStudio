@@ -66,6 +66,53 @@ double patch_area_xy(const std::vector<double>& positions,
 
 } // namespace
 
+TEST(Mesh, PrawkoRaisedSidewalksHaveRealCurbVolumeAndOptionalLegacyMode) {
+  roadmaker::RoadNetwork network;
+  const std::vector<roadmaker::Waypoint> waypoints{{0.0, 0.0}, {80.0, 0.0}};
+  const auto created = roadmaker::author_clothoid_road(
+      network, waypoints, roadmaker::LaneProfile::local_road(), "Studio", "1");
+  ASSERT_TRUE(created.has_value());
+
+  // The stock mesher remains nonbreaking for external simulation consumers.
+  const NetworkMesh flat = roadmaker::build_network_mesh(network);
+  ASSERT_EQ(flat.roads.size(), 1U);
+  for (std::size_t i = 2; i < flat.roads[0].positions.size(); i += 3) {
+    EXPECT_NEAR(flat.roads[0].positions[i], 0.0, 1e-12);
+  }
+
+  roadmaker::MeshOptions realistic;
+  realistic.raised_sidewalks = true;
+  const NetworkMesh shaped = roadmaker::build_network_mesh(network, realistic);
+  ASSERT_EQ(shaped.roads.size(), 1U);
+  const RoadMesh& road = shaped.roads[0];
+
+  double max_z = -1e6;
+  double min_nz = 1.0;
+  for (std::size_t i = 2; i < road.positions.size(); i += 3) {
+    max_z = std::max(max_z, road.positions[i]);
+    min_nz = std::min(min_nz, road.normals[i]);
+  }
+  EXPECT_NEAR(max_z, 0.15, 1e-9); // realistic sidewalk top
+  EXPECT_LT(min_nz, 0.1);        // actual vertical wall normals
+
+  std::size_t sidewalk_patches = 0;
+  std::size_t curb_patches = 0;
+  for (const auto& patch : road.lanes) {
+    if (patch.material == roadmaker::LaneType::Sidewalk) {
+      ++sidewalk_patches;
+      EXPECT_FALSE(patch.indices.empty());
+    }
+    if (patch.material == roadmaker::LaneType::Curb) {
+      ++curb_patches;
+      EXPECT_FALSE(patch.indices.empty());
+      EXPECT_EQ(patch.surface, "concrete");
+    }
+  }
+  EXPECT_EQ(sidewalk_patches, 2U);
+  EXPECT_EQ(curb_patches, 4U); // 2 walls and 2 chamfers
+  EXPECT_GT(road.positions.size(), flat.roads[0].positions.size());
+}
+
 TEST(Mesh, StraightRoadMeshesWithCorrectExtentsAndAreas) {
   const auto network = load_sample("straight_road.xodr");
   const NetworkMesh mesh = roadmaker::build_network_mesh(network);

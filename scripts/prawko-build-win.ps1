@@ -22,7 +22,7 @@ $cmdline=('"'+$vc+'" >nul && cmake -S "'+$root+'" -B "'+$build+
 & cmd.exe /c $cmdline
 if($LASTEXITCODE -ne 0){throw "CMake configure failed: $LASTEXITCODE"}
 if($Target -eq 'tests'){
-  $action='cmake --build "'+$build+'" --parallel '+$Jobs
+  $action='cmake --build "'+$build+'" --target roadmaker_core_tests --parallel '+$Jobs
 }elseif($Target -eq 'all'){
   $action='cmake --build "'+$build+'" --parallel '+$Jobs
 }elseif($Target -eq 'python'){
@@ -32,4 +32,9 @@ if($Target -eq 'tests'){
 }
 & cmd.exe /c ('"'+$vc+'" >nul && '+$action)
 if($LASTEXITCODE -ne 0){throw "Build failed: $LASTEXITCODE"}
+if($Target -eq 'editor' -or $Target -eq 'all'){
+  $exe=Join-Path $build 'editor\roadmaker-editor.exe'
+  & "$qt\bin\windeployqt.exe" --release --no-translations $exe
+  if($LASTEXITCODE -ne 0){throw "Qt deployment failed: $LASTEXITCODE"}
+}
 Write-Host "BUILD_PASS: $Target"

@@ -901,6 +901,88 @@ RoadMesh build_one_road(const RoadNetwork& network,
       const std::size_t col_left = lane.odr_id > 0 ? center_col - p : center_col + p - 1;
       const std::size_t col_right = col_left + 1;
 
+      // PrawkoRoadStudio cross-section: the sidewalk has a separate raised
+      // top plus a vertical curb and a beveled lip, all swept along the true
+      // reference-line frames. The old flat grid stays the road datum and is
+      // still shared by the driving lanes and OpenDRIVE lane boundaries.
+      // These vertices are a presentation layer; they never mutate .xodr.
+      const bool raised_sidewalk = options.raised_sidewalks && lane.type == LaneType::Sidewalk;
+      std::vector<std::array<std::uint32_t, 2>> raised_top;
+      std::vector<std::array<std::uint32_t, 2>> curb_wall;
+      std::vector<std::array<std::uint32_t, 2>> curb_bevel;
+      if (raised_sidewalk) {
+        raised_top.reserve(rows.size());
+        curb_wall.reserve(rows.size());
+        curb_bevel.reserve(rows.size());
+        const double side = lane.odr_id > 0 ? 1.0 : -1.0;
+        const auto junction_end = [](const std::optional<RoadLink>& link) {
+          return link.has_value() && std::holds_alternative<JunctionId>(link->target);
+        };
+        const auto vertex = [&](const StationFrame& frame,
+                                double s, double t, double z,
+                                const std::array<double, 3>& normal) {
+          auto p = lateral_point(frame, t);
+          p[2] += z;
+          const auto id = static_cast<std::uint32_t>(mesh.positions.size() / 3);
+          mesh.positions.insert(mesh.positions.end(), p.begin(), p.end());
+          mesh.normals.insert(mesh.normals.end(), normal.begin(), normal.end());
+          mesh.uvs.insert(mesh.uvs.end(), {s, t});
+          return id;
+        };
+        for (std::size_t ri = 0; ri < rows.size(); ++ri) {
+          const double s = rows[ri];
+          const StationFrame frame = make_frame(road, s);
+          const double t_left = row_offsets[ri][col_left];
+          const double t_right = row_offsets[ri][col_right];
+          const double width = std::abs(t_left - t_right);
+          const double inner_t = side > 0.0 ? t_right : t_left;
+          double fade = 1.0;
+          // The existing junction sidewalk band lies at the carriageway datum.
+          // Short unobtrusive ramps avoid a vertical hole at each arm's join
+          // until the junction floors receive their own true curb mesh.
+          constexpr double kJoinRampM = 4.0;
+          if (junction_end(road.predecessor)) {
+            fade = std::min(fade, std::clamp(s / kJoinRampM, 0.0, 1.0));
+          }
+          if (junction_end(road.successor)) {
+            fade = std::min(
+                fade, std::clamp((road.plan_view.length() - s) / kJoinRampM, 0.0, 1.0));
+          }
+          const double height = defaults::kCurbHeight * fade;
+          const double wall_height = height * 0.80;
+          const double bevel_width = std::min(0.05 * fade, width * 0.20);
+          const double top_inner_t = inner_t + side * bevel_width;
+          const double top_left_t = side > 0.0 ? t_left : top_inner_t;
+          const double top_right_t = side > 0.0 ? top_inner_t : t_right;
+          const auto top_normal = surface_normal(frame);
+          const std::array<double, 3> inward{
+              side * frame.sin_h, -side * frame.cos_h, 0.0};
+          const double slope = height - wall_height;
+          const double denom = std::hypot(bevel_width, slope);
+          const double weight_in = denom > 1e-12 ? slope / denom : 0.0;
+          const double weight_up = denom > 1e-12 ? bevel_width / denom : 1.0;
+          const std::array<double, 3> bevel_normal{
+              (weight_in * inward[0]) + (weight_up * top_normal[0]),
+              (weight_in * inward[1]) + (weight_up * top_normal[1]),
+              (weight_in * inward[2]) + (weight_up * top_normal[2])};
+          const auto top_l = vertex(frame, s, top_left_t, height, top_normal);
+          const auto top_r = vertex(frame, s, top_right_t, height, top_normal);
+          raised_top.push_back({top_l, top_r});
+
+          const auto wall_bottom = vertex(frame, s, inner_t, 0.0, inward);
+          const auto wall_top = vertex(frame, s, inner_t, wall_height, inward);
+          curb_wall.push_back(side > 0.0
+                                  ? std::array<std::uint32_t, 2>{wall_top, wall_bottom}
+                                  : std::array<std::uint32_t, 2>{wall_bottom, wall_top});
+
+          const auto lip_bottom = vertex(frame, s, inner_t, wall_height, bevel_normal);
+          const auto lip_top = vertex(frame, s, top_inner_t, height, bevel_normal);
+          curb_bevel.push_back(side > 0.0
+                                   ? std::array<std::uint32_t, 2>{lip_top, lip_bottom}
+                                   : std::array<std::uint32_t, 2>{lip_bottom, lip_top});
+        }
+      }
+
       // Surface code covering a section-local station: the <material> record
       // with the greatest sOffset <= s (§11.8.2, "valid until the next element
       // starts"). Empty when the lane has no record there — the renderer then
@@ -945,16 +1027,43 @@ RoadMesh build_one_road(const RoadNetwork& network,
           patch.surface = std::move(surface);
           patch_open = true;
         }
-        const std::uint32_t a = grid_base + (row * static_cast<std::uint32_t>(columns)) +
-                                static_cast<std::uint32_t>(col_left);
-        const std::uint32_t b = grid_base + (row * static_cast<std::uint32_t>(columns)) +
-                                static_cast<std::uint32_t>(col_right);
-        const std::uint32_t c = b + static_cast<std::uint32_t>(columns);
-        const std::uint32_t d = a + static_cast<std::uint32_t>(columns);
+        const std::uint32_t a = raised_sidewalk
+                                    ? raised_top[row][0]
+                                    : grid_base + (row * static_cast<std::uint32_t>(columns)) +
+                                          static_cast<std::uint32_t>(col_left);
+        const std::uint32_t b = raised_sidewalk
+                                    ? raised_top[row][1]
+                                    : grid_base + (row * static_cast<std::uint32_t>(columns)) +
+                                          static_cast<std::uint32_t>(col_right);
+        const std::uint32_t c = raised_sidewalk
+                                    ? raised_top[row + 1][1]
+                                    : b + static_cast<std::uint32_t>(columns);
+        const std::uint32_t d = raised_sidewalk
+                                    ? raised_top[row + 1][0]
+                                    : a + static_cast<std::uint32_t>(columns);
         patch.indices.insert(patch.indices.end(), {a, b, c, a, c, d});
       }
       if (!patch.indices.empty()) {
         mesh.lanes.push_back(std::move(patch));
+      }
+      if (raised_sidewalk) {
+        // Each curb face has its own vertices: normals stay sharp at the
+        // vertical rise and the chamfer instead of averaging with the walk.
+        const auto emit_strip = [&](const auto& edge, std::string_view part) {
+          RoadMesh::LanePatch face = new_patch("concrete");
+          face.material = LaneType::Curb;
+          (void)part; // the material class names the two strips consistently
+          for (std::uint32_t row = 0; row + 1 < rows.size(); ++row) {
+            const auto [a, b] = edge[row];
+            const auto [d, c] = edge[row + 1];
+            face.indices.insert(face.indices.end(), {a, b, c, a, c, d});
+          }
+          if (!face.indices.empty()) {
+            mesh.lanes.push_back(std::move(face));
+          }
+        };
+        emit_strip(curb_wall, "wall");
+        emit_strip(curb_bevel, "bevel");
       }
     }
   }

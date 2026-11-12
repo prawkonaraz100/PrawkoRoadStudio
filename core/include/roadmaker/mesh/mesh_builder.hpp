@@ -59,6 +59,12 @@ struct MeshOptions {
   /// before terrain existed.
   bool terrain = true;
 
+  /// PrawkoRoadStudio: build actual raised sidewalk tops and distinct curb
+  /// faces instead of sharing a coplanar vertex grid with the carriageway.
+  /// Opt-in at kernel level for legacy mesh/test compatibility; the Qt
+  /// editor selects the realistic presentation automatically.
+  bool raised_sidewalks = false;
+
   /// Width [m] of the skirt band along road edges over which the road-edge z
   /// wins over the raw field sample (p5-s2, #232): the ground blends up (or
   /// down) to meet the kerb across this distance, so there is no cliff at the
