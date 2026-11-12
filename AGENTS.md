@@ -89,9 +89,14 @@ narzędzi i bibliotek; zapisy scen z `agent/projects/` są kopiowane osobno.
 Sceny niezapisanej w GUI nie da się zabezpieczyć bez jej wcześniejszego
 zapisu. Backupy lokalne na F: nie chronią przed awarią tego dysku.
 
-**Docelowo:** dwa prywatne repozytoria `origin` na zewnętrznym serwerze
-(np. GitHub), potwierdzony `git push` obu gałęzi oraz druga kopia scen poza
-dyskiem F:. `source-local` to wyłącznie lokalna kopia referencyjna,
-`upstream` to oryginalny publiczny RoadMaker; **nie wysyłaj tam zmian
-naszego projektu**. Nie usuwaj lokalnych archiwów przed potwierdzeniem
-zewnętrznej kopii.
+**GitHub (PUBLIC, stan potwierdzony 12.11.2026):**
+- edytor: `https://github.com/prawkonaraz100/PrawkoRoadStudio`, `origin`, gałęzie `main` i `feature/realistic-road-surfaces`;
+- agent: `https://github.com/prawkonaraz100/PrawkoRoadStudio-Agent`, `origin`, gałąź `main`.
+
+Każdy nowy commit należy wysłać na odpowiednią gałąź `origin` i sprawdzić
+zgodność SHA z GitHub przed zgłoszeniem pełnej synchronizacji. Repozytoria
+są **publiczne**: nie zapisuj w Git haseł, tokenów, prywatnych kluczy ani
+danych użytkowników. Druga kopia scen poza dyskiem F: nadal jest potrzebna.
+`source-local` to tylko lokalna kopia referencyjna, `upstream` to oryginalny
+publiczny RoadMaker; **nie wysyłaj tam zmian naszego projektu**.
+Nie usuwaj lokalnych archiwów przed potwierdzeniem zewnętrznej kopii.
