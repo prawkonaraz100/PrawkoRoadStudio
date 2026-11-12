@@ -2,7 +2,7 @@
 
 > **Jedyny aktualizowany dziennik przekazania między rozmowami.**
 > Kolejny agent ma czytać ten plik **przed edycją kodu**.
-> Stan dokumentu: 2026-11-12, po wdrożeniu i testach geometrii S2.1.
+> Stan dokumentu: 2026-11-12, po wdrożeniu i testach geometrii S2.2a.
 > Poniższe SHA to punkt kontrolny, nie zamiennik aktualnego `git status`.
 
 ## Gotowe polecenie do nowej rozmowy
@@ -90,23 +90,61 @@ i mało czytelny detal krawężnika.
   Przed kolejnymi działaniami trzeba **na nowo** sprawdzić otwarte procesy
   i niezapisane sceny.
 
-**Następny krok S2.2:** sprawdzić i domknąć górne profile naroży
-na skrzyżowaniach — obecnie mają pionową ściankę, ale **nie mają jeszcze
-ciągłej fazy** takiej jak na drogach. Przeprowadzić weryfikację siatki
-z perspektywy kierowcy i przy przejściach, dodać obniżenia krawężników
-i rampy w obrębie narożnika (obecne obniżenia przy przejściach NIE są
-zaimplementowane). Potwierdzić geometrię na łuku i skrzyżowaniach
-z pochyleniem, brak z-fightingu i poprawny eksport glTF. Wprowadzić
-odpowiednie testy na profil 3D i odtworzenie scen. Dopiero po tym
-rozpoczynać pracę nad PBR i oświetleniem.
+**S2.2a — obniżenia na odcinkach drogi (12.11.2026):**
+Dodano w `core/src/mesh/mesh_builder.cpp` generowanie obniżeń
+na podstawie istniejących `ObjectType::Crosswalk` (wymiary,
+pozycja `s/t` i obrót obiektu). W trybie `raised_sidewalks=true`
+chodnik opada z +0,15 m do poziomu jezdni na całej szerokości
+poprawnie zlokalizowanego przejścia i wznosi się przez dwie
+3-metrowe rampy z łagodnym profilem `smoothstep`.
+Normalne chodnika uwzględniają pochylenie. Generator nie tworzy
+zerowych trójkątów ściany/fazy w miejscu obniżenia.
+
+**Warunki bezpieczeństwa:** przejście musi fizycznie sięgać
+krawędzi jezdni po danej stronie i być obrócone w poprzek drogi.
+Wyloty z wyniesionym narożem, gdzie brakuje co najmniej 3 m
+na pełną rampę i odzyskanie 15 cm wysokości przed stykiem,
+są świadomie pomijane — **nie mają jeszcze obniżenia w S2.2a**.
+Stan kompatybilny `raised_sidewalks=false` nie zmienia się.
+Przy edycji/usuwaniu obiektu `remesh_objects` przebudowuje
+siatkę drogi w trybie 3D, aby nie zostawiać starego zagłębienia.
+
+Dodano dwa testy do `core/tests/test_mesh.cpp`:
+obniżenie obu stron, ciągłość wysokości, normalne,
+brak degeneracji ścian, zgodność pełnego i przyrostowego
+remesh oraz powrót do stanu pierwotnego po usunięciu
+przejścia; brak obniżenia przy błędnym zasięgu/obrocie.
+Testy skoncentrowane: 2/2 PASS. Scena do kontroli GUI:
+`archive/visual-regression/s2-midblock-curb-drop.xodr`
+(z lokalnego wzorca, tylko do testów; walidator: 0 błędów).
+**Potwierdzono kompilację i testy:** `BUILD_PASS: tests`,
+`BUILD_PASS: editor`, pełny `QUALITY_GATE_PASS`,
+**2058 testów C++ PASS**, 10 wyłączonych, **6/6 testów agenta PASS**.
+Nowa scena `s2-midblock-curb-drop.xodr` przeszła walidację
+bez błędów, została otwarta w nowym edytorze bez awarii,
+a lokalne zrzuty `s2.2a-midblock-editor.png` i
+`s2.2a-midblock-close.png` są w `archive/visual-regression/`.
+Osobne okno testowe zamknięto. Z kamery ogólnej i na niskim
+ujęciu profil krawężnika jest nadal bardzo słabo czytelny,
+a materiały pozostają uproszczone. **Nie zaliczono jeszcze
+wizualnego odbioru w zbliżeniu ani glTF.**
+
+**Następny krok S2.2b — skrzyżowania:** zbudować
+bezprzerwową fazę krawężnika na łuku narożnika oraz
+obniżenia przy przejściach położonych 1–3 m przed
+skrzyżowaniem (łączone z siatką narożnika). Zweryfikować
+ich połączenie z 3D drogą przy różnych promieniach
+i pochyleniu. Potem rozszerzyć testy OpenDRIVE / glTF,
+Undo/Redo i zbliżenia z kamery kierowcy. Nie mylić
+funkcjonalnych testów z odbiorem wizualnym PBR.
 
 **Kontynuować przebudowę realistycznej geometrii dróg i chodników.** Nie zaczynać ponownie od konfiguracji Git ani migracji folderów.
 
-1. Uruchomić `scripts/prawko-resume.ps1` i sprawdzić dwa repozytoria oraz otwarte sceny. Nie przeładowywać niezapisanych dokumentów.
-2. W `core/src/mesh/junction_surface.cpp` i `mesh_builder.cpp` skontrolować spójność profilu krawężnika 3D na przejściu drogi w narożnik — aktualnie ściana skrzyżowania jest pionowa, a faza drogi zanika na metr przed wlotem.
-3. Dodać pełną fazę i obniżenia przy przejściach, bez zmieniania danych OpenDRIVE i zachowując `raised_sidewalks=false`; w razie potrzeby poszerzyć istniejący wspólny model C++.
-4. Dopisać testy krzywych, pochylenia i przejść oraz sprawdzić eksport glTF, Undo/Redo, OpenDRIVE, GUI T/X i widok kamery kierowcy.
-5. Gdy jakość geometrii jest potwierdzona, przejść do PBR, realnej skali UV, oświetlenia i proceduralnych detali; nie raportować tego jako gotowe bez zrzutów i odbioru.
+1. Uruchomić `scripts/prawko-resume.ps1` i sprawdzić oba repozytoria oraz otwarte sceny. Nie przeładowywać niezapisanych dokumentów.
+2. **S2.2b priorytet:** połączyć 3-metrowy spadek ramienia z wyniesioną siatką narożnika, tak aby typowe przejście w odległości 1 m od skrzyżowania miało obniżenie i nie pozostawiało szczeliny.
+3. Zrealizować ciągłą 5-centymetrową fazę przez łuk narożnika, używając istniejących ograniczeń triangulacji i ścian z `junction_surface.cpp`. Chronić kompatybilny tryb legacy.
+4. Dopisać testy T/X, łuków i pochylenia; sprawdzić eksport glTF/UV, Undo/Redo, OpenDRIVE i widok kamery kierowcy. Zwracać uwagę na poprawne normalne, brak z-fightingu i wydajność `remesh_objects` po przejściu na pełny remesh w 3D.
+5. Dopiero po poprawnej geometrii i odbiorze GUI przejść do PBR, skali UV, oświetlenia i detali ulicznych.
 
 **Kryterium ukończenia:** kod + testy + rzeczywista ocena GUI; potem commity, push i aktualizacja TEGO pliku. Bez zgadywania stanu na podstawie dawnych raportów.
 

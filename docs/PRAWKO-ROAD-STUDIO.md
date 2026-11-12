@@ -136,10 +136,12 @@ To nie oznacza ukończenia docelowego stylu.
 ### Pozostałe prace
 
 Domyślne modele drzew, podłoże i materiały nadal są uproszczone.
-Chodniki narożne w skrzyżowaniach nadal są płaskimi pasmami.
-Potrzebne są spójne wzniesione naroża, zjazdy i obniżone krawężniki
-przy przejściach, normalne i oświetlenie oraz regulacja wysokości
-i profilu krawężnika myszką. Nie opisywać tych funkcji jako wykonanych.
+S2.1 podniósł chodniki narożne o 15 cm i dodał ściany krawężników.
+S2.2a dodaje obniżenia przy przejściach śródodcinkowych, ale
+naroża skrzyżowań nadal nie mają pełnej ciągłej fazy i obniżeń
+przy przejściach tuż przed wlotem. Nieukończone pozostają materiały
+PBR, oświetlenie, kontrola wyglądu z poziomu kierowcy oraz
+regulacja krawężnika myszką. Nie opisywać tych prac jako wykonanych.
 
 ## Potwierdzone wykonanie — etap S2.1 (12.11.2026)
 
@@ -175,3 +177,40 @@ wizualna ocena jakości. Obecne kolory, materiały i drzewa nadal są
 uproszczone. **Nie uznawać jakości wizualnej za odebraną** na podstawie
 samej zielonej kompilacji/testów. Szczegółowa kolejność kontynuacji
 znajduje się w `HANDOFF.md`.
+
+## Implementacja S2.2a — obniżenia na przejściach śródodcinkowych (12.11.2026)
+
+W `core/src/mesh/mesh_builder.cpp` użyto istniejących obiektów
+`ObjectType::Crosswalk` (położenie, orientacja i rozmiar) do
+**proceduralnego** obniżenia chodnika przy przejściach, bez edycji
+pliku OpenDRIVE. Zjazd obejmuje pełną szerokość chodnika, a jego
+styk z jezdnią leży na poziomie 0 m (krawężnik poza przejściem:
+0,15 m). Obie 3-metrowe rampy mają profil cubic smoothstep
+z maksymalnym nachyleniem około 7,5%. Ich próbkowanie
+zawiera wymuszone węzły i środki przejść niezależnie od
+kroku meshera; normalne wierzchołków zależą od pochodnej
+tego profilu. Fragmenty ścian/faz o zerowym polu są odrzucane.
+
+**Aktywacja jest ostrożna:** zjazd występuje tylko przy prostokątnym,
+poprzecznym przejściu, które sięga krawędzi jezdni po konkretnej
+stronie. Wariant `raised_sidewalks=false` nie zmienia istniejącej
+geometrii. Przy edycji/wymazaniu obiektów w trybie 3D
+`remesh_objects` odbudowuje pełną geometrię danej drogi,
+ponieważ funkcja nie jest już niezależna od oznakowania
+(koszt większy niż dotychczasowy remesh samej farby).
+
+**Nieobsługiwane w tym podetapie:** przejścia tuż przed
+skrzyżowaniem, gdy nie ma 3 m na zakończenie rampy
+przed końcem wyniesionego narożnika; ciągła faza przez
+naroże, łagodne obniżenia na łuku narożnika i
+pełny odbiór wizualny. One należą do S2.2b.
+
+Dwa testy `Mesh` kontrolują obniżenia obu stron,
+zbieżność z przejściem, nachylenie normalnych,
+brak degeneracji siatki, poprawność przyrostowej
+przebudowy i odwrócenie po usunięciu przejścia,
+oraz brak fałszywych zjazdów dla błędnego zasięgu
+i orientacji. Scena kontrolna (niepublikowana
+w repo): `archive/visual-regression/s2-midblock-curb-drop.xodr`.
+Szczegółowy bieżący stan testów i następne zadanie:
+`HANDOFF.md`.
