@@ -2,7 +2,7 @@
 
 > **Jedyny aktualizowany dziennik przekazania między rozmowami.**
 > Kolejny agent ma czytać ten plik **przed edycją kodu**.
-> Stan dokumentu: 2026-11-13, po wdrożeniu S2.2b i weryfikacji silnika; testy Qt zidentyfikowane jako blokada środowiskowa.
+> Stan dokumentu: 2026-11-13, po S2.2b; odblokowano Windows Qt/GTest (1284 PASS, 1 SKIPPED). Następny etap: S2.2c.
 > Poniższe SHA to punkt kontrolny, nie zamiennik aktualnego `git status`.
 
 ## Gotowe polecenie do nowej rozmowy
@@ -164,22 +164,36 @@ do `archive/visual-regression/s2.2b-gui-window-print.png`.
 Widok ogólny działa, ale nie zastępuje odbioru z kamery kierowcy.
 Osobne okno testowe zamknięte bez zapisania zmian.
 
-**Blokada dodatkowych testów Qt (NIE PASS):** skompilowano
-`roadmaker_editor_tests.exe`, lecz `gtest_discover_tests`
-nie potrafi uruchomić go na tym Windows: początkowo brak
-biblioteki (`0xc0000135`) bez PATH Qt, następnie przy
-prawidłowym PATH start procesów utykał (timeout 5 i 60 s),
-a diagnostyczna próba pominięcia `QApplication` podczas
-listowania dała `0xc0000409`. Zmiany eksperymentalne
-w `qt_gtest_main.cpp` i `editor/tests/CMakeLists.txt`
-cofnięto do stanu repo, aby nie włączać niedziałającego obejścia.
+**Odblokowano testy Qt Windows (13.11.2026).** Zrzut błędu
+`RoadMakerEditorTests` dostarczony przez użytkownika ujawnił
+komunikat: `No Qt platform plugin could be initialized`;
+dostępna była wyłącznie platforma `windows`, podczas gdy
+`qt_gtest_main.cpp` wymaga `offscreen`. W lokalnym Qt
+`F:\PrawkoRoadStudio\.qt\6.8.3\msvc2022_64\plugins\platforms\qoffscreen.dll`
+istniał, ale `windeployqt` kopiuje obok edytora tylko
+`qwindows.dll`. To wyjaśniało zawieszenie w modalnym oknie
+błędu podczas `gtest_discover_tests`.
+
+Naprawa w `editor/tests/CMakeLists.txt`: na Windows po
+zlinkowaniu `roadmaker_editor_tests` CMake kopiuje
+`$<TARGET_FILE:Qt6::QOffscreenIntegrationPlugin>` do
+`$<TARGET_FILE_DIR:roadmaker_editor_tests>/platforms`
+**przed automatycznym wykrywaniem GTest**. Wymagany
+plugin jest sprawdzany jako target Qt (brak -> błąd konfiguracji).
+Zweryfikowano bez specjalnych `QT_PLUGIN_PATH`
+ani `QT_QPA_PLATFORM_PLUGIN_PATH`: testy
 `DocumentCommands.NearJunctionCrosswalkDeleteAndUndoKeepRaisedMeshParity`
-oraz rozszerzone `test_mesh_parity.cpp` kompilowały się,
-ale **nie zostały uruchomione i nie są zaliczone**.
-Należy ustalić dokładną przyczynę startu dużej binarki Qt
-(m.in. pluginy/DLL/ustawienia procesu/Windows event logs)
-i dopiero wtedy zaliczyć testy GUI. Zestaw 2059 C++
-i 6 agenta jest osobno potwierdzony PASS.
+oraz `MeshParity.*` — **5/5 PASS**. Ręcznie skopiowany
+plugin kontrolny usunięto przed przebudową; automatyczna
+kompilacja `roadmaker_editor_tests` zakończyła się
+`EDITOR_TEST_DISCOVERY_BUILD_PASS` i sama odtworzyła
+`qoffscreen.dll`. Pełna binarka edytora:
+**1285 przypadków, 1284 PASS, 1 SKIPPED, 0 FAIL**, exit 0.
+Log lokalny:
+`archive/visual-regression/s2.2b-qt-full-tests.log`.
+Dawnych prób diagnostycznych nie utrzymywano w kodzie.
+Osobny Quality Gate jądra: 2059 testów C++ i 6 agenta PASS.
+**Nie mylić testów Qt z odbiorem estetyki renderingu.**
 
 **Następny krok S2.2c:** dokończyć 5 cm fazę krawężnika
 przez cały łuk narożnika (obecna ściana narożnika jest
@@ -192,7 +206,7 @@ Nie uznawać obecnych materiałów za realistycznie odebrane.
 **Kontynuować przebudowę realistycznej geometrii dróg i chodników.** Nie zaczynać ponownie od konfiguracji Git ani migracji folderów.
 
 1. Uruchomić `scripts/prawko-resume.ps1` i sprawdzić oba repozytoria oraz otwarte sceny. Nie przeładowywać niezapisanych dokumentów.
-2. **NAJPIERW odblokować testy Qt Windows:** `roadmaker_editor_tests.exe` nie przechodzi odkrywania GTest (po naprawie PATH nadal timeout i diagnostyczny fastfail 0xc0000409). Uruchomić `DocumentCommands.NearJunctionCrosswalkDeleteAndUndoKeepRaisedMeshParity` i `MeshParity.*` z `QT_QPA_PLATFORM=offscreen`, sprawdzić wyniki, nie oznaczać testów GUI jako PASS na podstawie samej kompilacji.
+2. **Testy Qt Windows już odblokowane:** przed zmianami GUI sprawdzić `roadmaker_editor_tests` i `qoffscreen.dll` w `build/dev-windows/editor/platforms/`; CMake kopiuje plugin automatycznie. Ostatnia pełna sesja: 1284 PASS, 1 SKIPPED, 0 FAIL; wyniki oraz konfiguracja w akapicie S2.2b powyżej. Nie zmieniać `qt_gtest_main.cpp` bez odtwarzalnej regresji.
 3. **S2.2c:** zrealizować ciągłą 5-centymetrową fazę na łuku narożnika, wykorzystując constrained edges i wspólne wierzchołki. Chronić kompatybilny tryb `raised_sidewalks=false`.
 4. Dopisać testy ciasnych T/Y, nachylonych ulic i przejść, brak z-fightingu, eksport glTF/UV, pełny Undo/Redo i widok kamery kierowcy. Sprawdzić koszt przebudowy `remesh_objects` w trybie 3D.
 5. Dopiero po poprawnej geometrii i odbiorze GUI przejść do PBR, skali UV, oświetlenia i proceduralnych detali.
@@ -210,7 +224,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File F:\PrawkoRoadStudio\scripts\
 ```
 
 - `prawko-resume.ps1` czyta **bieżący Git** i ten dokument, sygnalizuje odchylenia względem `origin`.
-- `-Verify` uruchamia Quality Gate. Pełna kompilacja i **ręczny test GUI** są osobną kontrolą.
+- `-Verify` uruchamia Quality Gate jądra i agenta; **nie obejmuje testów Qt edytora**. Te ostatnie trzeba budować oddzielnie (target `roadmaker_editor_tests` lub `prawko-build-win.ps1 -Target all`) i uruchamiać z `QT_QPA_PLATFORM=offscreen` oraz Qt `bin` w `PATH`; plugin `qoffscreen.dll` kopiuje CMake. Ostatnia kompletna seria: 1284 PASS, 1 SKIPPED. Pełna kompilacja i **ręczny test GUI** są osobną kontrolą.
 - Start programu: `build/dev-windows/editor/roadmaker-editor.exe`.
 - Agent: `scripts/prawko-agent.cmd`.
 - Główne wymagania: `docs/PRAWKO-ROAD-STUDIO.md`.

@@ -243,11 +243,14 @@ Szczegółowy bieżący stan testów i następne zadanie:
   (pliki lokalne, poza publicznym Git).
 - Test Qt w `editor/tests/test_document_commands.cpp` sprawdza
   usuwanie przejścia, Undo i Redo oraz zgodność z pełną siatką
-  3D. Kod testowy **kompiluje się, lecz nie zaliczono wykonania**:
-  proces `roadmaker_editor_tests.exe` blokuje się przy wykrywaniu
-  testów (timeout) nawet po dostarczeniu bibliotek Qt w PATH.
-  Diagnostyczne obejścia nie pomogły i zostały cofnięte.
-  Dokładny stan i kolejny krok opisano w `HANDOFF.md`.
+  3D. Błąd Qt zidentyfikowano: testy żądały pluginu
+  `offscreen`, a obok edytora wdrożono jedynie `windows`.
+  `editor/tests/CMakeLists.txt` kopiuje teraz `qoffscreen.dll`
+  automatycznie przed wykrywaniem testów GTest na Windows.
+  Testy celowane: **5/5 PASS**. Pełny zestaw Qt:
+  **1284 PASS, 1 SKIPPED, 0 FAIL** (exit 0).
+  Potwierdzono kompilację i uruchomienie bez ręcznego
+  `QT_PLUGIN_PATH`; szczegóły są w `HANDOFF.md`.
 
 **Nadal nieukończone:** fazowany (5 cm) profil przez sam łuk
 narożnika, przejścia w nietypowych T/Y i przy zmianach niwelety,
