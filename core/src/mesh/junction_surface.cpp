@@ -20,6 +20,7 @@
 #include "roadmaker/road/junction.hpp"
 #include "roadmaker/road/lane.hpp"
 #include "roadmaker/road/lane_section.hpp"
+#include "roadmaker/road/defaults.hpp"
 #include "roadmaker/tol.hpp"
 
 #include <CDT.h>
@@ -32,6 +33,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <map>
 #include <numbers>
 #include <optional>
 #include <span>
@@ -988,7 +990,8 @@ SubMesh build_junction_surface(const RoadNetwork& network,
 
 JunctionFloorSplit build_junction_floor_split(const RoadNetwork& network,
                                               const Junction& junction,
-                                              const SamplingOptions& sampling) {
+                                              const SamplingOptions& sampling,
+                                              bool raised_sidewalks) {
   JunctionFloorSplit result;
   FloorBuild built = build_floor(network, junction, sampling);
   const SubMesh& floor = built.floor;
@@ -1051,7 +1054,91 @@ JunctionFloorSplit build_junction_floor_split(const RoadNetwork& network,
                                      built.bands[k].surface,
                                      fmt::format("junction {} corner sidewalk", junction.odr_id));
     if (!band.indices.empty()) {
+      if (raised_sidewalks) {
+        for (std::size_t i = 2; i < band.positions.size(); i += 3) {
+          band.positions[i] += defaults::kCurbHeight;
+        }
+      }
       result.sidewalk_bands.push_back(std::move(band));
+    }
+  }
+  if (raised_sidewalks) {
+    // A band has already been separated from the same constrained floor as
+    // the carriageway. Find ONLY shared Driving/Sidewalk edges: these are the
+    // true curb seams. Do not extrude the outer boundary, arm mouths, or a
+    // boundary between two sidewalk bands into a spurious wall.
+    struct EdgeSide {
+      int region;
+      std::array<std::uint32_t, 3> vertices; // edge starts at [0], ends at [1]; [2] is interior
+    };
+    using EdgeKey = std::pair<std::uint32_t, std::uint32_t>;
+    std::map<EdgeKey, std::vector<EdgeSide>> edges;
+    for (std::size_t t = 0; t < tri_count; ++t) {
+      const std::array<std::uint32_t, 3> tri{
+          floor.indices[3 * t], floor.indices[(3 * t) + 1], floor.indices[(3 * t) + 2]};
+      for (std::size_t e = 0; e < 3; ++e) {
+        const std::uint32_t a = tri[e];
+        const std::uint32_t b = tri[(e + 1) % 3];
+        edges[{std::min(a, b), std::max(a, b)}].push_back(
+            EdgeSide{assignment[t], {a, b, tri[(e + 2) % 3]}});
+      }
+    }
+    std::vector<SubMesh> curbs(built.bands.size());
+    for (const auto& [key, sides] : edges) {
+      (void)key;
+      if (sides.size() != 2) {
+        continue;
+      }
+      const EdgeSide* pavement = nullptr;
+      if (sides[0].region >= 0 && sides[1].region == -1) {
+        pavement = &sides[0];
+      } else if (sides[1].region >= 0 && sides[0].region == -1) {
+        pavement = &sides[1];
+      }
+      if (pavement == nullptr) {
+        continue;
+      }
+      const std::size_t region = static_cast<std::size_t>(pavement->region);
+      SubMesh& wall = curbs[region];
+      std::uint32_t a = pavement->vertices[0];
+      std::uint32_t b = pavement->vertices[1];
+      const std::uint32_t inside = pavement->vertices[2];
+      const double dx = floor.positions[(3 * b)] - floor.positions[(3 * a)];
+      const double dy = floor.positions[(3 * b) + 1] - floor.positions[(3 * a) + 1];
+      const double ix = floor.positions[(3 * inside)] - floor.positions[(3 * a)];
+      const double iy = floor.positions[(3 * inside) + 1] - floor.positions[(3 * a) + 1];
+      // Orient this edge with sidewalk on the left, so the normal points
+      // outwards toward the carriageway on the right.
+      if ((dx * iy) - (dy * ix) < 0.0) {
+        std::swap(a, b);
+      }
+      const double ux = floor.positions[3 * b] - floor.positions[3 * a];
+      const double uy = floor.positions[(3 * b) + 1] - floor.positions[(3 * a) + 1];
+      const double length = std::hypot(ux, uy);
+      if (length < tol::kLength) {
+        continue;
+      }
+      const std::array<double, 3> normal{uy / length, -ux / length, 0.0};
+      const std::uint32_t first = static_cast<std::uint32_t>(wall.positions.size() / 3);
+      for (const auto [v, top] : {std::pair{a, false}, std::pair{b, false},
+                                  std::pair{b, true}, std::pair{a, true}}) {
+        wall.positions.insert(wall.positions.end(),
+                              {floor.positions[3 * v], floor.positions[(3 * v) + 1],
+                               floor.positions[(3 * v) + 2] + (top ? defaults::kCurbHeight : 0.0)});
+        wall.normals.insert(wall.normals.end(), normal.begin(), normal.end());
+      }
+      wall.uvs.insert(wall.uvs.end(), {0.0, 0.0, length, 0.0, length, defaults::kCurbHeight,
+                                       0.0, defaults::kCurbHeight});
+      wall.indices.insert(wall.indices.end(),
+                          {first, first + 1, first + 2, first, first + 2, first + 3});
+    }
+    for (std::size_t k = 0; k < curbs.size(); ++k) {
+      if (!curbs[k].indices.empty()) {
+        curbs[k].material = LaneType::Curb;
+        curbs[k].surface = "concrete";
+        curbs[k].name = fmt::format("junction {} corner curb {}", junction.odr_id, k);
+        result.curb_faces.push_back(std::move(curbs[k]));
+      }
     }
   }
   return result;

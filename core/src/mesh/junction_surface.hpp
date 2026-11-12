@@ -71,12 +71,14 @@ struct Junction;
 /// bands — the feature never fires on a rural junction.
 struct JunctionFloorSplit {
   SubMesh carriageway;                 ///< Driving core, surface = junction material.
-  std::vector<SubMesh> sidewalk_bands; ///< Sidewalk bands, one per sidewalked corner.
+  std::vector<SubMesh> sidewalk_bands; ///< Sidewalk tops, one per sidewalked corner.
+  std::vector<SubMesh> curb_faces;     ///< Vertical curb faces at the carriageway/sidewalk seam.
 };
 
 [[nodiscard]] JunctionFloorSplit build_junction_floor_split(const RoadNetwork& network,
                                                             const Junction& junction,
-                                                            const SamplingOptions& sampling = {});
+                                                            const SamplingOptions& sampling = {},
+                                                            bool raised_sidewalks = false);
 
 /// The junction's authored corner overlays (p4-s2, issue #226): one median nose
 /// per contiguous median span of every arm whose corner pair names a

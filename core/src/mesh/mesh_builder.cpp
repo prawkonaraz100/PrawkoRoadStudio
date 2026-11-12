@@ -21,6 +21,7 @@
 #include "roadmaker/edit/connection.hpp"
 #include "roadmaker/geometry/poly3.hpp"
 #include "roadmaker/mesh/junction_stoplines.hpp"
+#include "roadmaker/mesh/junction_sidewalk_bands.hpp"
 #include "roadmaker/road/defaults.hpp"
 #include "roadmaker/road/repeat_expansion.hpp"
 #include "roadmaker/tol.hpp"
@@ -841,6 +842,23 @@ RoadMesh build_one_road(const RoadNetwork& network,
   // emit below (they are lifted above the surface and the floor carries no
   // marks of its own).
   const bool surface_is_floor = options.junction_floors && road.junction.is_valid();
+  // Join a sidewalk to an actual raised corner band at full height. Retain
+  // the legacy four-metre fade where no meshed junction band can accept it.
+  const auto joins_raised_band = [&](const std::optional<RoadLink>& link) {
+    if (!options.raised_sidewalks || !options.junction_floors || !link.has_value()) {
+      return false;
+    }
+    const JunctionId* junction_id = std::get_if<JunctionId>(&link->target);
+    if (junction_id == nullptr || network.junction(*junction_id) == nullptr) {
+      return false;
+    }
+    const auto bands = junction_sidewalk_bands(network, *junction_id);
+    return std::ranges::any_of(bands, [&](const JunctionSidewalkBand& band) {
+      return band.arm_a.road == road_id || band.arm_b.road == road_id;
+    });
+  };
+  const bool raised_predecessor = joins_raised_band(road.predecessor);
+  const bool raised_successor = joins_raised_band(road.successor);
 
   for (std::size_t si = 0; !surface_is_floor && si < road.sections.size(); ++si) {
     const LaneSection& section = *network.lane_section(road.sections[si]);
@@ -937,20 +955,33 @@ RoadMesh build_one_road(const RoadNetwork& network,
           const double width = std::abs(t_left - t_right);
           const double inner_t = side > 0.0 ? t_right : t_left;
           double fade = 1.0;
-          // The existing junction sidewalk band lies at the carriageway datum.
-          // Short unobtrusive ramps avoid a vertical hole at each arm's join
-          // until the junction floors receive their own true curb mesh.
+          // A raised junction band now joins the road at full curb height.
+          // For junctions without a corresponding band keep the old 4 m fade
+          // rather than leave an exposed vertical cap at an unmeshed mouth.
           constexpr double kJoinRampM = 4.0;
-          if (junction_end(road.predecessor)) {
+          if (junction_end(road.predecessor) && !raised_predecessor) {
             fade = std::min(fade, std::clamp(s / kJoinRampM, 0.0, 1.0));
           }
-          if (junction_end(road.successor)) {
+          if (junction_end(road.successor) && !raised_successor) {
             fade = std::min(
                 fade, std::clamp((road.plan_view.length() - s) / kJoinRampM, 0.0, 1.0));
           }
           const double height = defaults::kCurbHeight * fade;
-          const double wall_height = height * 0.80;
-          const double bevel_width = std::min(0.05 * fade, width * 0.20);
+          // The junction's first 3-D curb pass has a vertical face. At the
+          // shared arm face, taper the road's 5 cm chamfer down to zero over
+          // the final metre, so the upper edge and the wall coincide with
+          // the junction seam rather than leaving a narrow open end-cap.
+          constexpr double kBevelTransitionM = 1.0;
+          double bevel_fade = 1.0;
+          if (raised_predecessor) {
+            bevel_fade = std::min(bevel_fade, std::clamp(s / kBevelTransitionM, 0.0, 1.0));
+          }
+          if (raised_successor) {
+            bevel_fade = std::min(
+                bevel_fade, std::clamp((road.plan_view.length() - s) / kBevelTransitionM, 0.0, 1.0));
+          }
+          const double wall_height = height * (1.0 - (0.20 * bevel_fade));
+          const double bevel_width = std::min(0.05 * fade * bevel_fade, width * 0.20);
           const double top_inner_t = inner_t + side * bevel_width;
           const double top_left_t = side > 0.0 ? t_left : top_inner_t;
           const double top_right_t = side > 0.0 ? top_inner_t : t_right;
@@ -1082,13 +1113,17 @@ RoadMesh build_one_road(const RoadNetwork& network,
 JunctionFloor build_one_junction_floor(const RoadNetwork& network,
                                        JunctionId junction_id,
                                        const Junction& junction,
-                                       const SamplingOptions& sampling) {
+                                       const SamplingOptions& sampling,
+                                       bool raised_sidewalks) {
   // Sidewalked junctions (issue #357): the floor is split into its carriageway
   // core (kept as `mesh`, Driving) and per-corner sidewalk bands (Sidewalk),
   // which join the authored median-nose overlays in `details`. A rural junction
   // splits to itself, so `mesh` stays byte-identical to the un-split floor.
-  JunctionFloorSplit split = build_junction_floor_split(network, junction, sampling);
+  JunctionFloorSplit split = build_junction_floor_split(network, junction, sampling, raised_sidewalks);
   std::vector<SubMesh> details = std::move(split.sidewalk_bands);
+  for (SubMesh& curb : split.curb_faces) {
+    details.push_back(std::move(curb));
+  }
   for (SubMesh& overlay : build_junction_corner_details(network, junction, sampling)) {
     details.push_back(std::move(overlay));
   }
@@ -1129,7 +1164,8 @@ NetworkMesh build_network_mesh(const RoadNetwork& network, const MeshOptions& op
   if (options.junction_floors) {
     network.for_each_junction([&](JunctionId junction_id, const Junction& junction) {
       JunctionFloor floor =
-          build_one_junction_floor(network, junction_id, junction, options.sampling);
+          build_one_junction_floor(network, junction_id, junction,
+                                   options.sampling, options.raised_sidewalks);
       if (!floor.mesh.indices.empty()) {
         result.junction_floors.push_back(std::move(floor));
       }
@@ -1269,7 +1305,8 @@ void remesh_junctions(const RoadNetwork& network,
     const Junction* junction = options.junction_floors ? network.junction(junction_id) : nullptr;
     JunctionFloor rebuilt =
         junction != nullptr
-            ? build_one_junction_floor(network, junction_id, *junction, options.sampling)
+            ? build_one_junction_floor(network, junction_id, *junction,
+                                       options.sampling, options.raised_sidewalks)
             : JunctionFloor{.junction = junction_id, .mesh = {}};
     if (rebuilt.mesh.indices.empty()) {
       if (existing != mesh.junction_floors.end()) {

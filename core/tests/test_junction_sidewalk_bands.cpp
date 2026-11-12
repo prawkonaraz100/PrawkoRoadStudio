@@ -452,4 +452,110 @@ TEST_P(SidewalkBandMatrix, BandsAreFlushWithTheArmFaces) {
   }
 }
 
+// PrawkoRoadStudio S2: raised mode lifts the *existing constrained floor
+// regions*, and builds a real vertical curb only at the shared edge with
+// carriageway. Legacy mode remains flat and emits no curb walls.
+TEST_P(SidewalkBandMatrix, RaisedCornerHasElevatedTopAndTrueCurbWall) {
+  const Built baseline = build(GetParam());
+  roadmaker::MeshOptions options;
+  options.raised_sidewalks = true;
+  const NetworkMesh raised = roadmaker::build_network_mesh(baseline.network, options);
+  ASSERT_FALSE(raised.junction_floors.empty());
+  const JunctionFloor& flat_floor = baseline.mesh.junction_floors.front();
+  const JunctionFloor& raised_floor = raised.junction_floors.front();
+
+  // The carriageway must not be moved when only sidewalks are raised.
+  EXPECT_EQ(raised_floor.mesh.positions, flat_floor.mesh.positions);
+  EXPECT_EQ(raised_floor.mesh.indices, flat_floor.mesh.indices);
+
+  std::size_t sidewalks = 0;
+  std::size_t curbs = 0;
+  for (const SubMesh& detail : raised_floor.details) {
+    if (detail.material == LaneType::Sidewalk) {
+      ++sidewalks;
+      ASSERT_FALSE(detail.indices.empty());
+      for (std::size_t v = 2; v < detail.positions.size(); v += 3) {
+        EXPECT_NEAR(detail.positions[v], roadmaker::defaults::kCurbHeight, 1e-6);
+      }
+    } else if (detail.material == LaneType::Curb) {
+      ++curbs;
+      ASSERT_FALSE(detail.indices.empty());
+      ASSERT_EQ(detail.indices.size() % 6, 0U);
+      ASSERT_EQ(detail.positions.size(), detail.normals.size());
+      ASSERT_EQ(detail.uvs.size() * 3, detail.positions.size() * 2);
+      double min_height = 1e9;
+      double max_height = -1e9;
+      for (std::size_t v = 0; v + 2 < detail.positions.size(); v += 3) {
+        min_height = std::min(min_height, detail.positions[v + 2]);
+        max_height = std::max(max_height, detail.positions[v + 2]);
+        EXPECT_NEAR(detail.normals[v + 2], 0.0, 1e-8); // vertical face
+      }
+      EXPECT_NEAR(min_height, 0.0, 1e-6);
+      EXPECT_NEAR(max_height, roadmaker::defaults::kCurbHeight, 1e-6);
+      EXPECT_EQ(detail.surface, "concrete");
+    }
+  }
+  EXPECT_GT(sidewalks, 0U);
+  EXPECT_GT(curbs, 0U);
+  // No extra 3-D wall or raised top in the old OpenDRIVE-compatible mode.
+  for (const SubMesh& detail : flat_floor.details) {
+    EXPECT_NE(detail.material, LaneType::Curb);
+    if (detail.material == LaneType::Sidewalk) {
+      for (std::size_t v = 2; v < detail.positions.size(); v += 3) {
+        EXPECT_NEAR(detail.positions[v], 0.0, 1e-6);
+      }
+    }
+  }
+
+  // If there is an actual raised junction band, don't ramp the road-side
+  // pavement back to ground level at its junction mouth.
+  for (const auto& road : raised.roads) {
+    for (const auto& patch : road.lanes) {
+      if (patch.material != LaneType::Sidewalk) {
+        continue;
+      }
+      for (const std::uint32_t index : patch.indices) {
+        EXPECT_GE(road.positions[(3 * index) + 2],
+                  roadmaker::defaults::kCurbHeight - 1e-6);
+      }
+    }
+  }
+
+  // At every real sidewalk arm mouth, BOTH the outside edge and the
+  // carriageway-side edge must coincide with the raised junction sidewalk.
+  // Without the matching bevel taper only the outside edge joined: the
+  // inner edge was displaced by the road's 5 cm chamfer.
+  const auto road_top_at = [&](const Point& p) {
+    for (const auto& road : raised.roads) {
+      for (const auto& patch : road.lanes) {
+        if (patch.material != LaneType::Sidewalk) {
+          continue;
+        }
+        for (const std::uint32_t v : patch.indices) {
+          const double x = road.positions[3 * v];
+          const double y = road.positions[(3 * v) + 1];
+          const double z = road.positions[(3 * v) + 2];
+          if (std::hypot(x - p[0], y - p[1]) < 1e-4 &&
+              std::abs(z - roadmaker::defaults::kCurbHeight) < 1e-6) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  };
+  std::size_t mouths_checked = 0;
+  for (const JunctionSidewalkBand& band :
+       roadmaker::junction_sidewalk_bands(baseline.network, baseline.junction)) {
+    for (const std::size_t j : {std::size_t{0}, band.outer.size() - 1}) {
+      if (road_top_at(band.outer[j])) {
+        ++mouths_checked;
+        EXPECT_TRUE(road_top_at(band.inner[j]))
+            << "raised top misses the inner curb edge at an arm mouth";
+      }
+    }
+  }
+  EXPECT_GT(mouths_checked, 0U);
+}
+
 } // namespace
