@@ -78,6 +78,32 @@ if ($Action -eq 'finish') {
   if ($dirty) {
     throw 'FINISH BLOCKED: uncommitted edits in editor or agent. Review, test and commit each repo separately.'
   }
+  # The handoff must be part of the last editor commit and identify the latest agent commit.
+  $handoffPath = Join-Path $root 'HANDOFF.md'
+  if (!(Test-Path -LiteralPath $handoffPath)) { throw 'FINISH BLOCKED: HANDOFF.md is missing.' }
+  $editorHead = @($records | Where-Object { $_.component -eq 'editor' })[0].commit
+  $agentHead = @($records | Where-Object { $_.component -eq 'agent' })[0].commit
+  $handoffCommit = (Invoke-CheckedGit $root @('log', '-1', '--format=%H', '--', 'HANDOFF.md') | Out-String).Trim()
+  if ($handoffCommit -ne $editorHead) {
+    throw 'FINISH BLOCKED: last editor commit must update HANDOFF.md.'
+  }
+  $handoffText = [System.IO.File]::ReadAllText($handoffPath)
+  $marker = [regex]::Match($handoffText, '(?m)^<!-- agent_head: ([0-9a-f]{40}) -->\s*$')
+  if (!$marker.Success -or $marker.Groups[1].Value -ne $agentHead) {
+    throw "FINISH BLOCKED: HANDOFF.md agent_head does not equal current agent HEAD $agentHead."
+  }
+  foreach ($repo in $repos) {
+    $record = @($records | Where-Object { $_.component -eq $repo.Name })[0]
+    $ref = "refs/heads/$($record.branch)"
+    $raw = (Invoke-CheckedGit $repo.Path @('ls-remote', 'origin', $ref) | Out-String).Trim()
+    if ($raw -notmatch '^([0-9a-f]{40})\s') {
+      throw "FINISH BLOCKED: origin ref not found: $($repo.Name)/$ref"
+    }
+    if ($Matches[1] -ne $record.commit) {
+      throw "FINISH BLOCKED: remote SHA differs for $($repo.Name)/$ref"
+    }
+    Write-Host "ORIGIN_SHA_MATCH: $($repo.Name)/$ref @ $($record.commit)"
+  }
   $verify = Join-Path $root 'scripts\prawko-verify-win.ps1'
   & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $verify
   if ($LASTEXITCODE -ne 0) {

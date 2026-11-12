@@ -6,13 +6,17 @@ drogowych do nauki jazdy oraz poprawie jakości wizualnej siatki 3D.
 
 **Źródła projektu:** `F:\PrawkoRoadStudio`.
 **Gałąź funkcjonalna:** `feature/realistic-road-surfaces`.
-**Dokument nadrzędny:** `docs/PRAWKO-ROAD-STUDIO.md`.
+**Dokument nadrzędny (wymagania):** `docs/PRAWKO-ROAD-STUDIO.md`.
+**Ostatni stan i następne zadanie (START TUTAJ):** `HANDOFF.md`.
 
 ## Pierwsze kroki
 
 1. Połącz się z DESKTOP-G2FV0GJ przez Desktop Commander.
-2. Sprawdź `git status`, `git log -1` i dokument nadrzędny.
-3. Czytaj i modyfikuj tylko aktywne repo `F:\PrawkoRoadStudio`.
+2. **Najpierw przeczytaj `F:\PrawkoRoadStudio\HANDOFF.md`.**
+   Uruchom `scripts/prawko-resume.ps1` — wykrywa live SHA obu repo, status
+   zmian i zgodność z GitHub. Bez tego nie podejmuj pracy z pamięci rozmowy.
+3. Sprawdź wymagania nadrzędne i czytaj tylko aktywny projekt
+   `F:\PrawkoRoadStudio` oraz jego osobne repo `agent/`.
 4. Buduj przez `scripts/prawko-build-win.ps1` przy użyciu lokalnego
    MSVC z `F:\PrawkoRoadStudio\toolchain`.
 5. Funkcja jest ukończona tylko po testach C++, walidacji scen i realnym
@@ -81,8 +85,14 @@ commitów, testów i kopii historii.
    Skrypt blokuje zakończenie przy niezacommitowanych zmianach, wykonuje
    Quality Gate oraz kontrolę archiwów. Osobno potwierdź pełny build/GUI,
    jeśli był wymagany.
-6. **PRZEKAZANIE:** odnotuj pełne SHA obu HEAD, wyniki kompilacji i testów,
-   lokalizacje backupów, niewykonane kroki oraz stan otwartych scen.
+6. **PRZEKAZANIE — OBOWIĄZKOWE, nie tylko na końcu rozmowy:** po każdym
+   potwierdzonym etapie zaktualizuj `HANDOFF.md` w głównym repo
+   (ostatnia potwierdzona zmiana, aktualne wyniki, blokady, dokładny kolejny
+   krok, znacznik `agent_head`), a następnie wykonaj ostatni commit edytora
+   **zawierający `HANDOFF.md`**. Wyślij commity obu repo na GitHub.
+   `-Action finish` odmówi PASS, jeśli handoff jest nieaktualny lub SHA w
+   GitHub nie zgadzają się z lokalnymi. Podaj pełne SHA obu HEAD, wyniki
+   testów, backup i stan otwartych scen.
 
 Archiwa Git **nie zawierają niezacommitowanych zmian** ani ignorowanych
 narzędzi i bibliotek; zapisy scen z `agent/projects/` są kopiowane osobno.

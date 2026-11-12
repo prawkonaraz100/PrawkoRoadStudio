@@ -1,3 +1,9 @@
+# PrawkoRoadStudio — kontynuacja projektu
+
+**Nowy agent / nowa rozmowa?** Zacznij od [`HANDOFF.md`](HANDOFF.md), a następnie przeczytaj [`AGENTS.md`](AGENTS.md) i uruchom `scripts/prawko-resume.ps1`. Plik HANDOFF jest aktualizowany po każdej zakończonej sesji i wskazuje ostatni potwierdzony stan, następne zadanie oraz testy. Poniżej pozostaje dokumentacja bazowego projektu RoadMaker.
+
+---
+
 <img src="https://cdn.robomous.ai/public-images/robomous-banner.svg" alt="Robomous.ai" width=300 />
 
 -------
