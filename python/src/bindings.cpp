@@ -7029,6 +7029,8 @@ NB_MODULE(_roadmaker, m) {
       .def_rw("junction_floors", &roadmaker::MeshOptions::junction_floors)
       .def_rw("raised_sidewalks", &roadmaker::MeshOptions::raised_sidewalks,
               "Sweep a raised sidewalk and realistic curb wall/chamfer along road lanes.")
+      .def_rw("curb_render_lod", &roadmaker::MeshOptions::curb_render_lod,
+              "Refine raised junction curb arcs locally for GUI/GLB without changing the CDT mesh.")
       .def_rw(
           "terrain", &roadmaker::MeshOptions::terrain, "Emit the scene terrain channel (p5-s2).")
       .def_rw("terrain_skirt",

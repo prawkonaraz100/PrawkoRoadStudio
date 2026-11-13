@@ -1262,12 +1262,14 @@ JunctionFloor build_one_junction_floor(const RoadNetwork& network,
                                        JunctionId junction_id,
                                        const Junction& junction,
                                        const SamplingOptions& sampling,
-                                       bool raised_sidewalks) {
+                                       bool raised_sidewalks,
+                                       bool curb_render_lod) {
   // Sidewalked junctions (issue #357): the floor is split into its carriageway
   // core (kept as `mesh`, Driving) and per-corner sidewalk bands (Sidewalk),
   // which join the authored median-nose overlays in `details`. A rural junction
   // splits to itself, so `mesh` stays byte-identical to the un-split floor.
-  JunctionFloorSplit split = build_junction_floor_split(network, junction, sampling, raised_sidewalks);
+  JunctionFloorSplit split =
+      build_junction_floor_split(network, junction, sampling, raised_sidewalks, curb_render_lod);
   std::vector<SubMesh> details = std::move(split.sidewalk_bands);
   for (SubMesh& curb : split.curb_faces) {
     details.push_back(std::move(curb));
@@ -1313,7 +1315,8 @@ NetworkMesh build_network_mesh(const RoadNetwork& network, const MeshOptions& op
     network.for_each_junction([&](JunctionId junction_id, const Junction& junction) {
       JunctionFloor floor =
           build_one_junction_floor(network, junction_id, junction,
-                                   options.sampling, options.raised_sidewalks);
+                                   options.sampling, options.raised_sidewalks,
+                                   options.curb_render_lod);
       if (!floor.mesh.indices.empty()) {
         result.junction_floors.push_back(std::move(floor));
       }
@@ -1478,7 +1481,8 @@ void remesh_junctions(const RoadNetwork& network,
     JunctionFloor rebuilt =
         junction != nullptr
             ? build_one_junction_floor(network, junction_id, *junction,
-                                       options.sampling, options.raised_sidewalks)
+                                       options.sampling, options.raised_sidewalks,
+                                       options.curb_render_lod)
             : JunctionFloor{.junction = junction_id, .mesh = {}};
     if (rebuilt.mesh.indices.empty()) {
       if (existing != mesh.junction_floors.end()) {

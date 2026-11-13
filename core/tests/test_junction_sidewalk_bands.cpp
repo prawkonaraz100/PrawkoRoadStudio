@@ -36,6 +36,7 @@
 #include "roadmaker/mesh/junction_sidewalk_bands.hpp"
 #include "roadmaker/mesh/mesh.hpp"
 #include "roadmaker/mesh/mesh_builder.hpp"
+#include "mesh/junction_surface.hpp"
 #include "roadmaker/road/authoring.hpp"
 #include "roadmaker/road/defaults.hpp"
 #include "roadmaker/road/junction.hpp"
@@ -43,11 +44,13 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
 #include <map>
 #include <numbers>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -824,6 +827,118 @@ TEST(JunctionSidewalkBands, NearJunctionCrosswalksJoinCornerRampsAndRemeshTogeth
   for (std::size_t i = 0; i < restored.junction_floors.front().details.size(); ++i) {
     EXPECT_EQ(incremental.junction_floors.front().details[i].positions,
               restored.junction_floors.front().details[i].positions);
+  }
+}
+
+
+// S2.2f: the unchanged legacy junction CDT is kept, but the rendered
+// raised-sidewalk seam gains safe curvature samples on both adjacent faces.
+// Compare both modes for X/T/Y, including the non-perpendicular Y.
+TEST(JunctionSidewalkBands, VisualCurbArcLODAddsSharedVerticesWithoutSlivers) {
+  const std::vector<std::vector<double>> configurations{
+      {0.0, std::numbers::pi / 2, std::numbers::pi, 3 * std::numbers::pi / 2},
+      {0.0, std::numbers::pi / 2, 3 * std::numbers::pi / 2},
+      {0.0, 2 * std::numbers::pi / 3, 4 * std::numbers::pi / 3}};
+  for (const auto& angles : configurations) {
+    RoadNetwork network;
+    const JunctionId id = build_radial(network, angles, 20.0, {LaneProfile::local_road()});
+    const auto* junction = network.junction(id);
+    ASSERT_NE(junction, nullptr);
+    const auto original = roadmaker::build_junction_floor_split(network, *junction, {}, false);
+    const auto stable_raised = roadmaker::build_junction_floor_split(network, *junction, {}, true);
+    const auto refined = roadmaker::build_junction_floor_split(network, *junction, {}, true, true);
+    const auto again = roadmaker::build_junction_floor_split(network, *junction, {}, true, true);
+    ASSERT_EQ(original.sidewalk_bands.size(), stable_raised.sidewalk_bands.size());
+    for (std::size_t k=0;k<original.sidewalk_bands.size();++k) {
+      EXPECT_EQ(original.sidewalk_bands[k].indices, stable_raised.sidewalk_bands[k].indices);
+    }
+    ASSERT_EQ(refined.sidewalk_bands.size(), original.sidewalk_bands.size());
+    ASSERT_EQ(refined.sidewalk_bands.size(), again.sidewalk_bands.size());
+    ASSERT_EQ(refined.carriageway.indices, again.carriageway.indices);
+    ASSERT_EQ(refined.carriageway.positions, again.carriageway.positions);
+    std::size_t old_tris = original.carriageway.indices.size() / 3;
+    std::size_t new_tris = refined.carriageway.indices.size() / 3;
+    for (std::size_t k = 0; k < original.sidewalk_bands.size(); ++k) {
+      old_tris += original.sidewalk_bands[k].indices.size() / 3;
+      new_tris += refined.sidewalk_bands[k].indices.size() / 3;
+      EXPECT_EQ(refined.sidewalk_bands[k].positions, again.sidewalk_bands[k].positions);
+      EXPECT_EQ(refined.sidewalk_bands[k].indices, again.sidewalk_bands[k].indices);
+    }
+    // Independent 5-degree sliver check on the actual rendered triangulation,
+    // not the untouched CDT mesh. It protects dense, acute T/Y junctions.
+    const auto slivers = [](const SubMesh& mesh) -> std::size_t {
+      std::size_t bad = 0;
+      const auto at = [&](std::uint32_t v) {
+        return std::array<double,2>{mesh.positions[3*v],mesh.positions[3*v+1]};
+      };
+      const auto angle = [](const auto& a, const auto& b, const auto& c) {
+        const double ux=b[0]-a[0], uy=b[1]-a[1];
+        const double vx=c[0]-a[0], vy=c[1]-a[1];
+        return std::atan2(std::abs(ux*vy-uy*vx), ux*vx+uy*vy);
+      };
+      for (std::size_t i=0;i+2<mesh.indices.size();i+=3) {
+        const auto a=at(mesh.indices[i]),b=at(mesh.indices[i+1]),
+                   c=at(mesh.indices[i+2]);
+        if (std::min({angle(a,b,c),angle(b,c,a),angle(c,a,b)}) <
+            0.08726646259971647) ++bad;
+      }
+      return bad;
+    };
+    std::size_t old_slivers=slivers(original.carriageway);
+    std::size_t new_slivers=slivers(refined.carriageway);
+    for (std::size_t k=0;k<original.sidewalk_bands.size();++k) {
+      old_slivers+=slivers(original.sidewalk_bands[k]);
+      new_slivers+=slivers(refined.sidewalk_bands[k]);
+    }
+    std::printf("[ArcLOD] arms=%zu old_tris=%zu new_tris=%zu delta=%zu slivers=%zu/%zu\n",
+                angles.size(), old_tris, new_tris, new_tris - old_tris,
+                old_slivers, new_slivers);
+    EXPECT_LE(new_slivers, old_slivers)
+        << "Refining curved seams must not introduce any new sliver triangle";
+    EXPECT_GT(new_tris, old_tris) << "The render mesh did not actually refine curved seams";
+    // The wall's lower vertices must be EXACT road vertices — a visual
+    // refinement may not introduce a T-seam or expose a gap under the curb.
+    std::set<std::array<double,3>> driving_vertices;
+    for (std::size_t v=0;v+2<refined.carriageway.positions.size();v+=3) {
+      driving_vertices.insert({refined.carriageway.positions[v],
+                               refined.carriageway.positions[v+1],
+                               refined.carriageway.positions[v+2]});
+    }
+    std::size_t curb_bottoms=0;
+    for (const auto& wall : refined.curb_faces) {
+      if (wall.name.find("corner curb") == std::string::npos) continue;
+      for (std::size_t v=0;v+11<wall.positions.size();v+=12) {
+        for (std::size_t j=0;j<2;++j) {
+          const std::array<double,3> p{
+              wall.positions[v+3*j],wall.positions[v+3*j+1],
+              wall.positions[v+3*j+2]};
+          ++curb_bottoms;
+          EXPECT_TRUE(driving_vertices.contains(p))
+              << "Wall does not meet the driving triangulation at its base";
+        }
+      }
+    }
+    EXPECT_GT(curb_bottoms, 0U);
+    for (const auto* mesh : [&]() {
+           std::vector<const SubMesh*> result{&refined.carriageway};
+           for (const auto& side : refined.sidewalk_bands) result.push_back(&side);
+           for (const auto& face : refined.curb_faces) result.push_back(&face);
+           return result;
+         }()) {
+      for (std::size_t i = 0; i + 2 < mesh->indices.size(); i += 3) {
+        const auto a = mesh->indices[i], b = mesh->indices[i+1], c=mesh->indices[i+2];
+        const auto xyz = [&](std::uint32_t v) {
+          return std::array<double,3>{mesh->positions[3*v], mesh->positions[3*v+1],
+                                      mesh->positions[3*v+2]};
+        };
+        const auto p=xyz(a), q=xyz(b), r=xyz(c);
+        const std::array<double,3> u{q[0]-p[0],q[1]-p[1],q[2]-p[2]};
+        const std::array<double,3> v{r[0]-p[0],r[1]-p[1],r[2]-p[2]};
+        const std::array<double,3> n{
+            u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]};
+        EXPECT_GT(std::hypot(n[0],n[1],n[2]), 1e-9) << mesh->name;
+      }
+    }
   }
 }
 

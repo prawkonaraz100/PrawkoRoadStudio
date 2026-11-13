@@ -48,6 +48,7 @@ namespace {
 MeshOptions studio_mesh_options() {
   MeshOptions options;
   options.raised_sidewalks = true;
+  options.curb_render_lod = true;
   return options;
 }
 

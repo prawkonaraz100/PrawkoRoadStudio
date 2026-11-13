@@ -65,6 +65,12 @@ struct MeshOptions {
   /// editor selects the realistic presentation automatically.
   bool raised_sidewalks = false;
 
+  /// S2.2f: visual-only local curvature refinement of raised junction curb
+  /// seams AFTER CDT. Opt-in so the legacy/regular raised geometry contracts,
+  /// including equal planar/raised triangle index buffers, remain unchanged.
+  /// The Qt studio and its GLB agent explicitly select this higher-detail LOD.
+  bool curb_render_lod = false;
+
   /// Width [m] of the skirt band along road edges over which the road-edge z
   /// wins over the raw field sample (p5-s2, #232): the ground blends up (or
   /// down) to meet the kerb across this distance, so there is no cliff at the

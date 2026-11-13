@@ -78,7 +78,8 @@ struct JunctionFloorSplit {
 [[nodiscard]] JunctionFloorSplit build_junction_floor_split(const RoadNetwork& network,
                                                             const Junction& junction,
                                                             const SamplingOptions& sampling = {},
-                                                            bool raised_sidewalks = false);
+                                                            bool raised_sidewalks = false,
+                                                            bool curb_render_lod = false);
 
 /// The junction's authored corner overlays (p4-s2, issue #226): one median nose
 /// per contiguous median span of every arm whose corner pair names a

@@ -208,6 +208,7 @@ TEST(DocumentCommands, NearJunctionCrosswalkDeleteAndUndoKeepRaisedMeshParity) {
   const auto expect_parity = [&]() {
     roadmaker::MeshOptions options;
     options.raised_sidewalks = true;
+    options.curb_render_lod = true; // match production GUI level of detail
     const auto fresh = roadmaker::build_network_mesh(document.network(), options);
     const auto& cached = document.mesh();
     ASSERT_EQ(cached.roads.size(), fresh.roads.size());

@@ -44,6 +44,7 @@
 
 #include "fill_backend.hpp"
 #include "junction_corner_detail.hpp"
+#include "junction_curb_refinement.hpp"
 #include "junction_fill_spans.hpp"
 #include "junction_sidewalk_bands.hpp"
 #include "mesh_detail.hpp"
@@ -1144,10 +1145,11 @@ static void refresh_sidewalk_normals(SubMesh& band) {
 JunctionFloorSplit build_junction_floor_split(const RoadNetwork& network,
                                               const Junction& junction,
                                               const SamplingOptions& sampling,
-                                              bool raised_sidewalks) {
+                                              bool raised_sidewalks,
+                                              bool curb_render_lod) {
   JunctionFloorSplit result;
   FloorBuild built = build_floor(network, junction, sampling);
-  const SubMesh& floor = built.floor;
+  SubMesh& floor = built.floor;
 
   // No sidewalks anywhere (or nothing the floor had room for) => the floor is
   // returned VERBATIM, byte-identical to the pre-#357 single-material floor.
@@ -1163,7 +1165,7 @@ JunctionFloorSplit build_junction_floor_split(const RoadNetwork& network,
   // triangulation, so no triangle straddles one and the centroid decides
   // exactly — this is a lookup now, not an approximation. Bands never overlap
   // (each corner owns one arm edge per side), so first match wins.
-  const std::size_t tri_count = floor.indices.size() / 3;
+  std::size_t tri_count = floor.indices.size() / 3;
   std::vector<int> assignment(tri_count, -1);
   bool any_sidewalk = false;
   for (std::size_t t = 0; t < tri_count; ++t) {
@@ -1197,6 +1199,14 @@ JunctionFloorSplit build_junction_floor_split(const RoadNetwork& network,
     return result;
   }
 
+  // S2.2f: subdivide only the *render* mesh on well-conditioned, curved
+  // shared driving/sidewalk edges, after the unchanged CDT and region solve.
+  // Both incident triangles use the same new vertex; floor vs curb wall/top
+  // remain watertight. Straight and legacy mesh formats are unaffected.
+  if (raised_sidewalks && curb_render_lod) {
+    junction_curb_refinement::refine(floor, assignment);
+    tri_count = assignment.size();
+  }
   result.carriageway =
       emit_floor_region(floor, assignment, -1, LaneType::Driving, floor.surface, floor.name);
 

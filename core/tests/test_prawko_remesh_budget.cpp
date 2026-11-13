@@ -39,6 +39,7 @@ struct Case {
 Case make_case(const std::vector<double>& angles) {
   Case fixture;
   fixture.options.raised_sidewalks = true;
+  fixture.options.curb_render_lod = true; // measure the real Studio viewport path
   fixture.options.markings = true;
   std::vector<RoadEnd> ends;
   for (std::size_t i = 0; i < angles.size(); ++i) {
