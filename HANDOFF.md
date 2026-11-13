@@ -2,7 +2,7 @@
 
 > **Jedyny aktualizowany dziennik przekazania między rozmowami.**
 > Kolejny agent ma czytać ten plik **przed edycją kodu**.
-> Stan dokumentu: 2026-11-13, S2.2c zaimplementowane i przetestowane automatycznie; odbiór wizualny S2.2c NADAL OTWARTY. Następny etap: kontrola GUI/glTF i narożników T/Y z bliska.
+> Stan dokumentu: 2026-11-13, S2.2c: niezależne oględziny geometrii GLB X/T/Y i bieżącego GUI potwierdzone; naprawiono nieaktualny moduł Python agenta i dodano test regresyjny. Odbiór bazowej bryły krawężnika PASS dla sprawdzonych scen; realism/PBR, wygładzenie łuków i pomiar remesh pozostają OTWARTE. Najbliższy krok poniżej.
 > Poniższe SHA to punkt kontrolny, nie zamiennik aktualnego `git status`.
 
 ## Gotowe polecenie do nowej rozmowy
@@ -199,6 +199,52 @@ Osobny Quality Gate jądra: 2059 testów C++ i 6 agenta PASS.
 
 **Potwierdzone 13.11:** `BUILD_PASS: tests`, `BUILD_PASS: editor`; C++ **2068 PASS, 10 DISABLED**, Python agent **6 PASS**, `QUALITY_GATE_PASS`; Qt edytora **1284 PASS, 1 SKIPPED, 0 FAIL** (1285 przypadków, exit 0). W czasie pracy żadne okno `roadmaker-editor` nie było otwarte, nie zmieniano zapisanych scen użytkownika. **BRAK odbioru wizualnego S2.2c z kamery kierowcy i zbliżeń T/Y, brak potwierdzonego oglądu GLB w zewnętrznym viewerze i profilowania czasu remesh** — nie deklarować pełnego ukończenia etapu wizualnego. Najbliższa praca: osobna kopia sceny testowej, inspekcja krawężników w GUI pod małym kątem (ciasne T/Y, przejścia, nachylenia), sprawdzenie glTF w viewerze i kosztu remesh_objects; dopiero po tym ocena geometrii jako gotowej do PBR.
 
+**S2.2c — niezależny ogląd GLB i naprawa eksportu agenta (13.11.2026):**
+Wykryto rozjazd skompilowanego `build/dev-windows/python/_roadmaker*.pyd`
+i ignorowanego przez Git `agent/vendor/roadmaker/_roadmaker*.pyd` (inne SHA-256).
+Stary agent eksportował płaskie narożniki bez faz: GLB 127232 B, 41 meshy;
+po synchronizacji z aktualnym modułem ten sam XODR eksportuje GLB
+157824 B, 49 meshy, 4 ściany i 4 fazy narożników z UV oraz 0–0,15 m
+wysokości. To był błąd ścieżki CLI, nie generatora C++.
+`scripts/prawko-build-win.ps1` dla targetów editor/python/all teraz
+kopiuje moduł do agenta i kontroluje SHA-256; `prawko-verify-win.ps1`
+blokuje PASS przy stale binding; `agent/roadctl.py` wymaga
+`raised_sidewalks` i nie może już po cichu użyć starej geometrii.
+Agent ma nowy test end-to-end: prawdziwy GLB, 4 fazy, atrybuty
+POSITION/NORMAL/TEXCOORD_0, dostępny VEC2 accessor. Repo agenta:
+`02cbdeb5e943f7a710d3292a9fbc5e85d3cc95fc` na `origin/main`.
+
+**Rzeczywista ocena 3D:** Blender 5.3 bezbłędnie zaimportował GLB
+skrzyżowania X, nowo utworzonego miejskiego T i niestandardowego Y
+(z zapisanych XODR z `agent/projects/visual_s2_2c_{t,y}`).
+X: 49 meshy, 4 fazy; T: 14 meshy, 3 fazy; Y: 13 meshy,
+3 fazy. Na diagnostycznych renderach z góry, z poziomu kierowcy
+i na wyizolowanym zbliżeniu widać ciągłą wzniesioną bryłę,
+oddzielną ścianę oraz fizyczne połączenie fazy z chodnikiem.
+Kolor pomarańczowy faz na renderach jest **wyłącznie diagnostyczny**,
+nie jest nowym materiałem produkcyjnym.
+Rzeczywista aplikacja Qt otworzyła oddzielną scenę testową X bez awarii:
+`archive/visual-regression/s2.2c-current-editor-gui.png`; proces
+zamknięto bez zapisywania zmian. Lokalne dowody w
+`archive/visual-regression/`: `s2.2c-independent-review-current.glb`,
+`s2.2c-t-urban-current.glb`, `s2.2c-y-urban-current.glb`,
+`s2.2c-glb-geometry-top.png`, `s2.2c-glb-corner-isolated.png`,
+`s2.2c-glb-corner-driver.png`, `s2.2c-y-glb-oblique.png`.
+Pliki diagnostyczne są ignorowane przez Git i **nie są** zdalnym backupem.
+
+**Granice odbioru:** zakładany profil 15 cm / 5 cm jest widoczny,
+a w pokazanych ujęciach nie widać przerw w fazie. Łuk pozostaje
+widocznie segmentowy; nie ma jeszcze PBR, realnych tekstur ani
+kompletnego odbioru estetyki z kamery kierowcy w samym edytorze.
+Nie wykonano pomiaru czasu `remesh_objects`. **Odbiór realizmu
+materiałowego i finalny odbiór wizualny produktu NIE SĄ PASS.**
+
+**Testy końcowe:** C++ 2068 PASS (10 DISABLED), Qt 1284 PASS,
+1 SKIPPED / 0 FAIL; agent 7 PASS wraz z nową regresją GLB.
+`AGENT_BINDING_PARITY_PASS`, `BUILD_PASS: python`, kompilacja
+edytora i pełny Quality Gate (aktualny log lokalny w
+`archive/visual-regression/s2.2c-final-quality-gate.log`).
+
 **Historyczny plan S2.2c:** dokończyć 5 cm fazę krawężnika
 przez cały łuk narożnika (obecna ściana narożnika jest
 pionowa, a faza drogi zwęża się przed wlotem), zszyć
@@ -211,9 +257,9 @@ Nie uznawać obecnych materiałów za realistycznie odebrane.
 
 1. Uruchomić `scripts/prawko-resume.ps1` i sprawdzić oba repozytoria oraz otwarte sceny. Nie przeładowywać niezapisanych dokumentów.
 2. **Testy Qt Windows już odblokowane:** przed zmianami GUI sprawdzić `roadmaker_editor_tests` i `qoffscreen.dll` w `build/dev-windows/editor/platforms/`; CMake kopiuje plugin automatycznie. Ostatnia pełna sesja: 1284 PASS, 1 SKIPPED, 0 FAIL; wyniki oraz konfiguracja w akapicie S2.2b powyżej. Nie zmieniać `qt_gtest_main.cpp` bez odtwarzalnej regresji.
-3. **S2.2c:** kod i testy automatyczne wykonane (2068 C++, 1284 Qt PASS); obowiązkowo skontrolować wizualnie ciągłą fazę 5 cm przy wlotach i ciasnych łukach. Nie uznawać jeszcze pełnego odbioru.
-4. Dopisać testy ciasnych T/Y, nachylonych ulic i przejść, brak z-fightingu, eksport glTF/UV, pełny Undo/Redo i widok kamery kierowcy. Sprawdzić koszt przebudowy `remesh_objects` w trybie 3D.
-5. Dopiero po poprawnej geometrii i odbiorze GUI przejść do PBR, skali UV, oświetlenia i proceduralnych detali.
+3. **S2.2c — odbiór bazowej geometrii X/T/Y i niezależnego GLB wykonany.** Zrzut bieżącego GUI, kamera kierowcy i izolat narożnika w Blenderze oraz import GLB są w lokalnym `archive/visual-regression/`. Testy i dowody wyżej. Zwróć uwagę na segmentację łuku — nie mylić z ostatecznym wyglądem.
+4. **NASTĘPNE:** zmierzyć koszt `remesh_objects` przy przejściach na sieci X/T/Y, sprawdzić większe nachylenia i brak z-fightingu w kolejnych niskich ujęciach GUI; ocenić i poprawić gęstość próbkowania łuków, jeśli segmentacja jest widoczna z perspektywy kursanta. Nie modyfikować starego formatu OpenDRIVE.
+5. Po potwierdzeniu jakości bryły i płynności edycji przejść do materiałów PBR, skali UV, oświetlenia, proceduralnych detali i docelowego porównania scen. Obecny rendering nie jest fotorealistyczny.
 
 **Kryterium ukończenia:** kod + testy + rzeczywista ocena GUI; potem commity, push i aktualizacja TEGO pliku. Bez zgadywania stanu na podstawie dawnych raportów.
 
@@ -245,4 +291,4 @@ powershell -NoProfile -ExecutionPolicy Bypass -File F:\PrawkoRoadStudio\scripts\
 5. **Nie nadpisuj otwartej niezapisanej sceny.** Pliki `agent/projects/` nie są objęte Git; backupują się lokalnie, ale niezapisanej sceny GUI nie da się odzyskać z tych kopii.
 6. Jeśli nie ma dostępu do komputera lub testów, opisz ograniczenie, zamiast twierdzić, że praca została wykonana.
 
-<!-- agent_head: 147a08d537530a4b07b0bd7840f6197dc9f62512 -->
+<!-- agent_head: 02cbdeb5e943f7a710d3292a9fbc5e85d3cc95fc -->

@@ -37,4 +37,21 @@ if($Target -eq 'editor' -or $Target -eq 'all'){
   & "$qt\bin\windeployqt.exe" --release --no-translations $exe
   if($LASTEXITCODE -ne 0){throw "Qt deployment failed: $LASTEXITCODE"}
 }
+if($Target -ne 'tests'){
+  # Keep the agent's binary binding in sync with the C++ core used by the GUI.
+  # Without this copy the agent silently exported flat legacy sidewalks.
+  $built=@(Get-ChildItem -LiteralPath (Join-Path $build 'python') -Filter '_roadmaker*.pyd' -File)
+  if(@($built).Count -ne 1){throw 'Expected exactly one freshly built Python binding'}
+  $vendor=Join-Path $root 'agent\vendor\roadmaker'
+  if(!(Test-Path $vendor)){throw "Missing agent vendor directory: $vendor"}
+  $dest=Join-Path $vendor $built[0].Name
+  Copy-Item -LiteralPath $built[0].FullName -Destination $dest -Force
+  $sha=[System.Security.Cryptography.SHA256]::Create()
+  try {
+    $a=[BitConverter]::ToString($sha.ComputeHash([IO.File]::ReadAllBytes($built[0].FullName)))
+    $b=[BitConverter]::ToString($sha.ComputeHash([IO.File]::ReadAllBytes($dest)))
+    if($a -ne $b){throw "Agent binding SHA mismatch: $dest"}
+  } finally {$sha.Dispose()}
+  Write-Host 'AGENT_BINDING_SYNC_PASS'
+}
 Write-Host "BUILD_PASS: $Target"

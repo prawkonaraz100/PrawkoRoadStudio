@@ -256,3 +256,23 @@ Szczegółowy bieżący stan testów i następne zadanie:
 narożnika, przejścia w nietypowych T/Y i przy zmianach niwelety,
 kontrola glTF i wizualny odbiór z wysokości kierowcy. Materiały
 nie spełniają jeszcze docelowego standardu realizmu.
+
+## Implementacja S2.2c — fazowane narożniki i kontrola eksportu (13.11.2026)
+
+- W trybie `raised_sidewalks=true` `junction_surface.cpp` wytwarza rzeczywistą
+  fazę o nominalnej szerokości 0,05 m między ścianą krawężnika a odsuniętą
+  górną krawędzią chodnika. Faza zanika przy wlotach i obniżeniach; dla
+  krótkich trójkątów przesunięcie jest ograniczane, aby nie odwracać siatki.
+- `gltf_exporter.cpp` zachowuje `TEXCOORD_0` dla podsiatek z pełnymi UV.
+  Oryginalne `.xodr` i kompatybilny tryb płaskich chodników nie są zmieniane.
+- Skrypt budowania Windows synchronizuje natywny moduł Python agenta z
+  aktualną kompilacją i porównuje SHA-256, a Quality Gate odmówi PASS
+  przy różnicy. Test eksportu agenta odczytuje rzeczywisty GLB, wymaga
+  faz narożników i ich atrybutów UV — eliminuje cichy powrót do geometrii 2D.
+- Obrazy rzeczywistych importów do Blender 5.3 scen X/T/Y i zrzut GUI są
+  zapisane **lokalnie** w `archive/visual-regression/`. Bryła i ciągłość faz
+  na sprawdzonych ujęciach są potwierdzone. Wciąż otwarte: wygładzenie
+  widocznej segmentacji łuków, profil wydajnościowy remesh, docelowe
+  materiały PBR, skala tekstur, światło i odbiór fotorealizmu.
+- Aktualne wyniki testów, SHA obu repozytoriów i dokładny kolejny krok:
+  `HANDOFF.md` (jedyne bieżące przekazanie).
