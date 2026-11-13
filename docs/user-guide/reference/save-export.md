@@ -30,6 +30,15 @@ Frame the scene in the 3D view, then choose **File → Export Scene Image…**
 and save a PNG. The export uses the current camera and viewport resolution.
 It leaves out the editor grid, reference guides, selection and tool overlays.
 
+## Run a scenario in the background
+
+Open a scene with actors and choose **Scenario → Run Simulation**. The
+Simulation panel shows the outcome, event times, collisions and actor
+sample count for the snapshot taken when the run started. **Cancel** stops
+an active run. Changes made while it runs are applied to the next snapshot.
+The command uses an installed esmini and its companion `dat2csv`. Select
+`esmini.exe` from the release's `bin` directory if prompted.
+
 ## Export meshes
 
 From the Python package you can export the tessellated network:

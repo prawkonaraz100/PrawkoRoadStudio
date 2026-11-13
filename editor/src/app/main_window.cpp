@@ -85,6 +85,7 @@
 #include "help/help_viewer.hpp"
 #include "help/manual_locator.hpp"
 #include "panels/asset_import_dialog.hpp"
+#include "panels/simulation_panel.hpp"
 #include "panels/diagnostics_panel.hpp"
 #include "panels/editor2d_host.hpp"
 #include "panels/library_panel.hpp"
@@ -1245,6 +1246,13 @@ void MainWindow::build_docks() {
       new DiagnosticsPanel(document_, diagnostics_model_, selection_, diagnostics_dock_));
   addDockWidget(Qt::BottomDockWidgetArea, diagnostics_dock_);
   diagnostics_dock_->hide(); // collapsed by default until diagnostics arrive
+
+  simulation_dock_ = new QDockWidget(tr("Simulation"), this);
+  simulation_dock_->setObjectName(QStringLiteral("dock.simulation"));
+  simulation_panel_ = new SimulationPanel(document_, settings_, simulation_dock_);
+  simulation_dock_->setWidget(simulation_panel_);
+  addDockWidget(Qt::BottomDockWidgetArea, simulation_dock_);
+  simulation_dock_->hide();
 }
 
 void MainWindow::build_menus() {
@@ -1336,6 +1344,7 @@ void MainWindow::build_menus() {
   view_menu->addAction(properties_dock_->toggleViewAction());
   view_menu->addAction(diagnostics_dock_->toggleViewAction());
   view_menu->addAction(editor2d_dock_->toggleViewAction());
+  view_menu->addAction(simulation_dock_->toggleViewAction());
   view_menu->addAction(actions_->scenario_mode);
   view_menu->addSeparator();
   auto* textured_action = new QAction(tr("&Textured Rendering"), this);
@@ -1402,6 +1411,14 @@ void MainWindow::build_menus() {
   cardinal_menu->addAction(actions_->view_top);
   view_menu->addSeparator();
   view_menu->addAction(actions_->reset_layout);
+
+  QMenu* scenario_menu = menuBar()->addMenu(tr("&Scenario"));
+  auto* run_simulation = scenario_menu->addAction(tr("&Run Simulation"));
+  connect(run_simulation, &QAction::triggered, this, [this] {
+    simulation_dock_->show();
+    simulation_dock_->raise();
+    simulation_panel_->run();
+  });
 
   QMenu* help_menu = menuBar()->addMenu(tr("&Help"));
   help_menu->addAction(actions_->help_contents);
@@ -3316,6 +3333,7 @@ void MainWindow::closeEvent(QCloseEvent* event) {
   // Explicit close: whatever the user decided in confirm_discard, the
   // recovery set is moot (§3 cleanup rule).
   autosave_.clear_recovery();
+  simulation_panel_->cancel();
   settings_.save_window(*this);
   settings_.set_library_splitter_state(library_panel_->splitter_state());
   QMainWindow::closeEvent(event);

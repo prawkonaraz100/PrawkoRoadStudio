@@ -164,11 +164,12 @@ set(FMT_DOC OFF)
     fixture, cached, run `--headless`. It is never linked into any RoadMaker
     target and never redistributed. If it ever needed to be linked or shipped,
     MPL-2.0's file-level copyleft would apply and this entry would not cover it.
-    - **The editor's `File ▸ Preview Scenario in esmini…` stays inside this
-      entry, and the boundary is exact** (p8-s5, #249): RoadMaker exports the
-      pair to a throwaway folder and starts a **detached subprocess** on a
-      binary the user already has — resolved from a settings path, then
-      `$ESMINI_PATH`, then `PATH`. There is no esmini header in this tree, no
+    - The editor offers **File ▸ Preview Scenario in esmini…** and
+      **Scenario ▸ Run Simulation**. Both export a snapshot into a temporary
+      folder and start an existing esmini binary, resolved from settings,
+      `$ESMINI_PATH`, then `PATH`. Run Simulation manages a headless subprocess
+      and calls the companion `dat2csv` binary from the same release directory.
+      There is no esmini header in this tree, no
       esmini target in any `CMakeLists.txt`, and nothing esmini-shaped in any
       installer or wheel. Bundling the binary with a release, or linking
       `esminiLib`, would be a *different* question with a different answer, and

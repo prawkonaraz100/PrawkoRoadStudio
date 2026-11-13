@@ -40,12 +40,14 @@
 
 #include <QFile>
 #include <QFileInfo>
+#include <QSignalSpy>
 #include <QTemporaryDir>
 #include <filesystem>
 #include <string>
 
 #include "document/document.hpp"
 #include "document/esmini_preview.hpp"
+#include "document/esmini_simulation.hpp"
 
 namespace roadmaker::editor {
 namespace {
@@ -86,7 +88,183 @@ void author_scene(Document& document) {
                   .has_value());
 }
 
+void write_test_file(const QString& path, const QByteArray& text) {
+  QFile file(path);
+  ASSERT_TRUE(file.open(QIODevice::WriteOnly));
+  ASSERT_EQ(file.write(text), text.size());
+}
+
+osc::Trigger after_time(double seconds) {
+  osc::Condition condition;
+  condition.name = "after_" + std::to_string(seconds);
+  condition.simulation_time.emplace();
+  condition.simulation_time->value = seconds;
+  osc::ConditionGroup group;
+  group.conditions.push_back(std::move(condition));
+  osc::Trigger trigger;
+  trigger.condition_groups.push_back(std::move(group));
+  return trigger;
+}
+
+void author_simulation(Document& document, double event_time, double stop_time) {
+  author_scene(document);
+  osc::SpeedAction speed;
+  speed.absolute_target.emplace();
+  speed.absolute_target->value = 8.0;
+  osc::PrivateAction change;
+  change.longitudinal.emplace();
+  change.longitudinal->speed = speed;
+  osc::Action action;
+  action.name = "accelerate";
+  action.action = change;
+  osc::Event event;
+  event.name = "start_moving";
+  event.actions.push_back(action);
+  event.start_trigger = after_time(event_time);
+  osc::StoryManeuver maneuver;
+  maneuver.name = "move";
+  maneuver.events.push_back(event);
+  osc::EntityRef actor;
+  actor.entity_ref = "Ego";
+  osc::ManeuverGroup group;
+  group.name = "ego_group";
+  group.actors.push_back(actor);
+  group.maneuvers.push_back(maneuver);
+  osc::Act act;
+  act.name = "act";
+  act.maneuver_groups.push_back(group);
+  osc::Story story;
+  story.name = "story";
+  story.acts.push_back(act);
+  ASSERT_TRUE(document.push_scenario_command(osc::edit::set_story(document.scenario(), 0, story)));
+  ASSERT_TRUE(document.push_scenario_command(
+      osc::edit::set_stop_trigger(document.scenario(), after_time(stop_time))));
+}
+
 } // namespace
+
+TEST(SimulationTrace, ReadsFullPoseAndSeparatesStartedCompletedAndStoppedEvents) {
+  QTemporaryDir directory;
+  ASSERT_TRUE(directory.isValid());
+  const QString csv = directory.filePath(QStringLiteral("run.csv"));
+  const QString log = directory.filePath(QStringLiteral("esmini.log"));
+  write_test_file(csv,
+                  "time, id, name, x, y, z, h, p, r, roadId, laneId\n"
+                  "0, 7, Car, 0, -1, 0, 0, 0, 0, 1, -2\n"
+                  "0.25, 7, Car, 1, -1, 2, 0.1, 0.2, 0.3, 1, -1\n"
+                  "0.25, 9, Car, red, 2, -2, 0, 0, 0, 0, 1, -2\n");
+  write_test_file(log,
+                  "[0.050] [info] First standbyState -> startTransition -> runningState\n"
+                  "[0.100] [info] First runningState -> endTransition -> completeState\n"
+                  "[0.100] [info] Second standbyState -> startTransition -> runningState\n"
+                  "[0.150] [info] Third standbyState -> stopTransition -> completeState\n"
+                  "[0.200] [warn] Collision between Car and Car, red\n"
+                  "[0.250] [warn] Collision between Car and Car, red dissolved\n");
+  const auto trace = read_simulation_trace(
+      csv,
+      log,
+      {QStringLiteral("First"), QStringLiteral("Second"), QStringLiteral("Third"),
+       QStringLiteral("Duplicate"), QStringLiteral("Duplicate")});
+  ASSERT_TRUE(trace.has_value());
+  ASSERT_EQ(trace->samples.size(), 3);
+  EXPECT_DOUBLE_EQ(trace->samples.at(1).roll, 0.3);
+  EXPECT_DOUBLE_EQ(trace->samples.at(1).pitch, 0.2);
+  EXPECT_EQ(trace->samples.at(1).lane_id, -1);
+  EXPECT_EQ(trace->samples.back().actor_name, QStringLiteral("Car, red"));
+  ASSERT_EQ(trace->events.size(), 4);
+  EXPECT_EQ(trace->events.at(1).kind, SimulationEventKind::Completed);
+  EXPECT_EQ(trace->events.back().kind, SimulationEventKind::Collision);
+  EXPECT_EQ(trace->unstarted_events, QStringList{QStringLiteral("Third")});
+  EXPECT_EQ(trace->incomplete_events, QStringList{QStringLiteral("Second")});
+  EXPECT_EQ(trace->ambiguous_events, QStringList{QStringLiteral("Duplicate")});
+}
+
+TEST(SimulationTrace, RejectsMissingOrMalformedTelemetry) {
+  QTemporaryDir directory;
+  ASSERT_TRUE(directory.isValid());
+  const QString csv = directory.filePath(QStringLiteral("run.csv"));
+  const QString log = directory.filePath(QStringLiteral("esmini.log"));
+  write_test_file(log, "engine output\n");
+  EXPECT_FALSE(read_simulation_trace(csv, log, {}));
+  write_test_file(csv,
+                  "time, id, name, x, y, z, h, p, r, roadId, laneId\n"
+                  "0, 7, Car, nan, -1, 0, 0, 0, 0, 1, -2\n");
+  EXPECT_FALSE(read_simulation_trace(csv, log, {}));
+}
+
+TEST(EsminiSimulation, RequiresAnActorAndTheEngine) {
+  Document document;
+  EsminiSimulation simulation;
+  auto result = simulation.start(document, {});
+  ASSERT_FALSE(result);
+  EXPECT_EQ(result.error().code, ErrorCode::InvalidDocument);
+  author_scene(document);
+  result = simulation.start(document, {});
+  ASSERT_FALSE(result);
+  EXPECT_EQ(result.error().code, ErrorCode::FileNotFound);
+  EXPECT_FALSE(simulation.running());
+}
+
+TEST(EsminiSimulation, RealEngineDistinguishesCompletedAndUnstartedEvents) {
+  const QString engine = resolve_esmini({});
+  if (engine.isEmpty() || EsminiSimulation::find_converter(engine).isEmpty()) {
+    GTEST_SKIP() << "Set ESMINI_PATH to test the real esmini release with dat2csv.";
+  }
+  EsminiSimulation simulation;
+  QSignalSpy finished(&simulation, &EsminiSimulation::finished);
+  QString first_snapshot;
+  for (const double event_time : {0.1, 5.0}) {
+    Document document;
+    author_simulation(document, event_time, 1.0);
+    const auto started = simulation.start(document, engine);
+    ASSERT_TRUE(started.has_value()) << (started ? "" : started.error().message);
+    EXPECT_TRUE(simulation.running());
+    EXPECT_FALSE(simulation.start(document, engine));
+    ASSERT_TRUE(!finished.isEmpty() || finished.wait(15'000));
+    ASSERT_TRUE(finished.takeFirst().at(0).toString().isEmpty());
+    ASSERT_TRUE(simulation.result());
+    const SimulationRun& run = *simulation.result();
+    EXPECT_EQ(run.snapshot_sha256.size(), 64);
+    EXPECT_TRUE(run.network_snapshot.contains("<OpenDRIVE>"));
+    EXPECT_TRUE(run.scenario_snapshot.contains("preview.xodr"));
+    EXPECT_EQ(run.seed, 123);
+    EXPECT_TRUE(document.is_dirty());
+    ASSERT_GE(run.trace.samples.size(), 2);
+    if (event_time < 1.0) {
+      EXPECT_GT(run.trace.samples.back().x, run.trace.samples.front().x + 1.0);
+      EXPECT_TRUE(run.trace.unstarted_events.isEmpty());
+      EXPECT_TRUE(run.trace.incomplete_events.isEmpty());
+      ASSERT_EQ(run.trace.events.size(), 2);
+      EXPECT_EQ(run.trace.events.back().kind, SimulationEventKind::Completed);
+      first_snapshot = run.snapshot_sha256;
+    } else {
+      EXPECT_DOUBLE_EQ(run.trace.samples.front().x, run.trace.samples.back().x);
+      EXPECT_EQ(run.trace.unstarted_events, QStringList{QStringLiteral("start_moving")});
+      EXPECT_NE(run.snapshot_sha256, first_snapshot);
+    }
+  }
+}
+
+TEST(EsminiSimulation, RealEngineCanBeCancelledAndRunAgain) {
+  const QString engine = resolve_esmini({});
+  if (engine.isEmpty() || EsminiSimulation::find_converter(engine).isEmpty()) {
+    GTEST_SKIP() << "Set ESMINI_PATH to test the real esmini release with dat2csv.";
+  }
+  Document document;
+  author_simulation(document, 0.1, 1.0);
+  EsminiSimulation simulation;
+  QSignalSpy finished(&simulation, &EsminiSimulation::finished);
+  ASSERT_TRUE(simulation.start(document, engine));
+  simulation.cancel();
+  ASSERT_TRUE(!finished.isEmpty() || finished.wait(15'000));
+  EXPECT_TRUE(finished.takeFirst().at(0).toString().contains(QStringLiteral("cancelled")));
+  EXPECT_FALSE(simulation.running());
+  EXPECT_FALSE(simulation.result());
+  ASSERT_TRUE(simulation.start(document, engine));
+  ASSERT_TRUE(!finished.isEmpty() || finished.wait(15'000));
+  EXPECT_TRUE(finished.takeFirst().at(0).toString().isEmpty());
+  EXPECT_TRUE(simulation.result());
+}
 
 TEST(EsminiPreview, APreviewWritesThePairAndPointsTheScenarioAtIt) {
   Document document;

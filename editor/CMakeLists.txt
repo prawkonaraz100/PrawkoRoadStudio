@@ -7,7 +7,7 @@
 # provides qhelpgenerator (an IMPORTED target, Qt6::qhelpgenerator), which
 # compiles the .qhp/.qhcp into the shipped .qch/.qhc at build time. Both ride
 # in qttools, provisioned by scripts/setup_qt.py.
-find_package(Qt6 ${RM_QT_VERSION} QUIET COMPONENTS Widgets OpenGLWidgets Svg Help Tools)
+find_package(Qt6 ${RM_QT_VERSION} QUIET COMPONENTS Widgets OpenGLWidgets Svg Help Tools Concurrent)
 if(NOT Qt6_FOUND)
   message(FATAL_ERROR
     "Qt ${RM_QT_VERSION} not found. Run `python3 scripts/setup_qt.py` to "
@@ -67,6 +67,8 @@ add_library(roadmaker_editor_lib STATIC
   src/document/crosswalk_placement.cpp
   src/document/diagnostics_model.cpp
   src/document/esmini_preview.cpp
+  src/document/esmini_simulation.cpp
+  src/document/simulation_trace.cpp
   src/document/export_preview_state.cpp
   src/document/export_preview_models.cpp
   src/document/document.cpp
@@ -112,6 +114,7 @@ add_library(roadmaker_editor_lib STATIC
   src/panels/scene_tree_panel.cpp
   src/panels/scrub_label.cpp
   src/panels/storyboard_panel.cpp
+  src/panels/simulation_panel.cpp
   src/panels/slot_widget.cpp
   src/panels/unit_spin_box.cpp
   src/panels/width_panel.cpp
@@ -179,6 +182,7 @@ target_link_libraries(roadmaker_editor_lib
   PRIVATE
     Qt6::Svg
     Qt6::Help
+    Qt6::Concurrent
     Eigen3::Eigen
     spdlog::spdlog
 )

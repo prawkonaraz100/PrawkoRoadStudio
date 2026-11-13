@@ -388,6 +388,8 @@ private:
   QDockWidget* library_dock_;
   QDockWidget* properties_dock_;
   QDockWidget* diagnostics_dock_;
+  QDockWidget* simulation_dock_ = nullptr;
+  class SimulationPanel* simulation_panel_ = nullptr;
   QDockWidget* editor2d_dock_;
   class Editor2DHost* editor2d_host_ = nullptr;
   class SignalPhaseEditorPage* phase_page_ = nullptr;

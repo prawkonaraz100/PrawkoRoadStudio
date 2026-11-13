@@ -8,22 +8,21 @@ Instruktor tworzy i edytuje sytuację drogową, odtwarza ją, wybiera kamerę i 
 
 ## Stan bieżący
 
-- **Kod produktu sprawdzony przed aktualizacją tego planu.** Edytor `feature/realistic-road-surfaces` na `56ed4c8f10445697ccc72c4a486be55cfc08b61c`, agent `main` na `35c48c11cdb7efca8e08d1be731463657bbe7a32`. `prawko-resume.ps1 -Verify` potwierdził zgodność obu z `origin` i czyste katalogi na starcie.
+- **Punkt wyjścia etapu.** Edytor `feature/realistic-road-surfaces` na `1f2762bd95b0f5ca4854ea901e7ac56f3faab01d`, agent `main` na `35c48c11cdb7efca8e08d1be731463657bbe7a32`. `prawko-resume.ps1` potwierdził czyste katalogi i zgodność obu z `origin` przed zmianami.
 - **Wdrożono:** przycisk `Scenario` i `View → Scenario Mode`. Tryb wyświetla `Actor`, `Route` i otwiera `Storyboard`. W opcjach `Actor` jest wybór samochodu, ciężarówki, autobusu, motocykla, roweru lub pieszego, pobierany z katalogu C++. `File → Export Scene Image…` zapisuje PNG w rozdzielczości aktualnego widoku z bieżącej kamery. Eksport pomija siatkę, prowadnice, podświetlenia i narzędzia, zapis przez `QSaveFile`.
-- **Weryfikacja.** Bieżące testy dały **2072 PASS C++** (10 wyłączonych), **7 PASS Python** i **1306 PASS Qt + 1 SKIPPED**, `QUALITY_GATE_PASS`. Ostatni build kodu dał `BUILD_PASS: all` oraz `AGENT_BINDING_SYNC_PASS`. W rzeczywistym Qt Windows potwierdzono zmianę trybu, widoczność narzędzi, wczytanie `event_1` i eksport kadru **1297 × 779**. Plik i logi są w `archive/vicom-workflow/2026-11-13/`. Nadal trzeba odebrać myszą wstawienie aktora i poprowadzenie trasy na osobnej kopii.
-- **Otwarte.** Podgląd esmini uruchamia osobne okno i nie przekazuje przebiegu do edytora. Odtwarzanie na osi czasu oraz eksport MP4 są do wdrożenia. Autosave pomija XOSC, a błąd zapisu XOSC może zostawić dokument oznaczony jako zapisany.
+- **Wdrożono przebieg w tle.** `Scenario → Run Simulation` uruchamia esmini bez okna, z możliwością anulowania i limitem 60 s czasu rzeczywistego. Edytor używa `dat2csv` z katalogu tej samej dystrybucji. Wynik w pamięci ma parę XODR/XOSC ze skrótem SHA-256, wersję silnika, krok 0,05 s, ziarno 123, próbki pełnej pozy aktorów, identyfikatory dróg/pasów, start i koniec zdarzeń oraz kolizje. Raport wskazuje zdarzenia nierozpoczęte, niedokończone lub o niejednoznacznych nazwach. Edycja lub otwarcie innej sceny oznacza raport jako pochodzący z poprzedniej wersji.
+- **Weryfikacja.** `BUILD_PASS: all`, `AGENT_BINDING_SYNC_PASS`, **2072 PASS C++** (10 wyłączonych), **7 PASS Python**, **1311 PASS Qt + 1 SKIPPED** z esmini 3.5.0, `QUALITY_GATE_PASS`. Testy integracyjne potwierdziły ruch i wykonanie zdarzenia, zakończenie bez zdarzenia oraz ponowienie po anulowaniu. W rzeczywistym GUI Windows oba warianty otwarto i uruchomiono z menu w tym samym oknie. W wariancie 4 m `event_1` rozpoczęło się po **1,95 s**, zakończyło po **3,90 s**, a pierwszą kolizję zgłoszono po **4,50 s**. W wariancie 15 m raport wskazał, że `event_1` nie wystartowało. Każdy przebieg dał **35,05 s, 2 aktorów i 1404 próbki**. Kopie i logi są w `archive/simulation-stage1-20261113-202759/`. Oryginalne sceny nie były otwierane do zapisu.
+- **Otwarte.** Odtwarzanie na osi czasu i MP4 są do wdrożenia. Wynik etapu 1 żyje w sesji edytora. Znaczniki zdarzeń są odczytywane z logu sprawdzonego w esmini 3.5.0. Relatywne ścieżki do zewnętrznych katalogów i modeli pozostają zapisane w migawce w oryginalnej postaci i mogą wymagać dopracowania przy importowanych scenach. Nadal trzeba odebrać myszą wstawienie aktora i poprowadzenie trasy na kopii. Autosave pomija XOSC, a błąd zapisu XOSC może zostawić dokument oznaczony jako zapisany.
 
 ## Aktywny plan
 
-### 1. Następne zadanie — kontrolowany przebieg esmini w tle
+### 1. Ukończono — kontrolowany przebieg esmini w tle
 
-Zacznij od [esmini_preview.cpp](editor/src/document/esmini_preview.cpp). Wykorzystaj istniejący eksport migawki z bieżącego dokumentu i wykrywanie programu esmini. Dodaj zarządzany przebieg w tle z osobnym katalogiem roboczym, stałym krokiem i zapisanym ziarnem. Zwracaj czas, identyfikator aktora, pozycję, orientację i zdarzenia razem z informacją o migawce. Raportuj w GUI start, wynik oraz brak silnika, błąd wejścia, przerwanie lub przekroczenie limitu czasu. Zachowaj dane i powiązania z mapą źródłową. Testuj na kopiach.
+Punkt wejścia stanowią [panel symulacji](editor/src/panels/simulation_panel.cpp) i [wynik przebiegu](editor/src/document/esmini_simulation.hpp). Testy z prawdziwym silnikiem uruchamiają się po ustawieniu `ESMINI_PATH` na plik esmini z dystrybucji zawierającej również `dat2csv`.
 
-**Odbiór etapu.** Przebieg wywołany z okna edytora nie zamraża GUI ani nie otwiera osobnego okna esmini. Test pozytywny potwierdza ruch aktora i wykonanie oczekiwanego zdarzenia. Test negatywny wykrywa koniec bez oczekiwanego zdarzenia mimo kodu procesu 0. Wykorzystaj jako punkt odniesienia wyniki w `archive/scenario-audit/2026-11-13/fresh_cut_in/`. W próbce z progiem 15 m warunek jest spełniony od startu i zdarzenie się nie uruchamia. Kopia z progiem 4 m daje ruch i zdarzenie, a także wykrytą kolizję, więc służy do testu telemetrii. W bieżącym etapie wystarczy odebrać przebieg i jego wynik.
+### 2. Następne zadanie — odtwarzanie w istniejącym widoku Qt
 
-### 2. Odtwarzanie w istniejącym widoku Qt
-
-Pokaż pozycje aktorów z przebiegu w widoku 3D. Dodaj **Odtwórz**, **Pauza**, **Od początku**, suwak i znaczniki zdarzeń. Dane odtwarzania nie zapisują zmian do mapy ani stosu Undo. Po zmianie sceny pokaż, że przebieg pochodzi ze starszej rewizji. Odbierz przewijanie do zdarzenia i zgodność pozycji z telemetrią, a przy tej okazji zweryfikuj myszą dodanie aktora i trasy.
+Zacznij od `SimulationPanel::result()` i widoku 3D. Pokaż pozycje aktorów z tego przebiegu jako stan podglądu. Dodaj **Odtwórz**, **Pauza**, **Od początku**, suwak i znaczniki zdarzeń. Podgląd nie zapisuje zmian do mapy ani stosu Undo. Po zmianie sceny uniemożliw odtwarzanie nieaktualnych pozycji na zmienionej geometrii. Odbierz przewijanie do zdarzenia i zgodność pozycji z telemetrią na kopii `run-maneuver.xodr`, a przy tej okazji zweryfikuj myszą dodanie aktora i trasy.
 
 ### 3. Pierwsze nagranie MP4
 

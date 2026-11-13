@@ -56,6 +56,12 @@ struct EsminiPreview {
   QStringList arguments;
 };
 
+/// Writes the current OpenDRIVE/OSC pair with a relative LogicFile. The caller
+/// owns the destination directory. Catalog and model references are preserved.
+[[nodiscard]] Expected<void> write_esmini_snapshot(const Document& document,
+                                                   const std::filesystem::path& network_path,
+                                                   const std::filesystem::path& scenario_path);
+
 /// Writes `document`'s network and scenario into `directory` and builds the
 /// argument vector for them.
 ///

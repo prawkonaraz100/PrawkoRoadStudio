@@ -38,19 +38,16 @@ constexpr const char* kStem = "preview";
 
 } // namespace
 
-Expected<EsminiPreview> prepare_preview(const Document& document,
-                                        const std::filesystem::path& directory) {
+Expected<void> write_esmini_snapshot(const Document& document,
+                                    const std::filesystem::path& network_path,
+                                    const std::filesystem::path& scenario_path) {
   if (!document.has_scenario()) {
     return make_error(ErrorCode::InvalidArgument,
                       "this scene has no scenario to preview — place an actor first",
-                      directory.string());
+                      scenario_path.string());
   }
 
-  EsminiPreview preview;
-  preview.network_path = directory / (std::string(kStem) + ".xodr");
-  preview.scenario_path = directory / (std::string(kStem) + ".xosc");
-
-  if (auto written = roadmaker::save_xodr(document.network(), preview.network_path, kStem);
+  if (auto written = roadmaker::save_xodr(document.network(), network_path, kStem);
       !written) {
     return tl::unexpected<Error>(written.error());
   }
@@ -63,12 +60,21 @@ Expected<EsminiPreview> prepare_preview(const Document& document,
   osc::Scenario scenario = document.scenario();
   osc::edit::ScenarioStack stack;
   if (auto pointed = stack.push(
-          scenario, osc::edit::set_logic_file(scenario, preview.network_path.filename().string()));
+          scenario, osc::edit::set_logic_file(scenario, network_path.filename().string()));
       !pointed) {
     return tl::unexpected<Error>(pointed.error());
   }
 
-  if (auto written = osc::save_xosc(scenario, preview.scenario_path); !written) {
+  return osc::save_xosc(scenario, scenario_path);
+}
+
+Expected<EsminiPreview> prepare_preview(const Document& document,
+                                       const std::filesystem::path& directory) {
+  EsminiPreview preview;
+  preview.network_path = directory / (std::string(kStem) + ".xodr");
+  preview.scenario_path = directory / (std::string(kStem) + ".xosc");
+  if (auto written = write_esmini_snapshot(document, preview.network_path, preview.scenario_path);
+      !written) {
     return tl::unexpected<Error>(written.error());
   }
 
