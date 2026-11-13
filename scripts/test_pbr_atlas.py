@@ -6,14 +6,16 @@ import numpy as np
 root = Path(__file__).resolve().parents[1] / "assets" / "textures" / "prawko_atlas"
 for surface in ("asphalt", "concrete"):
     for channel, ext in (("diff", "jpg"), ("nor_gl", "png"), ("rough", "jpg")):
-        path = root / f"{surface}_{channel}_2048.{ext}"
+        resolution = 2048 if channel == "diff" else 1024
+        path = root / f"{surface}_{channel}_{resolution}.{ext}"
         rgb = np.asarray(Image.open(path).convert("RGB"), dtype=np.float32)
-        assert rgb.shape == (2048, 2048, 3), path
+        assert rgb.shape == (resolution, resolution, 3), path
         assert np.isfinite(rgb).all(), path
         # Rotation-free offsets vary the pattern: the four adjacent original
         # 4 m tiles must no longer be pixel identical.
-        a = rgb[512:1024, 512:1024]
-        b = rgb[512:1024, 1024:1536]
+        tile = resolution // 4
+        a = rgb[tile:2*tile, tile:2*tile]
+        b = rgb[tile:2*tile, 2*tile:3*tile]
         mismatch = np.abs(a - b).mean()
         assert mismatch > 0.4, (path, mismatch)
         # Atlas edges are close to each other, given seamless source textures.
@@ -22,4 +24,9 @@ for surface in ("asphalt", "concrete"):
         print(surface,channel,"tile_difference",round(float(mismatch),2),
               "x_seam",round(float(x_seam),2),"y_seam",round(float(y_seam),2))
         assert max(x_seam, y_seam) < 25, (path, x_seam, y_seam)
+        if channel == "nor_gl":
+            normals = rgb / 127.5 - 1.0
+            length = np.linalg.norm(normals, axis=2)
+            assert np.abs(length - 1.0).mean() < 0.012, (path, float(np.abs(length - 1).mean()))
+            assert (normals[..., 2] > 0).all(), path
 print("PBR_ATLAS_QA_PASS")

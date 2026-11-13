@@ -56,8 +56,10 @@ TEST(SurfaceTextures, BundledJpegsDecodeFromQrc) {
     const QImage image{QString::fromLatin1(path)};
     ASSERT_FALSE(image.isNull()) << path;
     const bool worn = QString::fromLatin1(path).contains("asphalt_worn");
-    EXPECT_EQ(image.width(), worn ? 512 : 2048);
-    EXPECT_EQ(image.height(), worn ? 512 : 2048);
+    const auto name = QString::fromLatin1(path);
+    const int side = worn ? 512 : (name.endsWith("asphalt.jpg") || name.endsWith("concrete.jpg")) ? 2048 : 1024;
+    EXPECT_EQ(image.width(), side);
+    EXPECT_EQ(image.height(), side);
   }
 }
 
@@ -72,6 +74,8 @@ TEST(SurfaceTextures, PrawkoAtlasKeepsFourMeterDetailButVariesOverSixteenMeters)
     EXPECT_FALSE(material->roughness.empty());
     const QImage image(QString::fromStdString(material->albedo));
     ASSERT_EQ(image.size(), QSize(2048, 2048));
+    EXPECT_EQ(QImage(QString::fromStdString(material->normal)).size(), QSize(1024, 1024));
+    EXPECT_EQ(QImage(QString::fromStdString(material->roughness)).size(), QSize(1024, 1024));
     // A 4-metre repetition would duplicate the exact central 512-px tile;
     // baked staggered offsets should visibly differ.
     EXPECT_NE(image.pixelColor(128, 128), image.pixelColor(640, 128));

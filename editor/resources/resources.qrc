@@ -121,14 +121,14 @@
        committed, re-encoded files; rows in ASSETS_LICENSES.md. -->
   <qresource prefix="/textures">
     <file alias="asphalt.jpg">../../assets/textures/prawko_atlas/asphalt_diff_2048.jpg</file>
-    <file alias="asphalt_nor.png">../../assets/textures/prawko_atlas/asphalt_nor_gl_2048.png</file>
-    <file alias="asphalt_rough.jpg">../../assets/textures/prawko_atlas/asphalt_rough_2048.jpg</file>
+    <file alias="asphalt_nor.png">../../assets/textures/prawko_atlas/asphalt_nor_gl_1024.png</file>
+    <file alias="asphalt_rough.jpg">../../assets/textures/prawko_atlas/asphalt_rough_1024.jpg</file>
     <file alias="asphalt_worn.jpg">../../assets/textures/asphalt/worn_asphalt_diff_512.jpg</file>
     <file alias="asphalt_worn_nor.png">../../assets/textures/asphalt/worn_asphalt_nor_gl_512.png</file>
     <file alias="asphalt_worn_rough.jpg">../../assets/textures/asphalt/worn_asphalt_rough_512.jpg</file>
     <file alias="concrete.jpg">../../assets/textures/prawko_atlas/concrete_diff_2048.jpg</file>
-    <file alias="concrete_nor.png">../../assets/textures/prawko_atlas/concrete_nor_gl_2048.png</file>
-    <file alias="concrete_rough.jpg">../../assets/textures/prawko_atlas/concrete_rough_2048.jpg</file>
+    <file alias="concrete_nor.png">../../assets/textures/prawko_atlas/concrete_nor_gl_1024.png</file>
+    <file alias="concrete_rough.jpg">../../assets/textures/prawko_atlas/concrete_rough_1024.jpg</file>
   </qresource>
   <qresource prefix="/branding">
     <file alias="icon_16.png">branding/icon_16.png</file>

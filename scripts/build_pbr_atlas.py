@@ -107,8 +107,21 @@ def generate() -> None:
                 raise ValueError(f"Expected 512x512: {src}")
             data = prepare(image, surface, ch)
             finished = atlas(data, 41 if surface == "asphalt" else 73, ch == "nor_gl")
+            # Preserve 2048 albedo grain; normal and roughness can use 1024
+            # because these fine channels are filtered at driving distances.
+            # Saving only the latter at half resolution reduces decode,
+            # VRAM and GLB size without altering 16 m UV periodicity.
+            resolution = 2048 if ch == "diff" else 1024
+            if resolution == 1024:
+                finished = finished.resize((resolution, resolution), Image.Resampling.LANCZOS)
+                if ch == "nor_gl":
+                    n = np.asarray(finished, dtype=np.float32) / 127.5 - 1.0
+                    n /= np.maximum(np.linalg.norm(n, axis=2, keepdims=True), 1e-6)
+                    finished = Image.fromarray(
+                        np.uint8(np.clip((n + 1.0) * 127.5, 0, 255)), "RGB"
+                    )
             suffix = "png" if ch == "nor_gl" else "jpg"
-            out = TARGET / f"{surface}_{ch}_2048.{suffix}"
+            out = TARGET / f"{surface}_{ch}_{resolution}.{suffix}"
             if suffix == "png":
                 finished.save(out, optimize=True)
             else:

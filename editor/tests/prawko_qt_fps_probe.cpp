@@ -147,7 +147,23 @@ int main(int argc,char** argv) {
       qCritical()<<"Hardware renderer expected"<<result["gl_renderer"].toString();
       app.exit(8);return;
     }
-    result["msaa_samples"]=viewport->format().samples();
+    result["msaa_requested"]=QSurfaceFormat::defaultFormat().samples();
+    result["msaa_widget_format"]=viewport->format().samples();
+    viewport->makeCurrent();
+    // QOpenGLWidget draws to an internal multisampled FBO, not the default
+    // platform framebuffer; reading GL_SAMPLES *there* is authoritative.
+    GLint sample_buffers=0, samples=0, framebuffer=0;
+    auto* gl=viewport->context()->functions();
+    gl->glGetIntegerv(0x80A8, &sample_buffers); // GL_SAMPLE_BUFFERS
+    gl->glGetIntegerv(0x80A9, &samples); // GL_SAMPLES
+    gl->glGetIntegerv(0x8CA6, &framebuffer); // GL_DRAW_FRAMEBUFFER_BINDING
+    result["msaa_draw_fbo_sample_buffers"]=sample_buffers;
+    result["msaa_draw_fbo_samples"]=samples;
+    result["msaa_draw_fbo"]=framebuffer;
+    viewport->doneCurrent();
+    qInfo()<<"MSAA_DIAGNOSTIC"<<"widget_format"<<viewport->format().samples()
+           <<"draw_fbo"<<framebuffer<<"buffers"<<sample_buffers
+           <<"samples"<<samples;
     driver.start();
   });
   return app.exec();

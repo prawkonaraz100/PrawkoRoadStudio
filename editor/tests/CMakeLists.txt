@@ -16,6 +16,12 @@ add_executable(prawko_qt_fps_probe EXCLUDE_FROM_ALL prawko_qt_fps_probe.cpp)
 target_link_libraries(prawko_qt_fps_probe PRIVATE roadmaker_editor_lib Qt6::OpenGL)
 rm_apply_warnings(prawko_qt_fps_probe)
 
+# S2.2j: visible hardware viewport plus actual Document drag-preview/remesh.
+# No scene writes, no CI/headless dependence, opt-in for local performance QA.
+add_executable(prawko_qt_edit_probe EXCLUDE_FROM_ALL prawko_qt_edit_probe.cpp)
+target_link_libraries(prawko_qt_edit_probe PRIVATE roadmaker_editor_lib Qt6::OpenGL)
+rm_apply_warnings(prawko_qt_edit_probe)
+
 
 # Soak driver (hardening sprint §4.3): one library, two consumers — the
 # standalone runner CI soaks under ASan, and the fixed-seed smoke gtest in
