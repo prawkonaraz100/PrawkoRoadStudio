@@ -496,3 +496,10 @@ w testach Qt, Quality Gate PASS, licencje PASS, render w działającym
 Windows Qt oraz testy parametrów geometrycznych, eksportu XODR,
 przeciągania stylu i cofania. Testuje się dane i rzeczywistą
 geometrię, nie tylko występowanie miniaturki.
+
+Potwierdzono **normalny start z istniejącego skrótu pulpitu** na Windows:
+`archive/visual-regression/s2.2k-real-launch-desktop.png` pokazuje
+kategorię `Prawko | Gotowe drogi` i sześć miniatur już po uruchomieniu
+aplikacji z istniejącą sceną użytkownika, przy włączonych teksturach.
+Scena pozostała niezmieniona (SHA256 zgodny z kontrolą sprzed startu).
+Program pozostawiono otwarty, gotowy do używania myszą.

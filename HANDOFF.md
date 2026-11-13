@@ -65,13 +65,26 @@
   luźnych segmentów. Poprawki nie stanowią dowodu pełnego
   fotorealizmu. Nie nadpisano ani nie zapisywano scen użytkownika.
 
-**Pierwsze następne zadanie:** po pierwszym uruchomieniu przez
-skrót potwierdzić normalne środowisko i bibliotekę na ekranie;
-następnie zaprojektować i wdrożyć osobne parametryczne
-prefabrykaty obniżonego krawężnika, wysepki i strefy przejścia
-bez nakładania atrap na siatkę (osobne testy ODR i przecięć),
-oraz wrócić do nieodebranego światła i oceny realistycznych
-materiałów przy dużych scenach. Nie zaczynać nowego projektu.
+**Potwierdzenie normalnego uruchomienia przez skrót — PASS:**
+po zakończeniu `SESSION_FINISH_PASS` uruchomiono z pulpitu
+`C:\Users\tomas\Desktop\PrawkoRoadStudio.lnk`.
+Rzeczywisty proces `roadmaker-editor.exe` PID **28400**, responsive,
+z otwartym `agent/projects/prawko_urban_curve/scene.xodr`;
+screen **`archive/visual-regression/s2.2k-real-launch-desktop.png`**:
+kategoria **`Prawko | Gotowe drogi`** aktywna, wszystkie sześć
+przekrojów z miniaturkami widoczne; trawa i droga renderowane
+w trybie Textured. Brak gwiazdki niezapisanego dokumentu;
+SHA256 sceny **879fe41c58cc83bc7393d456681c329b5d84574b0eabda0d73b2f600b13c540e**
+zgodny ze SHA odczytanym podczas weryfikacji sprzed uruchomienia.
+**Proces pozostawiony otwarty do używania; nie zamykać go
+ani nie nadpisywać niezapisanych ewentualnych późniejszych zmian.**
+
+**Pierwsze następne zadanie S2.2l:** zaprojektować i wdrożyć
+osobne parametryczne prefabrykaty obniżonego krawężnika,
+wysepki i strefy przejścia bez nakładania atrap na siatkę
+(osobne testy XODR, geometrii i przecięć); następnie wrócić
+do nieodebranego światła i realistycznych materiałów przy
+dużych scenach. Nie zaczynać nowego projektu.
 
 ## Gotowe polecenie do nowej rozmowy
 
