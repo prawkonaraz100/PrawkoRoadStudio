@@ -310,8 +310,15 @@ int main(int argc, char** argv) {
     return run_screenshot(screenshot);
   }
 
+  // One-time, explicit local migration: existing Sober-only settings should
+  // not hide the newly shipped road/sidewalk assets. No scene file is changed.
+  {
+    roadmaker::editor::Settings studio_settings;
+    studio_settings.enable_studio_materials_once();
+  }
   roadmaker::editor::MainWindow window;
   window.show();
+  window.open_studio_library(); // launch directly into the mouse asset catalogue
 
   if (argc > 1) {
     window.load_file(argv[1]);

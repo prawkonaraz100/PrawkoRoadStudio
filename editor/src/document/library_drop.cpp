@@ -143,7 +143,63 @@ LaneId lane_containing_t(const RoadNetwork& network, RoadId road, double s, doub
 
 } // namespace
 
+namespace {
+
+// Curbs are NOT independent props: the Studio builds a watertight 0.15 m
+// concrete curb + beveled top from the boundary between Driving/Parking
+// and Sidewalk lanes. These named profiles expose that real generated geometry
+// to a one-drag Library workflow, without altering the global defaults or XODR.
+LaneProfile prawko_road_profile(const QString& name) {
+  LaneProfile p = LaneProfile::local_road();
+  if (name == QStringLiteral("prawko.wide") || name == QStringLiteral("prawko.promenade")) {
+    const double width = name == QStringLiteral("prawko.wide") ? 2.5 : 3.0;
+    p.left.back().width = width;
+    p.right.back().width = width;
+  } else if (name == QStringLiteral("prawko.one_side")) {
+    p.left.back().width = 2.5;
+    p.right.pop_back(); // only LEFT sidewalk produces a curb
+  } else if (name == QStringLiteral("prawko.parking")) {
+    const LaneSpec parking{.type = LaneType::Parking, .width = defaults::kParkingLaneWidth};
+    p.left.insert(p.left.end() - 1, parking);
+    p.right.insert(p.right.end() - 1, parking);
+    p.left.back().width = 2.0;
+    p.right.back().width = 2.0;
+  } else if (name == QStringLiteral("prawko.no_curb")) {
+    p.left.pop_back();
+    p.right.pop_back();
+  }
+  return p;
+}
+
+RoadStyle prawko_road_style(const QString& name) {
+  RoadStyle style = RoadStyle::local_road();
+  if (name == QStringLiteral("prawko.wide") || name == QStringLiteral("prawko.promenade")) {
+    const double width = name == QStringLiteral("prawko.wide") ? 2.5 : 3.0;
+    style.left.back().width.a = width;
+    style.right.back().width.a = width;
+  } else if (name == QStringLiteral("prawko.one_side")) {
+    style.left.back().width.a = 2.5;
+    style.right.pop_back();
+  } else if (name == QStringLiteral("prawko.parking")) {
+    const StyleLane parking{.type = LaneType::Parking,
+                            .width = Poly3{.a = defaults::kParkingLaneWidth}};
+    style.left.insert(style.left.end() - 1, parking);
+    style.right.insert(style.right.end() - 1, parking);
+    style.left.back().width.a = 2.0;
+    style.right.back().width.a = 2.0;
+  } else if (name == QStringLiteral("prawko.no_curb")) {
+    style.left.pop_back();
+    style.right.pop_back();
+  }
+  return style;
+}
+
+} // namespace
+
 LaneProfile profile_for(const QString& name) {
+  if (name.startsWith(QStringLiteral("prawko."))) {
+    return prawko_road_profile(name);
+  }
   // The four road classes (#413); pre-#413 manifest names keep resolving to
   // their nearest class so an old saved reference still creates a road.
   if (name == QStringLiteral("freeway") || name == QStringLiteral("highway")) {
@@ -161,6 +217,14 @@ LaneProfile profile_for(const QString& name) {
 }
 
 RoadStyle style_for(const QString& name) {
+  // The Attributes pane supplies "style.prawko.*"; drag-and-drop supplies
+  // "prawko.*". Treat both identically so either mouse workflow works.
+  if (name.startsWith(QStringLiteral("prawko."))) {
+    return prawko_road_style(name);
+  }
+  if (name.startsWith(QStringLiteral("style.prawko."))) {
+    return prawko_road_style(name.mid(6));
+  }
   // Accepts both the manifest style name ("arterial", from the drop resolver)
   // and the library item key ("style.arterial", from the Attributes slot,
   // which passes the dropped key straight through). Pre-#413 names keep

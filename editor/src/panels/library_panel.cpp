@@ -346,6 +346,13 @@ void LibraryPanel::select_asset(const QString& key) {
 
 void LibraryPanel::focus_category(const QString& category) {
   search_->clear(); // the jump must not land behind a filter that hides it
+  // Selecting a tile alone left the combo on 'All categories': the catalogue
+  // still showed every asset and the Prawko presets were buried. Change the
+  // real category filter first so a startup library opens with useful tiles.
+  const int selected_category = category_combo_->findData(category);
+  if (selected_category >= 0) {
+    category_combo_->setCurrentIndex(selected_category);
+  }
   for (int row = 0; row < proxy_.rowCount(); ++row) {
     const QModelIndex index = proxy_.index(row, 0);
     if (proxy_.data(index, LibraryListModel::CategoryRole).toString() == category) {

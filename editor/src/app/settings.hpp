@@ -122,6 +122,9 @@ public:
 
   /// Viewport render mode: true = daytime Textured (default), false = flat
   /// Sober (the M2 look / packaging smoke path). docs/design/m3a/04_render.md §5.
+  // One-time S2.2k upgrade for the local editor: start with realistic PBR
+  // materials while respecting any later explicit Sober-mode choice.
+  void enable_studio_materials_once();
   [[nodiscard]] bool textured_rendering() const;
   void set_textured_rendering(bool textured);
 

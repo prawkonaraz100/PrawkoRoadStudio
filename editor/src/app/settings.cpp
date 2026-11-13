@@ -174,10 +174,20 @@ void Settings::set_tour_seen(bool seen) {
   settings_.setValue(QStringLiteral("tour/seen"), seen);
 }
 
+void Settings::enable_studio_materials_once() {
+  if (read_only() || settings_.contains(QStringLiteral("view/studio_materials_migrated"))) {
+    return;  // no writes during automated captures; never override a later choice
+  }
+  settings_.setValue(QStringLiteral("view/studio_materials_previous"),
+                     settings_.value(QStringLiteral("view/textured_rendering")));
+  settings_.setValue(QStringLiteral("view/textured_rendering"), true);
+  settings_.setValue(QStringLiteral("view/studio_materials_migrated"), true);
+}
+
 bool Settings::textured_rendering() const {
-  // Default OFF: the editor opens in the plain-color + reference-grid (Sober)
-  // look; textured mode (lit surfaces, grass ground, asphalt/concrete) is opt-in.
-  return settings_.value(QStringLiteral("view/textured_rendering"), false).toBool();
+  // Fresh Studio installations are PBR-first. Sober remains user-selectable,
+  // remembered after the one-time migration above.
+  return settings_.value(QStringLiteral("view/textured_rendering"), true).toBool();
 }
 
 void Settings::set_textured_rendering(bool textured) {

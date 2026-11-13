@@ -85,6 +85,9 @@ public:
   /// "dock.library") to the front of its tab group so it shows in a
   /// whole-window capture. Unknown names no-op.
   void raise_dock_for_capture(const QString& object_name);
+  /// Regular startup: show the bundled Prawko road/curb presets immediately.
+  /// No document writes and no change to the saved scene or its view state.
+  void open_studio_library();
 
   /// Screenshot mode: highlight roads by OpenDRIVE id so the viewport
   /// feedback states render in a capture — `select_odr` gets the strong

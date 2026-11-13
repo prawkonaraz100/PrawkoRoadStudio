@@ -21,6 +21,7 @@
 #include "roadmaker/edit/connection.hpp"
 #include "roadmaker/edit/operations.hpp"
 #include "roadmaker/mesh/junction_stoplines.hpp"
+#include "roadmaker/mesh/mesh_builder.hpp"
 #include "roadmaker/road/authoring.hpp"
 #include "roadmaker/road/defaults.hpp"
 #include "roadmaker/road/lane.hpp"
@@ -33,7 +34,12 @@
 
 #include <gtest/gtest.h>
 
+#include <QFile>
+#include <QFileInfo>
+#include <QImage>
 #include <QString>
+#include <algorithm>
+#include <array>
 #include <optional>
 #include <vector>
 
@@ -120,6 +126,108 @@ TEST(LibraryDrop, RoadTemplateArmsCreateRoadWithItsProfile) {
   EXPECT_EQ(action.kind, LibraryDropKind::RoadTemplate);
   EXPECT_EQ(action.command, nullptr); // arms the tool, no command
   EXPECT_EQ(action.profile.right.size(), LaneProfile::highway().right.size());
+}
+
+// Prawko Road Studio: every new Library tile must produce actual *curb
+// geometry*, not just an icon or a colored material. These presets share the
+// same authoring/style path as mouse drag/drop and preserve OpenDRIVE.
+TEST(LibraryDrop, PrawkoRoadAndCurbPresetsGenerateRealThreeDimensionalGeometry) {
+  struct Case { const char* name; int sidewalks; double walk_width; };
+  const std::array<Case, 6> cases{{
+      {"urban", 2, 1.8}, {"wide", 2, 2.5}, {"promenade", 2, 3.0},
+      {"one_side", 1, 2.5}, {"parking", 2, 2.0}, {"no_curb", 0, 0.0},
+  }};
+  const std::vector<Waypoint> points{{.x = 0.0, .y = 0.0},
+                                     {.x = 80.0, .y = 0.0}};
+  roadmaker::MeshOptions options;
+  options.raised_sidewalks = true;
+  options.curb_render_lod = true;
+  const auto inspect = [&](const RoadNetwork& net, const Case& item) {
+    const roadmaker::NetworkMesh mesh = roadmaker::build_network_mesh(net, options);
+    ASSERT_EQ(mesh.roads.size(), 1U) << item.name;
+    int curb_patches = 0;
+    for (const auto& patch : mesh.roads.front().lanes) {
+      if (patch.material == roadmaker::LaneType::Curb && !patch.indices.empty()) {
+        ++curb_patches;
+      }
+    }
+    if (item.sidewalks == 0) {
+      EXPECT_EQ(curb_patches, 0) << item.name;
+    } else {
+      EXPECT_GE(curb_patches, 2 * item.sidewalks) << item.name;
+    }
+  };
+  for (const Case& item : cases) {
+    SCOPED_TRACE(item.name);
+    const QString name = QStringLiteral("prawko.") + QString::fromLatin1(item.name);
+    const LaneProfile profile = profile_for(name);
+    const auto count_sidewalks = [](const auto& left, const auto& right) {
+      int count = 0;
+      for (const auto& side : {&left, &right}) {
+        for (const auto& lane : *side) {
+          if (lane.type == roadmaker::LaneType::Sidewalk) { ++count; }
+        }
+      }
+      return count;
+    };
+    EXPECT_EQ(count_sidewalks(profile.left, profile.right), item.sidewalks);
+    for (const auto& lane : profile.left) {
+      if (lane.type == roadmaker::LaneType::Sidewalk) {
+        EXPECT_DOUBLE_EQ(lane.width, item.walk_width);
+      }
+    }
+    RoadNetwork created;
+    ASSERT_TRUE(roadmaker::author_clothoid_road(created, points, profile).has_value());
+    EXPECT_EQ(count_errors(validate_network(created)), 0U);
+    inspect(created, item);
+    ASSERT_TRUE(roadmaker::write_xodr(created, "Prawko prefab").has_value());
+
+    RoadNetwork restyled = with_straight_road();
+    LibraryItem tile;
+    tile.kind = LibraryItem::Kind::RoadStyle;
+    tile.label = QStringLiteral("Prawko curb");
+    tile.style = name;
+    auto action = resolve_library_drop(tile, restyled, 50.0, 3.0);
+    ASSERT_EQ(action.kind, LibraryDropKind::RoadStyle);
+    ASSERT_NE(action.command, nullptr);
+    ASSERT_TRUE(action.command->apply(restyled).has_value());
+    EXPECT_EQ(count_errors(validate_network(restyled)), 0U);
+    inspect(restyled, item);
+    ASSERT_TRUE(roadmaker::write_xodr(restyled, "Prawko styled").has_value());
+    ASSERT_TRUE(action.command->revert(restyled).has_value()); // Ctrl+Z path
+    EXPECT_EQ(count_errors(validate_network(restyled)), 0U);
+  }
+}
+
+TEST(LibraryDrop, PrawkoPresetsArePresentInBundledMouseLibraryWithThumbnails) {
+  QFile file(QStringLiteral(":/library/manifest.json"));
+  ASSERT_TRUE(file.open(QIODevice::ReadOnly));
+  const auto parsed = LibraryManifest::parse(file.readAll());
+  ASSERT_TRUE(parsed.has_value());
+  for (const char* name : {"urban","wide","promenade","one_side","parking","no_curb"}) {
+    for (const bool style : {false, true}) {
+      const QString prefix = style ? QStringLiteral("style.prawko.")
+                                   : QStringLiteral("road.prawko.");
+      const QString key = prefix + QString::fromLatin1(name);
+      const auto& items = parsed->items();
+      const auto it = std::find_if(items.begin(), items.end(), [&](const LibraryItem& item) {
+        return item.key == key;
+      });
+      ASSERT_NE(it, items.end()) << key.toStdString();
+      EXPECT_EQ(it->kind, style ? LibraryItem::Kind::RoadStyle
+                                : LibraryItem::Kind::RoadTemplate);
+      EXPECT_TRUE(it->category.startsWith(QStringLiteral("Prawko")));
+      const QString image = QStringLiteral(":/library/thumbnails/") +
+                            QFileInfo(it->thumbnail).fileName();
+      EXPECT_FALSE(QImage(image).isNull()) << image.toStdString();
+      if (style) {
+        EXPECT_EQ(style_for(key).left.size(), style_for(it->style).left.size());
+      } else {
+        const auto drop = resolve_library_drop(*it, RoadNetwork{}, 5.0, 8.0);
+        EXPECT_EQ(drop.kind, LibraryDropKind::RoadTemplate);
+      }
+    }
+  }
 }
 
 TEST(LibraryDrop, TAssemblyDropPushesAValidStandaloneJunction) {

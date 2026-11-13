@@ -2452,6 +2452,15 @@ void MainWindow::activate_tool_for_capture(const QString& tool_id) {
   }
 }
 
+void MainWindow::open_studio_library() {
+  if (library_dock_ == nullptr || library_panel_ == nullptr) {
+    return;
+  }
+  library_dock_->show();
+  library_dock_->raise();
+  library_panel_->focus_category(QStringLiteral("Prawko | Gotowe drogi"));
+}
+
 void MainWindow::raise_dock_for_capture(const QString& object_name) {
   for (QDockWidget* dock : findChildren<QDockWidget*>()) {
     if (dock->objectName() == object_name) {

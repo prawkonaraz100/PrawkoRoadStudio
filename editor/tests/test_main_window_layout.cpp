@@ -27,6 +27,8 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QComboBox>
+#include <QDockWidget>
 #include <QLabel>
 #include <QMenu>
 #include <QMenuBar>
@@ -59,6 +61,16 @@ class MainWindowLayoutTest : public ::testing::Test {
 protected:
   MainWindow window_{nullptr, /*restore_saved_layout=*/false};
 };
+
+TEST_F(MainWindowLayoutTest, StudioLibraryOpensTheNewRoadTemplatesWithoutUserSetup) {
+  window_.open_studio_library();
+  auto* dock = window_.findChild<QDockWidget*>(QStringLiteral("dock.library"));
+  auto* category = window_.findChild<QComboBox*>(QStringLiteral("library_category"));
+  ASSERT_NE(dock, nullptr);
+  ASSERT_NE(category, nullptr);
+  EXPECT_FALSE(dock->isHidden()); // window stays un-realized in headless CI
+  EXPECT_EQ(category->currentData().toString(), QStringLiteral("Prawko | Gotowe drogi"));
+}
 
 TEST_F(MainWindowLayoutTest, ToolbarsHoldNoVariableWidthLabels) {
   const auto bars = window_.findChildren<QToolBar*>();

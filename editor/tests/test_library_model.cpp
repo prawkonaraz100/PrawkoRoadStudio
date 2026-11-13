@@ -49,7 +49,7 @@ TEST(LibraryManifest, ParsesTheShippedManifest) {
   ASSERT_TRUE(manifest.has_value()) << (manifest ? "" : manifest.error().message);
   EXPECT_EQ(manifest->version(), 1);
   EXPECT_EQ(manifest->items().size(),
-            59U); // 4 road templates + 4 road styles + 2 assemblies + 10 tree props
+            71U); // 10 road templates + 10 road styles + 2 assemblies + 10 tree props
                   // (5 trees/shrub + 2 streetlights + 3 buildings) + 15 signals
                   // (the whole shipped sign catalogue, #414)
                   // + 9 markings + 5 materials + 1 crosswalk + 6 stencils + 2 prop sets
@@ -78,7 +78,8 @@ TEST(LibraryManifest, ParsesTheShippedManifest) {
     } else if (item.kind == LibraryItem::Kind::RoadStyle) {
       ++styles;
       EXPECT_FALSE(item.style.isEmpty());
-      EXPECT_EQ(item.category, "Road styles");
+      EXPECT_TRUE(item.category == "Road styles" ||
+                  item.category == "Prawko | Krawężniki i chodniki");
     } else if (item.kind == LibraryItem::Kind::Assembly) {
       ++assemblies;
       EXPECT_TRUE(item.assembly == "t" || item.assembly == "x");
@@ -144,8 +145,8 @@ TEST(LibraryManifest, ParsesTheShippedManifest) {
       }
     }
   }
-  EXPECT_EQ(templates, 4);
-  EXPECT_EQ(styles, 4);
+  EXPECT_EQ(templates, 10);
+  EXPECT_EQ(styles, 10);
   EXPECT_EQ(assemblies, 2);
   EXPECT_EQ(trees, 10);
   // Every catalogue entry is placeable from the Library — the pack ships whole.
@@ -523,7 +524,7 @@ TEST(LibraryListModel, PassesQtModelSanityChecksEmptyAndPopulated) {
   const auto manifest = LibraryManifest::load(kManifest);
   ASSERT_TRUE(manifest.has_value());
   model.set_manifest(*manifest);
-  EXPECT_EQ(model.rowCount(), 59);
+  EXPECT_EQ(model.rowCount(), 71);
 }
 
 TEST(LibraryListModel, ExposesRolesAndItemLookup) {
@@ -541,7 +542,7 @@ TEST(LibraryListModel, ExposesRolesAndItemLookup) {
   ASSERT_NE(item, nullptr);
   EXPECT_EQ(model.data(first, LibraryListModel::KeyRole).toString(), item->key);
   EXPECT_EQ(model.item(-1), nullptr);
-  EXPECT_EQ(model.item(59), nullptr);
+  EXPECT_EQ(model.item(71), nullptr);
 }
 
 // The per-project overlay (p6-s1): project items merge into the built-in
@@ -617,7 +618,7 @@ TEST(LibraryListModel, SetManifestRemergesAnActiveOverlay) {
   const auto base = LibraryManifest::load(kManifest);
   ASSERT_TRUE(base.has_value());
   model.set_manifest(*base);       // the overlay survives a base reload
-  EXPECT_EQ(model.rowCount(), 60); // 59 base items + 1 overlay
+  EXPECT_EQ(model.rowCount(), 72); // 71 base items + 1 overlay
   EXPECT_NE(model.item_for_key(QStringLiteral("project.only")), nullptr);
 }
 

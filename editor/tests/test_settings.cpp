@@ -117,6 +117,30 @@ protected:
 // Paths are stored absolute
 // ---------------------------------------------------------------------------
 
+TEST_F(SettingsTest, StudioMaterialsAreEnabledOnceAndRespectSubsequentUserChoice) {
+  settings_->set_textured_rendering(false); // a pre-upgrade saved Sober session
+  EXPECT_FALSE(settings_->textured_rendering());
+  settings_->enable_studio_materials_once();
+  EXPECT_TRUE(settings_->textured_rendering());
+  EXPECT_TRUE(QSettings().value(QStringLiteral("view/studio_materials_migrated")).toBool());
+  EXPECT_FALSE(QSettings().value(QStringLiteral("view/studio_materials_previous")).toBool());
+
+  settings_->set_textured_rendering(false); // later user explicitly chooses Sober
+  settings_->enable_studio_materials_once();
+  EXPECT_FALSE(settings_->textured_rendering()) << "Migration must run only once";
+}
+
+TEST_F(SettingsTest, StudioMaterialsMigrationDoesNotWriteDuringReadOnlyCapture) {
+  const auto before = store_snapshot();
+  {
+    const Settings::ReadOnlySession capture;
+    settings_->enable_studio_materials_once();
+    EXPECT_EQ(store_snapshot(), before);
+  }
+  settings_->enable_studio_materials_once();
+  EXPECT_TRUE(settings_->textured_rendering());
+}
+
 TEST_F(SettingsTest, RelativePathIsRecordedAbsolute) {
   QTemporaryDir dir;
   ASSERT_TRUE(dir.isValid());
