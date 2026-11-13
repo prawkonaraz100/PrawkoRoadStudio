@@ -557,3 +557,30 @@ transformacji całych złożonych prefabrykatów ani niezależnej
 od drogi lokalizacji wszystkich obiektów. Te funkcje
 nie mogą być nazywane ukończonymi. Realizm wizualny ma
 osobne kryteria odbioru.
+
+## S2.2n — przesuwanie znaków, sygnalizatorów i grup obiektów
+
+W trybie **Select** lub **Move** możesz chwycić na scenie znak albo
+sygnalizator i przeciągnąć go w nowe miejsce w pobliżu jego drogi.
+Po zwolnieniu myszy pozycja zapisuje się jako jedna operacja
+`Ctrl+Z`. Wyjście poza dopuszczalny obszar zatrzymuje podgląd,
+powrót wznawia ruch, `Esc` anuluje. Ruch `s/t` nie zmienia
+kierunku, którego dotyczy znak (`orientation`), ani jego ustawionego
+kąta wizualnego (`hOffset`). Aby **obrócić** znak, zaznacz go,
+włącz **Move** i chwyć **podświetlony okrągły pierścień**;
+obrót zapisuje `hOffset` bez zmiany `orientation`.
+Ten gest zweryfikowano na rzeczywistym oknie Qt Windows.
+
+Kilka wybranych obiektów 3D na **jednej drodze** można przesunąć
+razem: zaznacz ich zbiór, chwyć dowolną wybraną część i przeciągnij.
+Grupa zachowuje odległości w osi `s/t`, pod warunkiem że cały
+prefabrykat mieści się w dozwolonym zasięgu jednej drogi.
+Undo/Redo obejmuje całą grupę. Wariant dla różnych dróg,
+wspólny obrót grupy i swobodny ruch poza drogą nie są jeszcze
+dostępne.
+
+Na testowej scenie T **bez wcześniejszych zebr** przeciągnięcie
+`Zebra crosswalk` na wlot utworzyło jedno przejście i powiązaną
+linię zatrzymania. Upust poza wlotem został odrzucony.
+Pliki kontrolne, screenshoty, testy i ograniczenia opisano
+w `HANDOFF.md`; nie są dowodem fotorealizmu.

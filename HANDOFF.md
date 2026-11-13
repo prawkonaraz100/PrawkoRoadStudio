@@ -2,8 +2,105 @@
 
 > **Jedyny aktualizowany dziennik przekazania między rozmowami.**
 > Kolejny agent ma czytać ten plik **przed edycją kodu**.
-> Stan dokumentu: 2026-11-13, **S2.2m — wybór i edycja komponentów po upuszczeniu**: obiekty 3D, znaki/sygnalizacja, skrzyżowania, przejścia, materiały i oznakowanie korzystają z jednego mechanizmu rozpoznania świeżo dodanych elementów albo dokładnego pasa. Udana operacja włącza zaznaczanie, wybiera właściwe elementy i otwiera Properties; wskazówki w bibliotece zależą od typu. **BUILD_PASS all**, **1295 Qt PASS + 1 SKIPPED**, **QUALITY_GATE_PASS**; test kursorem Windows: poprawny i niepoprawny upust materiału, sosna 3D, znak, sygnalizator, Undo/Redo i zapis wyłącznie kopii sceny. Oryginał nienaruszony, SHA256 bez zmian. **Nie oznaczać jako ukończone pełnej edycji wszystkich typów, przesuwania znaków w 3D, poprawnego zwolnienia obiektów od drogi ani fotorealizmu**.
+> Stan dokumentu: 2026-11-13, **S2.2n — ruch znaków i sygnalizacji, przesuwanie grup prefabrykatów, poprawny/niepoprawny upust przejścia na czystym wlocie T**. W kodzie nowe bezpośrednie LMB drag znaków i świateł (preview, Esc, Undo, zachowany kierunek obowiązywania), atomowy przesuw grupy obiektów przypiętych do jednej drogi; 5 testów regresji PASS. Rzeczywisty Windows Qt: znak STOP przesunięty `s=134,221 → 113,762 m` (hOffset=0,052 rad bez zmiany), następnie obrócony pierścieniem `0,052 → −1,833 rad`, Undo/Redo, kopia zapisana i zamknięta; w osobnej scenie T bez zebr wstawiono jedno przejście + stop-line, niepoprawne miejsce odrzucone, Undo/Redo, zapisana kopia ma dokładnie 1 crosswalk. **BUILD_PASS all; Qt 1301 PASS, 1 SKIPPED; QUALITY_GATE_PASS**. Oryginał sceny użytkownika nietknięty. **Otwarte:** fizyczny test grupy prefabrykatów, obrót całej grupy, stencil/marking, powtarzalne upuszczanie zebry na ten sam wlot i pełny realizm; NIE deklarować całego zakresu jako ukończonego.
 > Poniższe SHA to punkt kontrolny, nie zamiennik aktualnego `git status`.
+
+## S2.2n — podetap 2: grupy prefabrykatów i końcowy odbiór myszą (13.11.2026)
+
+**Wykonane i zweryfikowane:**
+
+- Dokończono w `SelectTool` bezpośrednie przeciąganie `SignalId`
+  (statyczny znak / dynamiczne światło) LMB w trybie Select lub Move.
+  Zmienia `s/t` tylko względem **macierzystej drogi**, zachowuje
+  `orientation` (kierunek obowiązywania) i `hOffset` (obrót
+  wizualny). Po opuszczeniu dozwolonej odległości od drogi blokuje
+  klatkę i wznawia po powrocie, `Esc` anuluje, zwolnienie
+  zatwierdza **jeden** wpis Undo. Pierścień `Move` do obrotu
+  znaku istniał wcześniej; potwierdzono jego działanie rzeczywistą
+  myszą.
+- Zaznaczone **dwa lub więcej obiektów 3D na jednej drodze**
+  przesuwa się razem, jeśli użytkownik chwyci jeden z zaznaczonych
+  elementów. `ObjectMoveState` zapamiętuje pozycje początkowe
+  grupy; `edit::composite("Move selected prefab")` przesuwa
+  je z jednakowym przyrostem `s/t` w podglądzie, jednym Undo.
+  Jeśli jeden element przekracza długość macierzystej drogi albo
+  dozwolony offset boczny, cała zmiana jest odrzucana, bez
+  częściowego przestawienia. Dla różnych dróg pozostaje
+  bezpieczny ruch jednego elementu, bez udawania translacji grupy.
+  **To jest przesuw, nie obrót całej grupy.**
+- `editor/tests/test_select_tool.cpp`: **5 nowych testów PASS**:
+  znaki statyczne i dynamiczne światła, Undo/Redo, zachowanie
+  `orientation/hOffset`, Esc i zwykły klik bez wpisu Undo,
+  przebywanie poza drogą / powrót, translacja całej wybranej
+  grupy i odmowa, gdy końcowy element przekracza granicę.
+  `archive/visual-regression/s2.2n-targeted-final.log`.
+- **Rzeczywisty Windows Qt, mysz systemowa, wyłącznie kopie scen**:
+  `archive/visual-regression/s2.2n-mouse/signal-body-test.xodr`
+  – po upuszczeniu znaku STOP panel Properties wskazał
+  `s=134,221 m`, `t=-0,574 m`, `hOffset=0,052 rad`.
+  Po bezpośrednim LMB drag:
+  `s=113,762 m`, `t=1,802 m`,
+  `hOffset=0,052 rad`, toast `Sign or traffic light moved`.
+  Przy `Move` próba chwycenia niepodświetlonego fragmentu
+  pierścienia wybrała drogę i ją przesunęła; **ten nieudany
+  gest został cofnięty Ctrl+Z**. Następnie
+  `sign-ring-hover-diagonal.png` pokazuje podświetloną obręcz,
+  a właściwy jej obrót (`sign-ring-active-rotate-after.png`)
+  zmienił **`hOffset=0,052 → -1,833 rad`** i wyświetlił
+  `Rotated sign to -105° — Ctrl+Z to undo`. Wykonano
+  Ctrl+Z/Ctrl+Shift+Z, Ctrl+S i zamknięto **tylko testowe PID18504**.
+  Zrzuty `stop-sign-direct-move-after.png`,
+  `sign-ring-active-rotate-after.png`,
+  `sign-rotate-undo.png`, `sign-rotate-redo.png`.
+- **Przejście na czystym wlocie T:** testowa kopia
+  `archive/visual-regression/s2.2n-mouse/crosswalk-clean-test.xodr`
+  powstała z `agent/projects/t_junction/scene.xodr`
+  przez usunięcie 3 wcześniejszych `object type="crosswalk"`
+  **tylko w kopii**. `crosswalk-clean-baseline.png` pokazuje
+  T bez zebry, `clean-zebra-invalid-after.png` odrzuca
+  upust poza wlotem, `clean-zebra-valid-after.png` dokumentuje
+  wstawienie **jednej zebry i stop-line** (toast)
+  na wlocie oraz zaznaczenie obiektu w Properties.
+  Ctrl+Z/Ctrl+Shift+Z i zapis kopii; ponowny odczyt XML:
+  **dokładnie 1 `object type="crosswalk"`**.
+  PID24164 zamknięto normalnie; oryginalnego `t_junction`
+  ani `prawko_urban_curve` nie modyfikowano.
+- **Build/test:** `archive/visual-regression/s2.2n-final-build2.log`
+  **`BUILD_PASS: all`, `AGENT_BINDING_SYNC_PASS`**;
+  `s2.2n-quality-gate.log` **`QUALITY_GATE_PASS`**;
+  `s2.2n-qt-full.log` **1301 PASS, 1 SKIPPED, 0 FAIL**
+  (1302 testów/160 suites).
+  Przejściowy `LNK1168` w `s2.2n-assembly-build.log`
+  wynikał z otwartej testowej instancji `roadmaker-editor.exe`.
+  Testową scenę bezpiecznie zapisano i zamknięto, a pełny
+  build w `s2.2n-final-build2.log` powtórzono do PASS.
+  Oryginalne `agent/projects/prawko_urban_curve/scene.xodr`:
+  SHA256 **879fe41c58cc83bc7393d456681c329b5d84574b0eabda0d73b2f600b13c540e**,
+  bez zmiany; projekt `reference/RoadMaker` nietknięty.
+
+**Pierwsze niewykonane zadanie S2.2o:** test rzeczywistą myszą
+przesuwania całego prefabrykatu `PropAssembly` (nie tylko
+unit test z dwoma drzewami), a następnie parametryczny
+**obrót całej grupy** z zachowaniem wzajemnych odległości,
+snapowania i OpenDRIVE, także w scenach wielodrogowych.
+Osobno skontrolować `Stencil`/`Marking`, blokadę
+**drugiej zebry na tym samym wlocie** oraz udokumentować
+końcowy wygląd z poziomu kierowcy. Nie zmieniać globalnego
+CDT ani goldenów bez testu, nie oznaczać fotorealizmu PASS.
+
+## S2.2n — podetap 1: ruch znaków/sygnalizacji myszą, test przejścia na X (13.11.2026)
+
+**Stan: podetap wykonany w kodzie i sprawdzony na pojedynczym sygnalizatorze w widocznym GUI, lecz S2.2n jako całość otwarty.**
+
+- Przejęto trzy zastane niezacommitowane pliki `editor/src/tools/select_tool.cpp/.hpp` i `editor/tests/test_select_tool.cpp` bez kasowania ich zmian. `SelectTool` rozpoznaje naciśnięcie na `PickHit::signal`, osobny ruch LMB po przekroczeniu tolerancji oraz aktywny preview `edit::move_signal` z przyciąganiem do **macierzystej** drogi. Nie przesuwa całej drogi; zachowuje `orientation` i `h_offset`. Esc przywraca stan, zwolnienie LMB kończy jeden Undo. Ruch poza progiem drogi zatrzymuje się na ostatniej poprawnej pozycji. Przy braku poprawnego preview zwolnienie nie udaje udanego ruchu.
+- Testy `SelectTool`: statyczny znak i dynamiczny sygnalizator, snap/Undo/Redo i zachowanie kierunku, opuszczenie drogi i powrót, anulowanie Esc, zwykły klik bez Undo, odrzucenie całkowicie niepoprawnego przesunięcia bez Undo.
+- Rzeczywiste zdarzenia kursora/przycisku Windows na **kopii** `archive/visual-regression/s2.2n-mouse/intersection-test.xodr` (16 dróg, skrzyżowanie X): `signal-click.png` wskazuje `signal tl3`, `s=8.000 m`, `t=-6.000 m`; po LMB drag `signal-drag-after.png` panel pokazuje `s=21.856 m`, `t=-2.239 m`, `hOffset=0.052 rad` bez zmiany. To test widocznego Qt, nie bezpośrednie wywołanie funkcji.
+- W tej samej testowej kopii rzeczywisty drag Zebra crosswalk: poza wlotem odrzucony (`crosswalk-invalid-after.png`), na wlocie zgłoszony jako `Placed Zebra crosswalk + stop line`, dodany `object 11` i otwarte Properties (`crosswalk-valid-after.png`). UWAGA: ta scena **miała już** przejścia na wlotach, dlatego nie zaliczono testu wizualnej poprawności pojedynczej nowej zebry na pustym wlocie; wymagana osobna czysta scena oraz kontrola nakładania duplikatów.
+- Okno kopii `PID 15600` zakończyło działanie przed kolejną próbą klawiszy Undo/Redo. Nie zgłaszać tego testu GUI ani testu obrotu gizmem jako PASS. Weryfikację jednej operacji Undo/Redo zapewniają testy Qt; materiał z GUI jest tylko dowodem przesunięcia LMB. Zastana scena użytkownika `agent/projects/prawko_urban_curve/scene.xodr` zachowała SHA256 `879fe41c58cc83bc7393d456681c329b5d84574b0eabda0d73b2f600b13c540e` (certutil). Nie nadpisywano oryginalnego `s2.2b-crosswalks-junction.xodr`.
+- **Pełna kompilacja bieżącej wersji:** `prawko-build-win.ps1 -Target all -Jobs 3`: **BUILD_PASS: all**, `AGENT_BINDING_SYNC_PASS`. Pierwsza próba po małej poprawce trafiła na przejściowy konflikt `ninja -t restat` (Permission denied przy równoległym procesie); po ustaniu konfliktu powtórzono build i otrzymano PASS. `archive/visual-regression/s2.2n-qt-full.log`: **1301/1302 Qt PASS, 1 SKIPPED, 0 FAIL** (160 suites). Testy SelectTool w pełnym przebiegu, w tym nowy test no-op poza drogą, PASS. `-Verify` jądra + agenta odczytać z bieżącej sesji lub wykonać ponownie; Qt odpalono osobno z `QT_QPA_PLATFORM=offscreen`.
+- **Ograniczenie modelu:** bezpośredni ruch znaków to `s/t` względem drogi w płaszczyźnie, a nie dowolny ruch 3D poza drogą. Istniejący gizmo odpowiada za obrót, lecz osobny odbiór obrotu myszą nadal otwarty. Format sceny OpenDRIVE, triangulacja i materiały niezmienione; repo agenta bez zmian.
+
+**Historyczny następny krok po podetapie 1 S2.2n (zrealizowany w podetapie 2 powyżej):** utworzyć izolowaną testową scenę T/X **bez gotowych przejść** na wybranym wlocie i sprawdzić w rzeczywistym Qt poprawny/odrzucony drag zebry, stop-line, Undo/Redo i ponowne otwarcie zapisanego wyniku; rozważyć blokadę duplikatu na tym samym wlocie. Następnie analogicznie sprawdzić `Stencil`, `Marking`, złożony `PropAssembly` oraz obrót znaku i sygnalizatora gizmem; dla braków dopiero projektować zmiany kodu z testami. NIE oznaczać całej edycji złożonych prefabrykatów ani pełnego S2.2n jako zakończone.
 
 ## S2.2m — edycja komponentów bez szukania ich po upuszczeniu (13.11.2026)
 
