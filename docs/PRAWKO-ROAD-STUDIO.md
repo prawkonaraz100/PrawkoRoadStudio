@@ -349,3 +349,34 @@ nie spełniają jeszcze docelowego standardu realizmu.
   Rzeczywiste okno GUI otwiera kontrolną scenę X, ale
   **odbiór pełnego realizmu materiałowego i pomiar GPU są otwarte**.
   Szczegółowe logi, ścieżki renderów i dalsze kroki w HANDOFF.md.
+
+## Weryfikacja S2.2g — sprzętowy GPU i wizualny LOD (13.11.2026)
+
+- Rozdzielono CPU meshing, synchroniczny upload geometrii, cold-start
+  tekstur PBR, CPU submission, czas GPU GL_TIME_ELAPSED i oczekiwanie
+  na zakończenie pracy GPU. Ręczny target `prawko_gpu_probe`
+  (EXCLUDE_FROM_ALL) wykorzystuje produkcyjny GLRenderer i te same
+  materiały; pomiary na GeForce GTX 1050 Ti w OpenGL 3.3, 1280×720,
+  15 rozgrzewkowych + 65 mierzonych klatek na 5 kamer dla X/T/Y.
+  Mierzy offscreen, a nie prezentację przez QWidget/kompozytor Windows.
+- Mediany GPU (LOD) z góry / ukośnie / kierowca 1,55 m:
+  X 0,383 / 0,423 / 0,292 ms;
+  T 0,348 / 0,373 / 0,258 ms;
+  Y 0,340 / 0,372 / 0,278 ms.
+  Powtarzany synchronizowany upload całej siatki: X 2,56,
+  T 1,57, Y 1,36 ms. Ten upload obejmuje wywołania sterownika
+  i synchronizację, nie sam transfer DMA. Większy LOD nie wykazuje
+  znaczącej regresji w tych kontrolnych scenach.
+- Rzeczywiste kadry samego GLRenderer, porównane RGB piksel po
+  pikselu dla base/LOD: wpływ na obraz subtelny
+  (0,0125–0,1518% pikseli przy progu 8/255).
+  Na niskich kadrach pozostały ciemne ściany krawężników,
+  ostre przejścia cieniowania i kontrast tekstur między drogą
+  a płaską nawierzchnią skrzyżowania.
+  Nie stwierdzono otwartych dziur w oglądanych kadrach, ale
+  nadal BRAK pomiaru realnego FPS, kompozytora, przeciągania
+  i dynamicznego z-fightingu. Nie uznawać fotorealizmu za zakończony.
+- Pełne logi i 30 zdjęć oraz 15 map różnic pozostają lokalnie:
+  `archive/visual-regression/s2.2g-v2/`; procedura i następny
+  krok zapisane w HANDOFF.md. QUALITY_GATE_PASS (2072 C++
+  i 7 Python), Qt 1284 PASS + 1 SKIPPED, BUILD_PASS all.

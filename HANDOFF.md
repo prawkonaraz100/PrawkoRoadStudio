@@ -2,7 +2,7 @@
 
 > **Jedyny aktualizowany dziennik przekazania między rozmowami.**
 > Kolejny agent ma czytać ten plik **przed edycją kodu**.
-> Stan dokumentu: 2026-11-13, **S2.2f**: w GUI oraz GLB agenta działa opcjonalny, bezpieczny post-CDT LOD zakrzywionych faz krawężników na X/T/Y, bez nowych sliverów i bez zmian historycznych goldenów; 2072/2072 C++ PASS (10 DISABLED), 7/7 agent PASS, Qt 1284 PASS + 1 SKIPPED, GLB/Blender 5.3 X/T/Y PASS, pełny Windows BUILD PASS. **Odbiór finalnego fotorealizmu i wydajności GPU nadal OTWARTY.**
+> Stan dokumentu: 2026-11-13, **S2.2g**: wykonano sprzętowy pomiar GPU OpenGL 3.3 (GTX 1050 Ti) i ilościową ocenę 15 par widoków X/T/Y w 1280×720: GPU draw ok. 0,24–0,43 ms, synchronizowany reupload siatki ok. 1,4–2,7 ms (mediana), wpływ LOD na czas rysowania znikomy. Qt GUI uruchomione, 2072 C++ PASS, 7 agent PASS, Qt 1284 PASS + 1 SKIPPED, BUILD PASS. **FPS z kompozytorem, przesyłanie klatki do ekranu, dynamiczny z-fighting i fotorealizm nadal NIEODEBRANE.**
 > Poniższe SHA to punkt kontrolny, nie zamiennik aktualnego `git status`.
 
 ## Gotowe polecenie do nowej rozmowy
@@ -446,12 +446,81 @@ różnice w renderze Blendera i neutralnym obrazie GUI.
 - Osobne repo agenta po zmianie: `35c48c11cdb7efca8e08d1be731463657bbe7a32`
   (origin/main). Należy zawsze sprawdzić aktualny HEAD obu repo.
 
-**Następne pierwsze niewykonane zadanie:** PBR w GUI i lokalny detal
-łuków z perspektywy kierowcy; dokładnie zmierzyć błąd sylwetki
-na ekranie w różnych odległościach/pochyleniach, rozważyć większy
-LOD tylko przy spełnieniu jakości siatki; osobno mierzyć koszt
-GPU-upload i czas wyświetlenia klatki. Nie globalnie zagęszczać
-CDT. Nadal otwarte powtarzalne spękania asfaltu i oświetlenie.
+**S2.2g — pomiar karty GPU i pięć widoków X/T/Y (13.11.2026):**
+
+- Dodano **oddzielny, ręcznie uruchamiany** target
+  `prawko_gpu_probe` (`editor/tests/prawko_gpu_probe.cpp`;
+  `EXCLUDE_FROM_ALL` w `editor/tests/CMakeLists.txt`). Korzysta z tej
+  samej implementacji `GLRenderer`, shaderów, materiałów i budowania
+  siatki co PrawkoRoadStudio; sprzętowy OpenGL 3.3 przez Qt offscreen
+  na **NVIDIA GeForce GTX 1050 Ti (4096 MiB, sterownik 582.78)**.
+  Próba jest pomiarem sprzętowym, nie Mesa/llvmpipe.
+- Metodologia: ten sam zapisany X/T/Y, `raised_sidewalks=true`,
+  LOD wyłączony/włączony; 1280×720, 5 kamer: z góry, ukośnie,
+  kamera kierowcy (około **1,55 m**), z przeciwnej strony (1,55 m)
+  i zbliżenie (około **0,60 m**). Dla T/Y kamera poziomu drogi
+  celuje w centroid rzeczywiście zbudowanego najdłuższego
+  krawężnika, zamiast w narożnik X. Dla każdego punktu 15 warm-up,
+  65 pomiarów czasu `GL_TIME_ELAPSED` przez natywny GPU timer query.
+  Mierzone są osobno CPU submission i oczekiwanie na wykonanie GPU;
+  `QPainter`, Qt `QOpenGLWidget`, prezentacja klatki, synchronizacja
+  monitora i kompozytor Windows NIE są objęte testem.
+- W **finalnej, skorygowanej serii S2.2g-v2** mediana GPU draw:
+  X góra **0,383 ms**, ukos **0,423 ms**, kierowca **0,292 ms**;
+  T **0,348 / 0,373 / 0,258 ms**;
+  Y **0,340 / 0,372 / 0,278 ms**. CPU draw submission
+  ok. **0,008–0,025 ms**; CPU do odczytu zakończenia GPU
+  ok. **0,4–0,65 ms**. Włączenie LOD zmienia mediany GPU
+  o około 0–0,002 ms (zależne od kamery); bez widocznej
+  regresji renderingowej w tych scenach.
+- Oddzielono koszt wczytania PBR tekstur od siatek. Powtarzane
+  synchronizowane `GLRenderer::upload` całej siatki+GPU `glFinish`
+  (10 rozgrzanych próbek): mediana X **2,56 ms** (bez LOD 2,74),
+  T **1,57 ms** (bez 1,54), Y **1,36 ms** (bez 1,51).
+  Obejmuje CPU driver, tworzenie VAO/VBO/EBO i GPU fence, a NIE
+  sam transfer DMA. Początkowe dekodowanie+upload sześciu
+  obrazów PBR ok. **42–56 ms**, zależne od cache; wartości
+  baseline/LOD nieporównywalne na zimno. Rozmiary buforów
+  geometrii X 0,281→0,290 MiB, T 0,267→0,278,
+  Y 0,230→0,237. Odpowiednio 1620→1764, 1423→1621
+  i 1047→1179 trójkątów całego renderowanego obszaru
+  (to inne liczniki niż test samej jezdni/chodników S2.2f).
+- Obiektywne porównanie 15 par kadrów przy progu max RGB
+  >=8/255: zmiana X góra **0,0125%**, kierowca **0,0248%**,
+  macro **0,1518%**; T **0,0284 / 0,1341 / 0,0267%**;
+  Y **0,0160 / 0,0627 / 0,1214%**. Na mapach różnic
+  zmiany ograniczają się do linii łuków. Odbiór estetyczny:
+  brak widocznych otwartych dziur w tych kadrach, ale
+  **przyrost płynności bardzo subtelny**; miejscami wyraźny
+  ciemny/czarny pas ściany krawężnika, nadal segmentowane
+  cieniowanie i gwałtowne przejście teksturowanej jezdni
+  do jednolitej posadzki junction. Nie ogłaszać
+  braku z-fightingu w animacji ani realizmu.
+- Źródła pomiarów (lokalne, ignorowane przez Git):
+  `archive/visual-regression/s2.2g-v2/{x,t,y}-gpu-benchmark.json`,
+  `{x,t,y}-{base,lod}-{top,oblique,driver,opposite,macro}.png`,
+  `{x,t,y}-diff-*.png` + `s2.2g-v2-pixel-diff.ps1`.
+  Nie używać wcześniejszej próbnej serii `s2.2g/`
+  jako finalnej: T/Y kamery nie zawsze pokazywały krawężnik;
+  **v2** ma dynamiczne celowanie w rzeczywisty narożnik.
+- `BUILD_PASS: all`, `QUALITY_GATE_PASS`:
+  **2072/2072 C++ PASS** (10 DISABLED), **7/7 agent PASS**;
+  testy Qt **1284 PASS, 1 SKIPPED**. Logi `s2.2g-build-all.log`,
+  `s2.2g-final-gate.log`, `s2.2g-qt.log`.
+  Testowe okno prawdziwego edytora otwarto ze sceną X
+  i bezpiecznie zamknięto bez zapisu, obraz:
+  `s2.2g-current-editor-gui.png`. Nie modyfikowano
+  scen użytkownika ani geometrii, agent repo bez zmian.
+
+**Pierwsze następne zadanie:** realny end-to-end pomiar
+`QOpenGLWidget` frame/present, frametime (z HUD i swap) oraz
+p95 przy interaktywnym przeciąganiu i renderowaniu z kamery
+kursanta. Odrębnie poprawić cieniowanie ciemnych ścian i
+kontrast materiałów, powtarzalność spękań asfaltu i
+jednolitą, nieotexturowaną powierzchnię junction,
+z testem porównawczym z renderem GLB Blender.
+Nie ruszać globalnego CDT ani goldenów bez wyraźnej potrzeby.
+
 
 **Historyczny plan S2.2c:** dokończyć 5 cm fazę krawężnika
 przez cały łuk narożnika (obecna ściana narożnika jest
@@ -466,7 +535,7 @@ Nie uznawać obecnych materiałów za realistycznie odebrane.
 1. Uruchomić `scripts/prawko-resume.ps1` i sprawdzić oba repozytoria oraz otwarte sceny. Nie przeładowywać niezapisanych dokumentów.
 2. **Testy Qt Windows już odblokowane:** przed zmianami GUI sprawdzić `roadmaker_editor_tests` i `qoffscreen.dll` w `build/dev-windows/editor/platforms/`; CMake kopiuje plugin automatycznie. Ostatnia pełna sesja: 1284 PASS, 1 SKIPPED, 0 FAIL; wyniki oraz konfiguracja w akapicie S2.2b powyżej. Nie zmieniać `qt_gtest_main.cpp` bez odtwarzalnej regresji.
 3. **S2.2c — odbiór bazowej geometrii X/T/Y i niezależnego GLB wykonany.** Zrzut bieżącego GUI, kamera kierowcy i izolat narożnika w Blenderze oraz import GLB są w lokalnym `archive/visual-regression/`. Testy i dowody wyżej. Zwróć uwagę na segmentację łuku — nie mylić z ostatecznym wyglądem.
-4. **NASTĘPNE — odbiór wyglądu i kosztu GPU:** opcjonalny `curb_render_lod` S2.2f jest wdrożony i przechodzi Quality Gate, nie trzeba go budować ponownie. Wykonać ilościowy test sylwetki przy kamerze kierowcy w GUI (zbliżenia i większe nachylenia) oraz rozróżnić subtelny zysk <=8 mm od wizualnej gotowości. Sprawdzić z-fighting i normy faz, mierzyć GPU upload, całkowity frametime i ewentualne zacięcia edycji, nie tylko CPU `remesh_objects`. Bez zmian starego formatu OpenDRIVE i globalnych parametrów triangulacji.
+4. **S2.2g pomiar GPU i obrazów WYKONANY; następny — rzeczywisty frame/present Qt:** sprzętowy OpenGL 3.3 `GL_TIME_ELAPSED` X/T/Y, pięć kątów i synchronizowany upload siatki, wyniki w sekcji S2.2g. Dalsza praca: zarejestrować dokładny frame-time rzeczywistego `QOpenGLWidget` z nakładkami i prezentacją obrazu (także zrzuty z pozycji kierowcy w GUI, nie tylko renderera offscreen), p95 i jank podczas edycji; ocenić dynamiczny z-fighting i normy faz. Wpływ LOD na GPU minimalny; nie ma dowodu na finalny realizm. Nie ruszać domyślnych parametrów CDT, OpenDRIVE ani goldenów.
 5. **NASTĘPNE — materiały i oświetlenie:** usunąć wyraźne powtarzanie spękań 4-metrowej tekstury, urealnić tint i rozkład roughness, sprawdzić przejścia asfalt/beton oraz oświetlenie na niskim ujęciu i w samym edytorze. Export GLB zawiera już CC0 albedo/normal/roughness (Blender X/T/Y PASS), ale realizm, instalacja materiałów i pełna zgodność wyglądu GUI vs Blender **nie** są odebrane.
 
 **Kryterium ukończenia:** kod + testy + rzeczywista ocena GUI; potem commity, push i aktualizacja TEGO pliku. Bez zgadywania stanu na podstawie dawnych raportów.
