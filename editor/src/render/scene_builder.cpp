@@ -189,6 +189,22 @@ float ground_base_z(const SceneBounds& bounds) {
   return (bounds.valid() ? bounds.lo[2] : 0.0F) - 0.05F;
 }
 
+// The exporter already derives world-planar UV for textured junction floors
+// without changing kernel geometry. The Qt viewport must use the SAME
+// metric coordinates: zero-filled UV made the entire junction one texel.
+std::vector<double> junction_planar_uvs(const SubMesh& sub) {
+  if (!sub.uvs.empty() && sub.uvs.size() == (sub.positions.size() / 3) * 2) {
+    return sub.uvs;
+  }
+  std::vector<double> uv;
+  uv.reserve((sub.positions.size() / 3) * 2);
+  for (std::size_t i = 0; i + 2 < sub.positions.size(); i += 3) {
+    uv.push_back(sub.positions[i]);
+    uv.push_back(sub.positions[i + 1]);
+  }
+  return uv;
+}
+
 void append_road_items(const RoadMesh& road, Scene& scene) {
   grow_bounds(scene.bounds, road.positions);
   for (const RoadMesh::LanePatch& patch : road.lanes) {
@@ -374,7 +390,8 @@ Scene build_scene(const NetworkMesh& mesh, const RoadNetwork* network) {
         .data = to_render_data(floor.mesh.positions,
                                floor.mesh.normals,
                                floor.mesh.indices,
-                               lane_color(floor.mesh.material)),
+                               lane_color(floor.mesh.material),
+                               junction_planar_uvs(floor.mesh)),
         .road = {},
         .lane = {},
         .junction = floor.junction,
@@ -388,7 +405,11 @@ Scene build_scene(const NetworkMesh& mesh, const RoadNetwork* network) {
     for (const SubMesh& detail : floor.details) {
       scene.items.push_back(SceneItem{
           .data = to_render_data(
-              detail.positions, detail.normals, detail.indices, lane_color(detail.material)),
+              detail.positions,
+              detail.normals,
+              detail.indices,
+              lane_color(detail.material),
+              junction_planar_uvs(detail)),
           .road = {},
           .lane = {},
           .junction = floor.junction,
@@ -418,7 +439,10 @@ Scene build_scene(const NetworkMesh& mesh, const RoadNetwork* network) {
     const Surface* entity = network != nullptr ? network->surface(surface.surface) : nullptr;
     scene.items.push_back(SceneItem{
         .data = to_render_data(
-            surface.mesh.positions, surface.mesh.normals, surface.mesh.indices, color),
+            surface.mesh.positions, surface.mesh.normals, surface.mesh.indices, color,
+            kind == SurfaceKind::Asphalt || kind == SurfaceKind::Concrete
+                ? junction_planar_uvs(surface.mesh)
+                : std::vector<double>{}),
         .surface_id = surface.surface,
         .surface = kind,
         // A surface's stored material (p6-s2) resolves through the same catalog

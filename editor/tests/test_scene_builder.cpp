@@ -101,6 +101,56 @@ TEST(BuildScene, MarkingItemsTakeTheirRoadMarkColor) {
   EXPECT_EQ(scene.items.front().surface, SurfaceKind::Paint);
 }
 
+
+// S2.2h: The GLB exporter already generates world XY UV for junction floors.
+// Qt must use the same metric UV (instead of repeating a single dark texel).
+TEST(BuildScene, JunctionAndCornerPavementUseWorldPlanarTextureCoordinates) {
+  NetworkMesh mesh;
+  SubMesh floor;
+  floor.material = LaneType::Driving;
+  floor.positions = {2.5, -3.5, 0.0, 6.5, -3.5, 0.0, 6.5, 0.5, 0.0};
+  floor.normals = {0,0,1,0,0,1,0,0,1};
+  floor.indices = {0,1,2};
+  SubMesh concrete;
+  concrete.material = LaneType::Sidewalk;
+  concrete.positions = {2.5,-3.5,0.15,6.5,-3.5,0.15,6.5,0.5,0.15};
+  concrete.normals = floor.normals;
+  concrete.indices = {0,1,2};
+  // Prescribed UV must never be overwritten when a SubMesh has them.
+  SubMesh custom=concrete;
+  custom.uvs = {1,2,5,2,5,6};
+  mesh.junction_floors.push_back(JunctionFloor{
+      .mesh=floor, .details={concrete,custom}});
+  const Scene scene=build_scene(mesh);
+  ASSERT_EQ(scene.items.size(),3U);
+  const std::vector<float> expected{2.5F,-3.5F,6.5F,-3.5F,6.5F,0.5F};
+  EXPECT_EQ(scene.items[0].data.uvs,expected);
+  EXPECT_EQ(scene.items[1].data.uvs,expected);
+  EXPECT_EQ(scene.items[2].data.uvs,
+            (std::vector<float>{1,2,5,2,5,6}));
+  EXPECT_EQ(scene.items[0].surface,SurfaceKind::Asphalt);
+  EXPECT_EQ(scene.items[1].surface,SurfaceKind::Concrete);
+}
+
+TEST(BuildScene, MaterializedGroundSurfaceGetsPlanarUvButGrassDoesNot) {
+  RoadNetwork network;
+  const SurfaceId painted = network.create_surface(Surface{});
+  network.surface(painted)->material="asphalt";
+  const SurfaceId grass = network.create_surface(Surface{});
+  const SubMesh tri{
+      .positions={4,8,0, 8,8,0, 8,12,0},
+      .normals={0,0,1, 0,0,1, 0,0,1},
+      .indices={0,1,2}};
+  NetworkMesh mesh;
+  mesh.surfaces.push_back(SurfaceMesh{.surface=painted,.mesh=tri});
+  mesh.surfaces.push_back(SurfaceMesh{.surface=grass,.mesh=tri});
+  const Scene scene=build_scene(mesh,&network);
+  ASSERT_EQ(scene.items.size(),2U);
+  EXPECT_EQ(scene.items[0].data.uvs,
+            (std::vector<float>{4,8, 8,8, 8,12}));
+  EXPECT_TRUE(scene.items[1].data.uvs.empty());
+}
+
 TEST(ToRenderData, NarrowsDoublesAndCopiesIndices) {
   const std::vector<double> positions{0.0, 1.5, -2.25};
   const std::vector<double> normals{0.0, 0.0, 1.0};
@@ -145,6 +195,7 @@ TEST(Material, DefaultsAreFlatAndUninstanced) {
   EXPECT_FALSE(mat.normal.valid());
   EXPECT_FALSE(mat.roughness.valid());
   EXPECT_FLOAT_EQ(mat.roughness_value, 1.0F);
+  EXPECT_FLOAT_EQ(mat.vertical_fill, 0.0F);
 
   const DrawItem item;
   EXPECT_FALSE(item.material.base_color.valid());
@@ -355,16 +406,12 @@ TEST(BuildScene, JunctionFloorSceneItemCarriesMaterialCode) {
   EXPECT_EQ(scene.items[0].surface, SurfaceKind::Concrete);
 }
 
-// #360: the combination the surface shader has to survive — a junction floor
-// (and every corner overlay) reaches the renderer with NO uvs, while the
-// material it resolves to DOES carry a normal map. The renderer uploads (0,0)
-// for a uv-less mesh, so both uv derivatives are zero and the tangent frame has
-// no extent; without a guard the frame is NaN and the polygon renders black on
-// drivers that flush NaN to zero (Mesa/llvmpipe, the CI visual-artifacts job).
-//
-// If junction floors ever gain real uvs (the deferred texturing follow-up),
-// this test is the record of what changed — update it, don't delete the guard.
-TEST(BuildScene, JunctionFloorHasNoUvsWhileItsMaterialIsNormalMapped) {
+// #360 -> S2.2h: kernel junction floors still have NO UVs, but the Qt
+// render boundary now derives metric planar world XY coordinates, exactly
+// like glTF has done all along. This removes constant-texel asphalt patches.
+// Keep the shader's degenerate UV guard for genuinely untextured geometry;
+// zero / singular derivative frames must never produce NaN on Mesa or NVIDIA.
+TEST(BuildScene, JunctionFloorSynthesizesMetricUvsForNormalMappedMaterials) {
   const JunctionId junction{.index = 4, .gen = 0};
   JunctionFloor floor{.junction = junction,
                       .mesh = SubMesh{.positions = {-5, -5, 0, 0, -5, 0, 0, 0, 0},
@@ -383,7 +430,11 @@ TEST(BuildScene, JunctionFloorHasNoUvsWhileItsMaterialIsNormalMapped) {
 
   const MaterialCatalog catalog;
   for (const SceneItem& item : scene.items) {
-    EXPECT_TRUE(item.data.uvs.empty()) << "junction geometry reaches the renderer without uvs";
+    ASSERT_EQ(item.data.uvs.size(), 6U);
+    for (std::size_t v = 0; v < 3; ++v) {
+      EXPECT_FLOAT_EQ(item.data.uvs[2*v], item.data.positions[3*v]);
+      EXPECT_FLOAT_EQ(item.data.uvs[2*v+1], item.data.positions[3*v+1]);
+    }
     // Both fall back through SurfaceKind: the floor to asphalt, the band to
     // concrete — and both of those catalog entries are normal-mapped.
     const MaterialDef* def =

@@ -235,6 +235,7 @@ int main(int argc, char** argv) {
           mat.uv_scale=m->uv_scale;mat.tint=m->tint;
           mat.roughness_value=m->roughness_value;
           mat.normal_strength=m->normal_strength;
+          mat.vertical_fill=item.surface==SurfaceKind::Concrete?0.38F:0.0F;
         }
       }
       if(item.surface==SurfaceKind::Paint)mat.unlit=true;

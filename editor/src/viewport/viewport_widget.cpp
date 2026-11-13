@@ -234,6 +234,10 @@ Material ViewportWidget::material_for(SurfaceKind surface, const std::string& ma
   result.uv_scale = def->uv_scale;
   result.roughness_value = def->roughness_value;
   result.normal_strength = def->normal_strength;
+  // Concrete-only sky/road bounce brightens the curb riser, with no fill
+  // on horizontal tops (shader multiplies by 1 - abs(geometric normal.z)).
+  // Only Textured mode reaches this branch; Sober look remains unchanged.
+  result.vertical_fill = surface == SurfaceKind::Concrete ? 0.38F : 0.0F;
   return result;
 }
 

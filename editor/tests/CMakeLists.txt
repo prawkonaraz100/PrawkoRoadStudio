@@ -11,6 +11,11 @@ add_executable(prawko_gpu_probe EXCLUDE_FROM_ALL prawko_gpu_probe.cpp)
 target_link_libraries(prawko_gpu_probe PRIVATE roadmaker_editor_lib Qt6::OpenGL)
 rm_apply_warnings(prawko_gpu_probe)
 
+# S2.2h: visible Qt frame-swapped and real Alt+LMB orbit benchmark; opt-in.
+add_executable(prawko_qt_fps_probe EXCLUDE_FROM_ALL prawko_qt_fps_probe.cpp)
+target_link_libraries(prawko_qt_fps_probe PRIVATE roadmaker_editor_lib Qt6::OpenGL)
+rm_apply_warnings(prawko_qt_fps_probe)
+
 
 # Soak driver (hardening sprint §4.3): one library, two consumers — the
 # standalone runner CI soaks under ASan, and the fixed-seed smoke gtest in

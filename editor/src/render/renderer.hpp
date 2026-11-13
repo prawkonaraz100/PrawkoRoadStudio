@@ -77,6 +77,9 @@ struct Material {
   /// Material adds ZERO specular and reproduces the pre-PBR output exactly.
   float roughness_value = 1.0F;
   float normal_strength = 1.0F; ///< perturbation scale for the normal map
+  // Diffuse sky/road fill on near-vertical concrete: zero for every default
+  // material and almost zero on horizontal sidewalk tops.
+  float vertical_fill = 0.0F;
   bool unlit = false;           ///< markings/sky bypass lighting
 };
 

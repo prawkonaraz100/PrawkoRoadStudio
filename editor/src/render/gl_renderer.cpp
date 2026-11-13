@@ -83,6 +83,7 @@ uniform float u_normal_strength;
 uniform int u_has_roughness;
 uniform sampler2D u_roughness_map; // .r channel
 uniform float u_roughness;         // scalar fallback / modulator
+uniform float u_vertical_fill;     // diffuse sky bounce on vertical concrete
 uniform vec3 u_camera_pos;      // world-space eye (specular half-vector)
 // Environment lighting (hemisphere ambient + one directional sun). The Sober
 // preset sets sky == ground == white and intensity 0.65 so this reduces to the
@@ -117,7 +118,11 @@ vec3 perturb_normal(vec3 geom_n, vec2 uv) {
   vec3 t = dp2perp * duv1.x + dp1perp * duv2.x;
   vec3 b = dp2perp * duv1.y + dp1perp * duv2.y;
   float extent = max(dot(t, t), dot(b, b));
-  if (extent <= 0.0) {
+  // A vertical facade with metric XY UV has a singular 2-D mapping.
+  // Such triangles must use their geometric normal instead of an unstable
+  // cotangent frame (avoids near-black/striped curb walls).
+  float det = duv1.x * duv2.y - duv1.y * duv2.x;
+  if (extent <= 0.0 || abs(det) < 1e-6) {
     return geom_n;
   }
   float inv_max = inversesqrt(extent);
@@ -149,7 +154,12 @@ void main() {
   float spec = pow(max(dot(n, half_v), 0.0), mix(8.0, 96.0, gloss)) * gloss;
   direct += u_sun_color * (u_sun_intensity * spec);
 
-  vec3 lighting = hemi + direct;                // colored light multiplier
+  // Daylight bounces off the road onto vertical concrete; the plain
+  // hemisphere-only model otherwise draws a 15-cm curb as a black stripe.
+  // Material opt-in keeps asphalt/grass/props and the legacy Sober preset
+  // unchanged. Use the GEOMETRIC normal to avoid shadow flicker from PBR bumps.
+  vec3 fill = u_sky_light * (u_vertical_fill * (1.0 - abs(geom_n.z)));
+  vec3 lighting = hemi + direct + fill;         // colored light multiplier
   vec3 shade = mix(vec3(1.0), lighting, u_lit); // lines (u_lit=0) stay unlit
   vec3 base = albedo.rgb * shade;
   frag_color = vec4(mix(base, u_accent, u_highlight), albedo.a);
@@ -381,6 +391,7 @@ bool GLRenderer::init() {
   u_has_roughness_ = gl::GetUniformLocation(program_, "u_has_roughness");
   u_roughness_map_ = gl::GetUniformLocation(program_, "u_roughness_map");
   u_roughness_ = gl::GetUniformLocation(program_, "u_roughness");
+  u_vertical_fill_ = gl::GetUniformLocation(program_, "u_vertical_fill");
   u_camera_pos_ = gl::GetUniformLocation(program_, "u_camera_pos");
   u_sun_dir_ = gl::GetUniformLocation(program_, "u_sun_dir");
   u_sun_color_ = gl::GetUniformLocation(program_, "u_sun_color");
@@ -738,6 +749,7 @@ void GLRenderer::render(const std::vector<DrawItem>& items,
     // Scalar roughness fallback/modulator: default 1.0 → zero specular, so an
     // untextured/default Material stays pixel-identical to the pre-PBR output.
     gl::Uniform1f(u_roughness_, mat.roughness_value);
+    gl::Uniform1f(u_vertical_fill_, mat.vertical_fill);
 
     const bool has_tex = base_tex != 0;
     gl::Uniform1i(u_has_texture_, has_tex ? 1 : 0);
