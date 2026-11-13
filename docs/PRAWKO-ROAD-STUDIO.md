@@ -503,3 +503,28 @@ kategorię `Prawko | Gotowe drogi` i sześć miniatur już po uruchomieniu
 aplikacji z istniejącą sceną użytkownika, przy włączonych teksturach.
 Scena pozostała niezmieniona (SHA256 zgodny z kontrolą sprzed startu).
 Program pozostawiono otwarty, gotowy do używania myszą.
+
+## Obsługa biblioteki myszą — S2.2l
+
+Zwykłe pojedyncze kliknięcie kafelka wybiera zasób, pokazując
+pod listą kategorii krótką instrukcję jego zastosowania.
+**Przeciągnięcie kafelka na scenę** wyświetla znacznik położenia
+i opis planowanej operacji przy znaczniku: pozycja i docelowy
+element są obliczane tym samym resolverem co operacja zatwierdzająca.
+Punkt nieprawidłowy jest oznaczony kolorem ostrzegawczym.
+
+- **Nowa droga**: przeciągnij szablon na teren i klikaj kolejne
+  punkty; Enter kończy rysowanie, Esc anuluje.
+- **Zmiana istniejącej drogi**: przeciągnij styl na jej jezdnię.
+  Po udanej zmianie droga jest automatycznie zaznaczona, a panel
+  Properties otwarty do dalszej edycji. Alternatywnie zaznacz
+  dokładnie jedną drogę i **kliknij dwukrotnie** kafelek jej stylu.
+- **Materiał i oznaczenia**: przeciągnij na odpowiedni pas jezdni.
+  Przed zwolnieniem przycisku sprawdź podgląd docelowego miejsca.
+  Zmiany zatwierdzane przez system komend można cofnąć przez Ctrl+Z.
+
+Wdrożenie tej obsługi nie tworzy jeszcze samodzielnych prefabrykatów
+obniżonych krawężników, nie wprowadza swobodnego przesuwania wszystkich
+obiektów po stworzeniu i nie stanowi odbioru końcowego realizmu.
+Test GUI rzeczywistym kursorem Windows wykonano na osobnej kopii
+sceny, nie na oryginalnym projekcie.
