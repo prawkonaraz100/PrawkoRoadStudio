@@ -406,3 +406,27 @@ nie spełniają jeszcze docelowego standardu realizmu.
 - BUILD_PASS all, Quality Gate C++ 2072 PASS i agent 7 PASS;
   Qt 1286 PASS + 1 SKIPPED. Lokalizacje logów i pierwszy kolejny krok
   w `HANDOFF.md` (S2.2h).
+
+## S2.2i — PBR atlasy asfaltu i betonu (13.11.2026)
+
+- Oryginalne źródła CC0 Poly Haven pozostają nietknięte. Reprodukowalne
+  `scripts/build_pbr_atlas.py` wytwarza sześć dopasowanych map albedo,
+  normal_gl, roughness w `assets/textures/prawko_atlas/` (2048²).
+  Losowanie jest deterministyczne: 4×4 łagodnie łączone przesunięcia
+  wzoru z oryginalnych 512²; pełny cykl 16 m zamiast 4 m.
+- Qt qrc + `MaterialCatalog` i glTF eksportują dokładnie te same mapy;
+  nowe `uv_scale=0.0625` dla standardowego asfaltu i betonu; wariant
+  `asphalt_worn` bez zmian. Betonu nie należy mylić z osobnym
+  optycznym materiałem czoła krawężnika. OpenDRIVE, CDT, UV źródłowe
+  i siatki geometryczne bez zmian.
+- Kontrola materiałów: `PBR_ATLAS_QA_PASS`, asset licenses PASS,
+  Qt 1287 PASS/1 SKIPPED, C++ 2072 PASS, agent Python 7 PASS.
+  Nowe GLB X/T/Y importują się w Blender 5.3 z obrazami 2048²,
+  3 kanałami PBR oraz UV i niezerową geometrią faz/czoła.
+- Sprzęt GTX 1050 Ti: QOpenGLWidget 1600×900 / Alt+LMB
+  X/T/Y ~60 FPS (p95 ~17,11–17,36 ms); GPU GLRenderer p50
+  ukośnie ~0,43–0,49 ms. Większy atlas zwiększa jednak
+  koszt początkowego wczytania tekstur do 0,55–0,63 s
+  i GLB do ~16,7 MB. Następny etap to optymalizacja
+  pamięci/zimnego startu i test jank podczas remesh, potem
+  dodatkowy odbiór renderu porównawczego Qt vs Blender.
