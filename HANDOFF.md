@@ -2,8 +2,77 @@
 
 > **Jedyny aktualizowany dziennik przekazania między rozmowami.**
 > Kolejny agent ma czytać ten plik **przed edycją kodu**.
-> Stan dokumentu: 2026-11-13, **S2.2l — intuicyjne przeciąganie i edycja z biblioteki**: kontekstowe instrukcje przy kafelkach, podpis przy rzeczywistym celu upuszczenia w 3D, podwójne kliknięcie stylu zastosowuje go do zaznaczonej drogi, a po przeciągnięciu stylu program zaznacza zmienioną drogę i udostępnia jej Properties. **BUILD_PASS all**, **1293 Qt PASS + 1 SKIPPED**, **QUALITY_GATE_PASS**, test prawdziwym kursorem Windows (drag, upuszczenie, dwuklik, Undo/Redo i zapis na oddzielnej kopii sceny). Właściwa scena użytkownika zachowana (SHA256 niezmieniony). S2.2k biblioteka i PBR pozostają dostępne w programie ze skrótu. **Nie deklarować ukończenia uniwersalnej edycji drag & drop wszystkich typów, nowych prefabrykatów ani fotorealizmu**.
+> Stan dokumentu: 2026-11-13, **S2.2m — wybór i edycja komponentów po upuszczeniu**: obiekty 3D, znaki/sygnalizacja, skrzyżowania, przejścia, materiały i oznakowanie korzystają z jednego mechanizmu rozpoznania świeżo dodanych elementów albo dokładnego pasa. Udana operacja włącza zaznaczanie, wybiera właściwe elementy i otwiera Properties; wskazówki w bibliotece zależą od typu. **BUILD_PASS all**, **1295 Qt PASS + 1 SKIPPED**, **QUALITY_GATE_PASS**; test kursorem Windows: poprawny i niepoprawny upust materiału, sosna 3D, znak, sygnalizator, Undo/Redo i zapis wyłącznie kopii sceny. Oryginał nienaruszony, SHA256 bez zmian. **Nie oznaczać jako ukończone pełnej edycji wszystkich typów, przesuwania znaków w 3D, poprawnego zwolnienia obiektów od drogi ani fotorealizmu**.
 > Poniższe SHA to punkt kontrolny, nie zamiennik aktualnego `git status`.
+
+## S2.2m — edycja komponentów bez szukania ich po upuszczeniu (13.11.2026)
+
+**Potwierdzona implementacja:**
+- W `document/library_drop.hpp/.cpp` `capture_library_entities` zapisuje
+  aktywne identyfikatory obiektów, znaków i skrzyżowań **przed** operacją,
+  a `created_library_entities` porównuje je z faktycznym stanem **po**
+  `Document::push_command`. Nie dobiera obiektu po największym numerze,
+  kolejności sceny czy najbliższym punkcie — poprawne także przy istniejących
+  obiektach i przetworzonych slotach aren.
+- `MainWindow::on_library_drop` po udanym dodaniu **drzew, pojedynczych
+  obiektów, złożonych prefabrykatów, znaków statycznych, sygnalizacji,
+  skrzyżowań, strzałek i przejść** zaznacza faktycznie dodane elementy,
+  przełącza Select oraz otwiera Properties. **Materiały i oznakowanie**
+  nie tworzą nowego obiektu: resolver wskazuje dokładny `RoadId + LaneId`
+  i po nałożeniu podświetla zmieniony pas.
+- Przejście nadal tworzy swój obiekt i powiązanie ze stop-line w jednym
+  makrze Undo. Oznaczenia i materiały nadal idą przez zwykłe komendy.
+  Nie zmieniono CDT, struktury sceny ani OpenDRIVE.
+- `LibraryPanel` wyświetla kontekstowe instrukcje dla `Signal`,
+  `Tree`, `PropAssembly`, `Crosswalk`, `Stencil`, `Material`
+  i `Marking`. Pojedynczy wybór katalogowy nadal tylko wybiera
+  zasób; przeciągnięcie jest osobną operacją.
+- Testy `LibraryDrop.FreshlyPlacedObjectsAndSignalsAreFoundByIdentityForProperties`
+  oraz `LibraryDrop.NewlyInsertedJunctionIsDistinguishedFromExistingAssets`;
+  dodatkowe asercje dokładnego pasa dla `Material` i `Marking`
+  oraz obiektu przejścia dla `Crosswalk`. **55/55 testów resolvera PASS**.
+- **Pełny build:** `archive/visual-regression/s2.2m-edit-after-drop-final-build2.log`
+  **BUILD_PASS: all, AGENT_BINDING_SYNC_PASS**. Przejściowy LNK1168
+  w `s2.2m-edit-after-drop-final-build.log` wynikał z uruchomienia
+  procesu testowego równocześnie z linkerem, nie z błędu kodu;
+  build powtórzony sekwencyjnie i zaliczony.
+  `s2.2m-qt-full-final.log`: **1295 PASS / 1 SKIPPED, 0 FAIL**
+  (1296 testów, 160 suites). `s2.2m-quality-gate.log`:
+  **QUALITY_GATE_PASS**.
+- **Rzeczywisty widoczny Qt + zdarzenia myszy Windows**, wyłącznie na kopii
+  `archive/visual-regression/s2.2m-mouse/all-assets-test.xodr`:
+  odrzucony upust asfaltu poza właściwym pasem (`material-hover.png`),
+  udany upust na pas z automatycznym Properties
+  (`material-valid-after.png`), drzewo `Pine tree`
+  z panelem `s/t, Heading, Z offset, Height` (`pine-after.png`),
+  znak `Stop ahead` z edycją oznaczenia/kąta/dimensions
+  (`stop-sign-after.png`), **sygnalizator dynamiczny**
+  (własny nowy `signal 2`, `traffic-light-after.png`).
+  Po sygnalizatorze wykonano Ctrl+Z, Ctrl+Shift+Z, Ctrl+S, zamknięto
+  wyłącznie proces testowy PID 20212. Screenshoty w tym samym folderze.
+  Również `traffic-light-undo.png` i `traffic-light-redo.png`.
+  `agent/projects/prawko_urban_curve/scene.xodr` pozostał bez zmian:
+  SHA256 `879fe41c58cc83bc7393d456681c329b5d84574b0eabda0d73b2f600b13c540e`.
+  Kopia sceny została zapisana osobno.
+
+**Granice odbioru:** ręczny upust przejścia na **wlocie skrzyżowania**
+nie został sprawdzony myszą w tej sesji — jedyna testowa scena miała
+jedną drogę bez skrzyżowania; test C++ waliduje resolver, komendę
+stop-line i identyfikację obiektu. **Nie oznaczać tego testu GUI PASS.**
+Nie ma jeszcze pełnego interaktywnego przesuwania znaku lub
+sygnalizatora po scenie (Properties pozwala edytować `s/t`);
+samodzielne obiekty bez drogi nadal ogranicza model OpenDRIVE.
+Również swobodne transformowanie całych złożonych prefabrykatów,
+nowe obniżone krawężniki, wysepki i fotorealizm nadal są **otwarte**.
+
+**Pierwszy następny krok S2.2n:** utworzyć kopię testowej sceny
+T/X z wlotami; rzeczywistą myszą sprawdzić prawidłowy/odrzucony
+upust przejścia + stop-line, a także stencil/marking i
+złożony prefabrykat. Zbadać wygodę przesuwania znaków i sygnalizacji
+myszą (z poprawnym orientowaniem, snapowaniem i Undo), dopiero potem
+wdrożyć brakujące gesty. Każda zmiana z osobnymi testami CI,
+odbiorem w Qt i wpisem do HANDOFF. Nie przypisywać modelowi
+geometrii/fotorealizmu nieudokumentowanego w kodzie.
 
 ## S2.2l — intuicyjne drag & drop i edycja z biblioteki (13.11.2026)
 
@@ -141,7 +210,7 @@ zgodny ze SHA odczytanym podczas weryfikacji sprzed uruchomienia.
 **Proces pozostawiony otwarty do używania; nie zamykać go
 ani nie nadpisywać niezapisanych ewentualnych późniejszych zmian.**
 
-**Pierwsze następne zadanie S2.2l:** zaprojektować i wdrożyć
+**Historyczny plan po S2.2k (nieaktualny punkt startu — aktualny krok S2.2n jest na początku HANDOFF):** zaprojektować i wdrożyć
 osobne parametryczne prefabrykaty obniżonego krawężnika,
 wysepki i strefy przejścia bez nakładania atrap na siatkę
 (osobne testy XODR, geometrii i przecięć); następnie wrócić
@@ -683,7 +752,7 @@ różnice w renderze Blendera i neutralnym obrazie GUI.
 - `prawko_qt_edit_probe` (manualny `EXCLUDE_FROM_ALL`) używa widocznego Windows Qt `ViewportWidget`, prawdziwego `Document` oraz produkcyjnego `update_node_drag` / `begin_preview` / `update_preview` / remesh / upload GPU, bez zapisu plików scen. `archive/visual-regression/s2.2j-edit-fps-{x,t,y}.json`: **X 60,02 FPS p95 17,27 ms, CPU edycji p95 7,89 ms, 205 zmian siatki; T 60,00 FPS p95 17,23 ms, CPU 6,82 ms, 206 zmian; Y 60,01 FPS p95 17,37 ms, CPU 5,21 ms, 206 zmian; wszystkie 0 klatek >33,33 ms**. `real_edit_verified=true` i aktywna sesja preview. Skrypt wymusza pozycje węzłów timerem 16 ms — NIE jest testem fizycznej myszy ani przeciążonej kilkunastotysięcznej sceny. Dodatkowo pełne GUI `prawko_qt_fps_probe` `s2.2j-qt-fps-{x,t,y}.json`: ~60 FPS, p95 obrotu X 17,20, T 17,23, Y 17,23 ms, 0 jank.
 - Kompilacja `s2.2j-final-build.log`: **BUILD_PASS all**, synchronizacja agenta PASS; `s2.2j-final-gate.log`: **QUALITY_GATE_PASS** (C++ 2072 PASS, Python 7 PASS), `s2.2j-final-qt.log`: **1287 PASS + 1 SKIPPED**, 0 FAIL. Po cofnięciu redundantnego `setFormat` ponowiono pełny build i testy. **Uwaga na żywą pracę użytkownika:** od 13:36 `roadmaker-editor.exe` PID 4744, tytuł `scene.xodr* - PrawkoRoadStudio...` (**asterysk = niezapisane zmiany**). Nie ubijać, nie przeładowywać i nie nadpisywać tej sceny. Ponowiony opt-in benchmark edycji dla ostatecznej wersji binarnej celowo **wstrzymano**, żeby nie obciążać aktywnej sesji graficznej; powyższy benchmark edycji był wykonany wcześniej z jedyną eksperymentalną zmianą `setFormat`, potem cofniętą po ablacjach FBO. Nie uznawać braku końcowego powtórzenia za PASS tego konkretnego porównania.
 
-**Pierwsze następne zadanie S2.2m:** S2.2l (instrukcje i obsługa stylów przez przeciąganie i dwuklik) zakończony — wynik i dowody na początku HANDOFF. Rozszerzyć testy fizycznego drag & drop na obiekty, sygnały, przejścia, materiały i obszary niedozwolone, ustalić spójny model edycji po upuszczeniu. Następnie wdrożyć parametryczny krawężnik obniżony/rampę oraz wysepkę jako samodzielnie przeciągany obiekt z zachowaniem siatki i OpenDRIVE. Powtórzyć test obciążeniowy większych scen (wiele dróg/props, ruch myszy, drag/remesh, p95/p99, VRAM). Oddzielnie wykończyć oświetlenie Qt/Blender oraz widoczne długie spękania. Nie uznawać fotorealizmu za ukończony. Nie zmieniać CDT/OpenDRIVE/goldenów bez uzasadnienia.
+**Historyczny plan po S2.2l (częściowo zrealizowany w S2.2m; aktualny krok S2.2n jest na początku HANDOFF):** S2.2l (instrukcje i obsługa stylów przez przeciąganie i dwuklik) zakończony — wynik i dowody na początku HANDOFF. Rozszerzyć testy fizycznego drag & drop na obiekty, sygnały, przejścia, materiały i obszary niedozwolone, ustalić spójny model edycji po upuszczeniu. Następnie wdrożyć parametryczny krawężnik obniżony/rampę oraz wysepkę jako samodzielnie przeciągany obiekt z zachowaniem siatki i OpenDRIVE. Powtórzyć test obciążeniowy większych scen (wiele dróg/props, ruch myszy, drag/remesh, p95/p99, VRAM). Oddzielnie wykończyć oświetlenie Qt/Blender oraz widoczne długie spękania. Nie uznawać fotorealizmu za ukończony. Nie zmieniać CDT/OpenDRIVE/goldenów bez uzasadnienia.
 
 
 

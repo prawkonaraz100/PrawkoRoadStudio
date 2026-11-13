@@ -528,3 +528,32 @@ obniżonych krawężników, nie wprowadza swobodnego przesuwania wszystkich
 obiektów po stworzeniu i nie stanowi odbioru końcowego realizmu.
 Test GUI rzeczywistym kursorem Windows wykonano na osobnej kopii
 sceny, nie na oryginalnym projekcie.
+
+## Edycja bezpośrednio po upuszczeniu — S2.2m
+
+Po przeciągnięciu znaku, sygnalizatora, drzewa, prefabrykatu
+obiektowego, oznakowania strzałką, przejścia albo skrzyżowania
+na prawidłowe miejsce, edytor wybiera właśnie **nowo dodane**
+elementy i pokazuje panel Properties. Można w nim zmienić
+pozycję i wysokość sygnału, właściwości znaku, albo pozycję,
+obrót i rozmiar pojedynczego modelu 3D, stosownie do jego
+istniejących kontrolek. Zbiorczy prefabrykat może zaznaczyć
+więcej niż jeden nowy obiekt. Po nałożeniu materiału lub
+oznakowania drogowego zaznaczany jest dokładny pas drogowy,
+nie cała droga.
+
+Nie trzeba ponownie klikać małego znaku lub drzewa, aby
+uzyskać dostęp do edycji. Cofanie i ponawianie działa przez
+istniejący mechanizm komend i nie zmienia schematu OpenDRIVE.
+Niepoprawny upust, np. materiału poza pasem, jest odrzucany
+z wyjaśnieniem.
+
+Nie ma jeszcze obsługi swobodnego przesuwania znaków
+i sygnalizatorów myszą w 3D; odpowiednie parametry można
+zmieniać w Properties. Ręczny test upuszczenia przejścia
+z powiązaniem stop-line na rzeczywistym wlocie jest nadal
+otwarty — istnieją tylko testy logiki C++. Brak też swobodnych
+transformacji całych złożonych prefabrykatów ani niezależnej
+od drogi lokalizacji wszystkich obiektów. Te funkcje
+nie mogą być nazywane ukończonymi. Realizm wizualny ma
+osobne kryteria odbioru.
