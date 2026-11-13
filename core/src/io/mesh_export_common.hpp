@@ -28,6 +28,7 @@
 #include "roadmaker/road/lane.hpp"
 
 #include <array>
+#include <filesystem>
 #include <string>
 
 namespace roadmaker::io_common {
@@ -102,6 +103,57 @@ inline constexpr double kLaneRoughness = 0.95;
              ? 0.78
              : kLaneRoughness;
 }
+// GLB-only CC0 PBR bundles. Every family has exactly three checked-in
+// sources; the roughness JPEG has identical RGB channels, so the glTF G
+// channel correctly carries roughness with metallicFactor=0. No extra files
+// are generated in the working tree and no user-authored material is altered.
+[[nodiscard]] inline std::string lane_pbr_family(LaneType type) {
+  if (type == LaneType::Curb || type == LaneType::Sidewalk || type == LaneType::Border)
+    return "concrete";
+  if (type == LaneType::Driving) return "asphalt";
+  return {};
+}
+
+[[nodiscard]] inline std::filesystem::path pbr_texture_root() {
+#ifdef RM_BUNDLED_TEXTURE_ROOT
+  return std::filesystem::path(RM_BUNDLED_TEXTURE_ROOT);
+#else
+  return {};
+#endif
+}
+
+[[nodiscard]] inline std::filesystem::path pbr_texture_file(
+    const std::string& family, int channel) {
+  const auto root = pbr_texture_root();
+  if (family == "concrete") {
+    const auto dir = root / "concrete";
+    switch (channel) {
+    case 0: return dir / "brushed_concrete_diff_512.jpg";
+    case 1: return dir / "brushed_concrete_nor_gl_512.png";
+    case 2: return dir / "brushed_concrete_rough_512.jpg";
+    }
+  }
+  if (family == "asphalt") {
+    const auto dir = root / "asphalt";
+    switch (channel) {
+    case 0: return dir / "asphalt_02_diff_512.jpg";
+    case 1: return dir / "asphalt_02_nor_gl_512.png";
+    case 2: return dir / "asphalt_02_rough_512.jpg";
+    }
+  }
+  return {};
+}
+
+[[nodiscard]] inline bool lane_pbr_available(LaneType type) {
+  const auto family = lane_pbr_family(type);
+  if (family.empty() || pbr_texture_root().empty()) return false;
+  for (int i = 0; i < 3; ++i) {
+    const auto file = pbr_texture_file(family, i);
+    if (file.empty() || !std::filesystem::is_regular_file(file)) return false;
+  }
+  return true;
+}
+
 inline constexpr double kMarkingRoughness = 0.6;
 
 inline constexpr const char* kMarkingMaterialName = "lane_marking";

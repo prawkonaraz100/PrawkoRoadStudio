@@ -45,6 +45,9 @@
 #include <array>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <limits>
 #include <map>
 #include <string>
@@ -236,6 +239,14 @@ private:
     const auto color = io_common::lane_material_color(type);
     const int index =
         add_material(io_common::lane_material_name(type), color, io_common::lane_material_roughness(type));
+    if (io_common::lane_pbr_available(type)) {
+      const auto family = io_common::lane_pbr_family(type);
+      const auto images = pbr_textures(family);
+      tinygltf::Material& material = model_.materials[static_cast<std::size_t>(index)];
+      material.pbrMetallicRoughness.baseColorTexture.index = images[0];
+      material.normalTexture.index = images[1];
+      material.pbrMetallicRoughness.metallicRoughnessTexture.index = images[2];
+    }
     lane_materials_.emplace(type, index);
     return index;
   }
@@ -281,6 +292,56 @@ private:
     return static_cast<int>(model_.materials.size() - 1);
   }
 
+  // All three CC0 images are stored in the GLB BIN chunk, once per material
+  // family. No external file paths survive in the final .glb.
+  int repeating_sampler() {
+    if (repeat_sampler_ >= 0) return repeat_sampler_;
+    tinygltf::Sampler sampler;
+    sampler.wrapS = TINYGLTF_TEXTURE_WRAP_REPEAT;
+    sampler.wrapT = TINYGLTF_TEXTURE_WRAP_REPEAT;
+    sampler.minFilter = TINYGLTF_TEXTURE_FILTER_LINEAR_MIPMAP_LINEAR;
+    sampler.magFilter = TINYGLTF_TEXTURE_FILTER_LINEAR;
+    model_.samplers.push_back(std::move(sampler));
+    repeat_sampler_ = static_cast<int>(model_.samplers.size() - 1);
+    return repeat_sampler_;
+  }
+
+  std::array<int, 3> pbr_textures(const std::string& family) {
+    const auto cached = pbr_texture_indices_.find(family);
+    if (cached != pbr_texture_indices_.end()) return cached->second;
+    std::array<int, 3> indices{};
+    for (int channel = 0; channel < 3; ++channel) {
+      const auto file = io_common::pbr_texture_file(family, channel);
+      std::ifstream stream(file, std::ios::binary);
+      std::vector<unsigned char> bytes(std::istreambuf_iterator<char>{stream},
+                                       std::istreambuf_iterator<char>{});
+      const int view = append_to_buffer(bytes.data(), bytes.size(), 0);
+      tinygltf::Image image;
+      image.name = family + (channel == 0 ? "_albedo" : channel == 1 ? "_normal" : "_roughness");
+      image.mimeType = channel == 1 ? "image/png" : "image/jpeg";
+      image.bufferView = view;
+      image.as_is = true;
+      model_.images.push_back(std::move(image));
+      tinygltf::Texture texture;
+      texture.source = static_cast<int>(model_.images.size() - 1);
+      texture.sampler = repeating_sampler();
+      model_.textures.push_back(std::move(texture));
+      indices[static_cast<std::size_t>(channel)] =
+          static_cast<int>(model_.textures.size() - 1);
+    }
+    pbr_texture_indices_.emplace(family, indices);
+    return indices;
+  }
+
+  // Existing road and curb UVs are in world metres. Match the editor's
+  // material_catalog UV scale (0.25 repeats per metre = one 4-metre tile).
+  int add_scaled_uv(const std::vector<double>& source, double scale) {
+    std::vector<float> uvs;
+    uvs.reserve(source.size());
+    for (double coordinate : source) uvs.push_back(static_cast<float>(coordinate * scale));
+    return add_vec2_accessor(uvs);
+  }
+
   int add_road_node(const RoadMesh& road) {
     tinygltf::Mesh gltf_mesh;
     gltf_mesh.name = road.name;
@@ -290,11 +351,14 @@ private:
     if (!road.lanes.empty()) {
       const int positions = add_vec3_accessor(to_gltf_frame(road.positions), true);
       const int normals = add_vec3_accessor(to_gltf_frame(road.normals), false);
+      const bool have_uvs = road.uvs.size() == (road.positions.size() / 3) * 2;
+      const int uv = have_uvs ? add_scaled_uv(road.uvs, 0.25) : -1;
       for (const RoadMesh::LanePatch& patch : road.lanes) {
         tinygltf::Primitive primitive;
         primitive.mode = TINYGLTF_MODE_TRIANGLES;
         primitive.attributes["POSITION"] = positions;
         primitive.attributes["NORMAL"] = normals;
+        if (uv >= 0) primitive.attributes["TEXCOORD_0"] = uv;
         primitive.indices = add_index_accessor(patch.indices);
         primitive.material = material_for(patch.material);
         gltf_mesh.primitives.push_back(std::move(primitive));
@@ -317,13 +381,22 @@ private:
     primitive.mode = TINYGLTF_MODE_TRIANGLES;
     primitive.attributes["POSITION"] = add_vec3_accessor(to_gltf_frame(sub.positions), true);
     primitive.attributes["NORMAL"] = add_vec3_accessor(to_gltf_frame(sub.normals), false);
-    if (!sub.uvs.empty() && sub.uvs.size() == (sub.positions.size() / 3) * 2) {
-      std::vector<float> uvs;
-      uvs.reserve(sub.uvs.size());
-      for (const double uv : sub.uvs) {
-        uvs.push_back(static_cast<float>(uv));
+    const bool textured =
+        model_.materials[static_cast<std::size_t>(material)]
+            .pbrMetallicRoughness.baseColorTexture.index >= 0;
+    if (sub.uvs.size() == (sub.positions.size() / 3) * 2 &&
+        !sub.uvs.empty()) {
+      primitive.attributes["TEXCOORD_0"] = add_scaled_uv(sub.uvs, textured ? 0.25 : 1.0);
+    } else if (textured) {
+      // The junction-floor CDT has no independent UV grid. Derive planar
+      // metric UVs from the exact world vertices without changing topology.
+      std::vector<double> planar;
+      planar.reserve((sub.positions.size() / 3) * 2);
+      for (std::size_t i = 0; i + 2 < sub.positions.size(); i += 3) {
+        planar.push_back(sub.positions[i]);
+        planar.push_back(sub.positions[i + 1]);
       }
-      primitive.attributes["TEXCOORD_0"] = add_vec2_accessor(uvs);
+      primitive.attributes["TEXCOORD_0"] = add_scaled_uv(planar, 0.25);
     }
     primitive.indices = add_index_accessor(sub.indices);
     primitive.material = material;
@@ -511,8 +584,10 @@ private:
   std::map<std::string, int> named_materials_;
   std::map<std::string, int> prop_meshes_;
   std::map<std::string, int> face_meshes_;
+  std::map<std::string, std::array<int, 3>> pbr_texture_indices_;
   int marking_material_ = -1;
   int clamp_sampler_ = -1;
+  int repeat_sampler_ = -1;
 };
 
 } // namespace

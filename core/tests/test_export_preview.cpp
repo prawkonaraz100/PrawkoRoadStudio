@@ -306,7 +306,22 @@ TEST(ExportPreview, RaisedJunctionChamfersSurviveGlbRoundTripWithNormalsAndUVs) 
     ASSERT_NE(found, model.materials.end()) << name;
     EXPECT_NEAR(found->pbrMetallicRoughness.roughnessFactor, 0.78, 1e-9);
     EXPECT_EQ(found->pbrMetallicRoughness.metallicFactor, 0.0);
-    EXPECT_EQ(found->pbrMetallicRoughness.baseColorTexture.index, -1);
+    ASSERT_GE(found->pbrMetallicRoughness.baseColorTexture.index, 0);
+    ASSERT_GE(found->normalTexture.index, 0);
+    ASSERT_GE(found->pbrMetallicRoughness.metallicRoughnessTexture.index, 0);
+    EXPECT_GE(preview.image_count, 6U);
+    const int albedo = found->pbrMetallicRoughness.baseColorTexture.index;
+    const int normal = found->normalTexture.index;
+    const int roughness = found->pbrMetallicRoughness.metallicRoughnessTexture.index;
+    for (const int texture : {albedo, normal, roughness}) {
+      ASSERT_LT(texture, static_cast<int>(model.textures.size()));
+      const int image = model.textures[static_cast<std::size_t>(texture)].source;
+      ASSERT_GE(image, 0);
+      ASSERT_LT(image, static_cast<int>(model.images.size()));
+      const auto& embedded = model.images[static_cast<std::size_t>(image)];
+      EXPECT_GE(embedded.bufferView, 0);
+      EXPECT_TRUE(embedded.mimeType == "image/jpeg" || embedded.mimeType == "image/png");
+    }
   }
   EXPECT_EQ(preview.mesh_count, model.meshes.size());
   EXPECT_EQ(preview.total_triangles, file_triangles(model));
@@ -326,6 +341,21 @@ TEST(ExportPreview, RaisedJunctionChamfersSurviveGlbRoundTripWithNormalsAndUVs) 
   }
   EXPECT_EQ(exported_bevel_tris, expected_bevel_tris)
       << "glTF lost the new bevel strips or some of their triangles";
+  // Every textured primitive must carry metrically tiled UVs, including
+  // junction sidewalk tops that have no authored UV arrays.
+  for (const auto& part : model.meshes) {
+    for (const auto& primitive : part.primitives) {
+      ASSERT_GE(primitive.material, 0);
+      const auto& mat = model.materials[static_cast<std::size_t>(primitive.material)];
+      if (mat.pbrMetallicRoughness.baseColorTexture.index >= 0) {
+        ASSERT_TRUE(primitive.attributes.contains("TEXCOORD_0")) << part.name;
+        const int uv = primitive.attributes.at("TEXCOORD_0");
+        ASSERT_LT(uv, static_cast<int>(model.accessors.size()));
+        EXPECT_EQ(model.accessors[static_cast<std::size_t>(uv)].type,
+                  TINYGLTF_TYPE_VEC2);
+      }
+    }
+  }
 }
 
 TEST(ExportPreview, VertexTotalMatchesTheUniqueAccessorsInTheFile) {

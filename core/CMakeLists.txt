@@ -148,6 +148,12 @@ target_include_directories(roadmaker_core PUBLIC
 
 target_compile_features(roadmaker_core PUBLIC cxx_std_20)
 
+# The checked-in, CC0 Poly Haven texture source root for the GLB exporter.
+# Installed binaries without this location gracefully retain solid materials;
+# deployment of PBR assets is tracked separately.
+target_compile_definitions(roadmaker_core PRIVATE
+  RM_BUNDLED_TEXTURE_ROOT="${CMAKE_SOURCE_DIR}/assets/textures")
+
 # tl::expected is the ONLY public dependency (rm::Expected in error.hpp).
 # BUILD_INTERFACE-only: install(EXPORT) would otherwise resolve the name to
 # our non-exported FetchContent alias and refuse to generate. The installed

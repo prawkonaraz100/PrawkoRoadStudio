@@ -95,6 +95,8 @@ constexpr std::array<ChannelPolicy, kMeshChannelCount> kChannelPolicy{{
 /// which is exactly how the reconciliation gate aggregates the reloaded file.
 class MaterialTally {
 public:
+  explicit MaterialTally(bool gltf) : gltf_(gltf) {}
+
   void add(const std::string& name,
            const std::array<double, 4>& color,
            double roughness,
@@ -116,7 +118,7 @@ public:
         io_common::lane_material_color(type),
         io_common::lane_material_roughness(type),
         triangles,
-        false);
+        gltf_ && io_common::lane_pbr_available(type));
   }
 
   void add_marking(std::size_t triangles) {
@@ -156,6 +158,7 @@ public:
   }
 
 private:
+  bool gltf_ = false;
   std::map<std::string, MaterialPreview> entries_;
 };
 
@@ -339,7 +342,7 @@ ScenePreview preview_mesh_export(const NetworkMesh& mesh, MeshExportFormat forma
 
   const bool gltf = format == MeshExportFormat::Gltf;
 
-  MaterialTally materials;
+  MaterialTally materials(gltf);
   std::vector<MeshChannelPreview> rows(kMeshChannelCount);
   for (std::size_t i = 0; i < kMeshChannelCount; ++i) {
     rows[i].channel = kChannelPolicy[i].channel;
@@ -619,6 +622,21 @@ ScenePreview preview_mesh_export(const NetworkMesh& mesh, MeshExportFormat forma
   }
   preview.channels = std::move(rows);
   preview.materials = materials.take();
+  if (gltf) {
+    // The GLB exporter deduplicates three embedded CC0 PBR images for
+    // each actually used lane material family (concrete/asphalt).
+    std::set<std::string> families;
+    for (const LaneType type : {LaneType::Driving, LaneType::Sidewalk,
+                                LaneType::Border, LaneType::Curb}) {
+      if (!io_common::lane_pbr_available(type)) continue;
+      const auto name = io_common::lane_material_name(type);
+      const auto it = std::find_if(
+          preview.materials.begin(), preview.materials.end(),
+          [&name](const MaterialPreview& entry) { return entry.name == name; });
+      if (it != preview.materials.end()) families.insert(io_common::lane_pbr_family(type));
+    }
+    preview.image_count += 3 * families.size();
+  }
 
   // The empty-mesh guard, previewed rather than hit at a file dialog. This is
   // not a copy of the exporters' condition — it is THE condition, the one

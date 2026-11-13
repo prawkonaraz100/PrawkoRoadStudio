@@ -39,12 +39,23 @@
 // gltf_exporter.cpp).
 #include <tiny_gltf.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <filesystem>
 #include <stdexcept>
 #include <string>
 
 namespace {
+
+// These tests verify JSON structure and bufferView references, not image
+// pixels. tinygltf is intentionally built here without stb_image; independent
+// Blender tests decode the embedded CC0 JPEG/PNG payloads.
+void install_structural_image_loader(tinygltf::TinyGLTF& loader) {
+  loader.SetImageLoader([](tinygltf::Image*, int, std::string*, std::string*,
+                           int, int, const unsigned char*, int, void*) {
+                          return true;
+                        }, nullptr);
+}
 
 std::filesystem::path temp_glb(const char* name) {
   return std::filesystem::temp_directory_path() / name;
@@ -65,7 +76,7 @@ tinygltf::Model export_and_reload(const char* sample_name, const char* out_name)
   }
 
   tinygltf::Model model;
-  tinygltf::TinyGLTF loader;
+  tinygltf::TinyGLTF loader; install_structural_image_loader(loader);
   std::string err;
   std::string warn;
   const bool loaded = loader.LoadBinaryFromFile(&model, &err, &warn, path.string());
@@ -85,7 +96,7 @@ tinygltf::Model write_and_reload(const roadmaker::NetworkMesh& mesh, const char*
     throw std::runtime_error("export_glb failed: " + exported.error().message);
   }
   tinygltf::Model model;
-  tinygltf::TinyGLTF loader;
+  tinygltf::TinyGLTF loader; install_structural_image_loader(loader);
   std::string err;
   std::string warn;
   const bool loaded = loader.LoadBinaryFromFile(&model, &err, &warn, path.string());
@@ -208,7 +219,7 @@ TEST(Gltf, GltfIncludesJunctionDetailSubmeshes) {
     const auto exported = roadmaker::export_glb(m, path);
     EXPECT_TRUE(exported.has_value());
     tinygltf::Model model;
-    tinygltf::TinyGLTF loader;
+    tinygltf::TinyGLTF loader; install_structural_image_loader(loader);
     std::string err;
     std::string warn;
     const bool loaded = loader.LoadBinaryFromFile(&model, &err, &warn, path.string());
@@ -370,7 +381,7 @@ TEST(Gltf, TreePropExportsASharedMeshAndInstanceNode) {
   const auto path = temp_glb("rm_tree.glb");
   ASSERT_TRUE(roadmaker::export_glb(mesh, path).has_value());
   tinygltf::Model model;
-  tinygltf::TinyGLTF loader;
+  tinygltf::TinyGLTF loader; install_structural_image_loader(loader);
   std::string err;
   std::string warn;
   ASSERT_TRUE(loader.LoadBinaryFromFile(&model, &err, &warn, path.string()));
@@ -441,7 +452,7 @@ TEST(Gltf, ScaledPropExportsAUniformNodeScale) {
   const auto path = temp_glb("rm_scaled_tree.glb");
   ASSERT_TRUE(roadmaker::export_glb(mesh, path).has_value());
   tinygltf::Model gltf;
-  tinygltf::TinyGLTF loader;
+  tinygltf::TinyGLTF loader; install_structural_image_loader(loader);
   std::string err;
   std::string warn;
   ASSERT_TRUE(loader.LoadBinaryFromFile(&gltf, &err, &warn, path.string()));
@@ -515,7 +526,7 @@ tinygltf::Model export_text_signs(int count, const std::string& text) {
     throw std::runtime_error("export_glb failed: " + exported.error().message);
   }
   tinygltf::Model model;
-  tinygltf::TinyGLTF loader;
+  tinygltf::TinyGLTF loader; install_structural_image_loader(loader);
   loader.SetImageLoader([](tinygltf::Image*,
                            const int,
                            std::string*,
@@ -538,21 +549,37 @@ tinygltf::Model export_text_signs(int count, const std::string& text) {
 
 } // namespace
 
+// Checked-in PBR maps may be embedded alongside sign-face PNGs. The sign
+// contract is about face images and CLAMP_TO_EDGE, not total scene images.
+int face_image_index(const tinygltf::Model& model) {
+  for (std::size_t i = 0; i < model.images.size(); ++i) {
+    if (model.images[i].name.empty() &&
+        model.images[i].mimeType == "image/png")
+      return static_cast<int>(i);
+  }
+  return -1;
+}
+
 TEST(GltfExport, TextSignEmbedsFaceTexture) {
   const tinygltf::Model model = export_text_signs(1, "City");
 
-  // Exactly one embedded PNG image, referenced by a bufferView.
-  ASSERT_EQ(model.images.size(), 1U);
-  EXPECT_EQ(model.images[0].mimeType, "image/png");
-  EXPECT_GE(model.images[0].bufferView, 0);
-
-  // A CLAMP_TO_EDGE sampler and a texture pointing at the image.
-  ASSERT_EQ(model.samplers.size(), 1U);
-  EXPECT_EQ(model.samplers[0].wrapS, TINYGLTF_TEXTURE_WRAP_CLAMP_TO_EDGE);
-  EXPECT_EQ(model.samplers[0].wrapT, TINYGLTF_TEXTURE_WRAP_CLAMP_TO_EDGE);
-  ASSERT_EQ(model.textures.size(), 1U);
-  EXPECT_EQ(model.textures[0].source, 0);
-  EXPECT_EQ(model.textures[0].sampler, 0);
+  const int face = face_image_index(model);
+  ASSERT_GE(face, 0);
+  EXPECT_GE(model.images[static_cast<std::size_t>(face)].bufferView, 0);
+  const auto clamp = std::find_if(model.samplers.begin(), model.samplers.end(),
+                                  [](const tinygltf::Sampler& s) {
+                                    return s.wrapS == TINYGLTF_TEXTURE_WRAP_CLAMP_TO_EDGE &&
+                                           s.wrapT == TINYGLTF_TEXTURE_WRAP_CLAMP_TO_EDGE;
+                                  });
+  ASSERT_NE(clamp, model.samplers.end());
+  const int clamp_index = static_cast<int>(std::distance(model.samplers.begin(), clamp));
+  const auto face_texture = std::find_if(model.textures.begin(), model.textures.end(),
+                                        [face, clamp_index](const tinygltf::Texture& t) {
+                                          return t.source == face && t.sampler == clamp_index;
+                                        });
+  ASSERT_NE(face_texture, model.textures.end());
+  const int face_texture_index =
+      static_cast<int>(std::distance(model.textures.begin(), face_texture));
 
   // A material whose base colour is the texture, on a face mesh with TEXCOORD_0.
   bool found_face = false;
@@ -561,10 +588,12 @@ TEST(GltfExport, TextSignEmbedsFaceTexture) {
       if (prim.attributes.count("TEXCOORD_0") == 0) {
         continue;
       }
-      found_face = true;
       ASSERT_GE(prim.material, 0);
       const auto& mat = model.materials[static_cast<std::size_t>(prim.material)];
-      EXPECT_EQ(mat.pbrMetallicRoughness.baseColorTexture.index, 0);
+      if (mat.name.find(":face") != std::string::npos) {
+        found_face = true;
+        EXPECT_EQ(mat.pbrMetallicRoughness.baseColorTexture.index, face_texture_index);
+      }
     }
   }
   EXPECT_TRUE(found_face) << "a face mesh with TEXCOORD_0 must be present";
@@ -573,11 +602,19 @@ TEST(GltfExport, TextSignEmbedsFaceTexture) {
 TEST(GltfExport, SameTextSharesOneImage) {
   // Two identical plates reuse the same cached image/texture/material/mesh.
   const tinygltf::Model model = export_text_signs(2, "City");
-  EXPECT_EQ(model.images.size(), 1U);
-  EXPECT_EQ(model.textures.size(), 1U);
+  const int face = face_image_index(model);
+  ASSERT_GE(face, 0);
+  EXPECT_EQ(std::count_if(model.images.begin(), model.images.end(),
+                          [](const tinygltf::Image& image) {
+                            return image.name.empty() && image.mimeType == "image/png";
+                          }), 1);
+  EXPECT_EQ(std::count_if(model.textures.begin(), model.textures.end(),
+                          [face](const tinygltf::Texture& texture) {
+                            return texture.source == face;
+                          }), 1);
 }
 
-TEST(GltfExport, SignWithoutTextEmitsNoImages) {
+TEST(GltfExport, SignWithoutTextEmitsNoFaceImages) {
   roadmaker::RoadNetwork network;
   const std::vector<roadmaker::Waypoint> waypoints{{.x = 0.0, .y = 0.0}, {.x = 120.0, .y = 0.0}};
   auto road = roadmaker::author_clothoid_road(
@@ -597,11 +634,19 @@ TEST(GltfExport, SignWithoutTextEmitsNoImages) {
   const auto path = temp_glb("rm_plain_sign.glb");
   ASSERT_TRUE(roadmaker::export_glb(mesh, path).has_value());
   tinygltf::Model model;
-  tinygltf::TinyGLTF loader;
+  tinygltf::TinyGLTF loader; install_structural_image_loader(loader);
+  // Image byte validity is verified independently in Blender; this parser
+  // is compiled without image decoders for structural GLB assertions.
+  loader.SetImageLoader([](tinygltf::Image*, int, std::string*, std::string*,
+                           int, int, const unsigned char*, int, void*) {
+                          return true;
+                        }, nullptr);
   std::string err;
   std::string warn;
-  ASSERT_TRUE(loader.LoadBinaryFromFile(&model, &err, &warn, path.string()));
+  ASSERT_TRUE(loader.LoadBinaryFromFile(&model, &err, &warn, path.string()))
+      << err << " / " << warn;
   std::remove(path.string().c_str());
-  EXPECT_TRUE(model.images.empty());
-  EXPECT_TRUE(model.textures.empty());
+  EXPECT_EQ(face_image_index(model), -1);
+  for (const tinygltf::Material& material : model.materials)
+    EXPECT_EQ(material.name.find(":face"), std::string::npos);
 }
