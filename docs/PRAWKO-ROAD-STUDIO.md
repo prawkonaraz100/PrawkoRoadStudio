@@ -456,3 +456,43 @@ nie spełniają jeszcze docelowego standardu realizmu.
   kolorów i oświetlenia z Qt. Fotorealizm pozostaje OTWARTY.
   Szczegółowy raport wyników, ścieżki logów i następny krok
   znajdują się w `HANDOFF.md`.
+
+## S2.2k — biblioteka gotowych elementów drogowych (13.11.2026)
+
+Aby pracować myszą, podczas zwykłego uruchamiania edytora otwiera
+się po lewej stronie zakładka **Library**, w której aktywna jest
+kategoria **Prawko | Gotowe drogi**. Przeciągnięcie szablonu
+uruchamia rysowanie nowej drogi — należy dodać jej punkty, a następnie
+zatwierdzić standardową operacją Create Road. Aby przebudować już
+istniejącą drogę, wybierz kategorię **Prawko | Krawężniki i chodniki**
+i upuść styl na jej jezdni; cofnięcie działa przez `Ctrl+Z`.
+
+| Identyfikator wariantu | Geometria nowej drogi/stylu |
+|---|---|
+| `prawko.urban` | Obustronne chodniki 1,8 m; krawężniki 15 cm |
+| `prawko.wide` | Obustronne chodniki 2,5 m; krawężniki 15 cm |
+| `prawko.promenade` | Obustronne chodniki 3,0 m; krawężniki 15 cm |
+| `prawko.one_side` | Lewy chodnik 2,5 m, prawy bez chodnika |
+| `prawko.parking` | Obie strony: pas postojowy 2,4 m, chodnik 2,0 m |
+| `prawko.no_curb` | Dwa pasy jazdy bez chodników i krawężników |
+
+Każdy wariant ma parę pozycji w bibliotece: `road.prawko.*`
+i `style.prawko.*`, razem 12 miniaturek. Używają istniejącej
+siatki jezdni, `Sidewalk` i generowanych ścian/faz krawężników.
+Nie są to wolne obiekty 3D ani prefabrykaty krawężnika
+najazdowego. Zachowany jest OpenDRIVE, a styl jest zwykłą
+operacją `apply_road_style` obsługiwaną przez Undo/Redo.
+
+Pierwszy zwykły start po aktualizacji jednorazowo aktywuje
+`Textured Rendering` (PBR) i pamięta wykonaną migrację;
+później świadoma zmiana przez użytkownika pozostaje zapisana.
+Nie zmienia to dokumentów użytkownika ani istniejącej sceny.
+Istniejący skrót `C:\Users\tomas\Desktop\PrawkoRoadStudio.lnk`
+odwołuje się do skompilowanego programu
+`F:\PrawkoRoadStudio\build\dev-windows\editor\roadmaker-editor.exe`.
+
+Weryfikacja S2.2k: BUILD_PASS all, 1292 PASS + 1 SKIPPED
+w testach Qt, Quality Gate PASS, licencje PASS, render w działającym
+Windows Qt oraz testy parametrów geometrycznych, eksportu XODR,
+przeciągania stylu i cofania. Testuje się dane i rzeczywistą
+geometrię, nie tylko występowanie miniaturki.

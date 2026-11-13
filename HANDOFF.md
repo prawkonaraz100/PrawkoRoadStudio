@@ -2,8 +2,76 @@
 
 > **Jedyny aktualizowany dziennik przekazania między rozmowami.**
 > Kolejny agent ma czytać ten plik **przed edycją kodu**.
-> Stan dokumentu: 2026-11-13, **S2.2j**: optymalizacja PBR: albedo 2048² bez zmian, normal i roughness 1024² (test 30 obrazów PASS), GLB X/T/Y **~5,4 MB zamiast ~16,7 MB**, zimny import tekstur **~268–280 ms zamiast ~550–626 ms**. Zdiagnozowano MSAA: mimo `viewport->format().samples()==0`, sprzętowy draw FBO ma **GL_SAMPLES=4**, także bez dodatkowego `setFormat`; to był błąd pomiaru, nie potwierdzona usterka antyaliasingu. Widoczna edycja `Document::update_preview` X/T/Y ~60 FPS, p95 17,23–17,37 ms (205–206 zmian siatki/scenę), ale symulowana, nie fizyczna mysz. Blender 5.3 GLB X/T/Y PASS, render X w kontrolowanym świetle, bez deklaracji pełnego parytetu. `BUILD_PASS all`, Quality Gate PASS, Qt 1287 PASS + 1 SKIPPED. **Otwarta niezapisana scena użytkownika w GUI wykryta o 13:36, nie dotykać.** Fotorealizm, długie spękania i stres-test obciążonych scen otwarte.
+> Stan dokumentu: 2026-11-13, **S2.2k — biblioteka używalnych myszą elementów drogowych**: 12 nowych pozycji `road.prawko.*` i `style.prawko.*` (6 przekrojów do tworzenia dróg + 6 nakładanych na istniejące), z miniaturami katalogowymi; realny generator krawężników 0,15 m i chodników, bez zmian OpenDRIVE/CDT. Normalne uruchomienie przez istniejący skrót z pulpitu aktywuje jednorazowo PBR i otwiera kategorię `Prawko | Gotowe drogi`; świadomy późniejszy wybór Sober pozostaje respektowany, screenshoty nie zapisują ustawień. `BUILD_PASS all`, **1292 Qt PASS + 1 SKIPPED**, `QUALITY_GATE_PASS`, licencje PASS. Skrót wskazuje bezpośrednio aktualny `build/dev-windows/editor/roadmaker-editor.exe`, a sceny użytkownika zachowano. Fotorealizm i autonomiczne prefabrykaty obniżonych krawężników/wysepek **nie są ukończone**.
 > Poniższe SHA to punkt kontrolny, nie zamiennik aktualnego `git status`.
+
+## S2.2k — gotowe elementy drogowe dostępne myszą (13.11.2026)
+
+**Wykonane (kod i testy; nie deklaracja końcowego fotorealizmu):**
+
+- 12 zasobów w `assets/library/manifest.json`, wbudowanych przez
+  `editor/resources/resources.qrc`, wszystkie z odrębnymi miniaturami
+  `assets/library/thumbnails/{road,style}_prawko_*.png`:
+  **6 szablonów do narysowania od zera**
+  (`Prawko | Gotowe drogi`) oraz **6 nakładanych na istniejącą drogę**
+  (`Prawko | Krawężniki i chodniki`).
+  Warianty: `urban` (chodniki 2×1,8 m), `wide` (2×2,5 m),
+  `promenade` (2×3,0 m), `one_side` (1×2,5 m po lewej),
+  `parking` (po obu stronach: pas postojowy 2,4 m + chodnik 2,0 m),
+  `no_curb` (bez chodników/krawężników). Typowa jezdnia lokalna
+  zachowuje dwa pasy jazdy szerokości 3,0 m.
+- Po przeciągnięciu **Road Template** edytor uzbraja narzędzie Create Road
+  i pozwala rysować punkty myszą; po przeciągnięciu **Road Style**
+  na istniejącą drogę wykonuje `edit::apply_road_style`
+  przez `Document::push_command`, z `Ctrl+Z` Undo.
+  Krawężniki nie są przyklejoną atrapą 3D: istniejący generator
+  `MeshOptions.raised_sidewalks=true` buduje ścianę 15 cm oraz fazę
+  z rzeczywistej granicy pasa Sidewalk. Wariant bez chodników nie ma
+  ścian. `curb_render_lod` pozostaje włączony. Środowisko i domyślne
+  globalne parametry geometrii/format XODR pozostają niezmienione.
+- Normalne uruchomienie `main.cpp` wywołuje
+  `Settings::enable_studio_materials_once()` (jednorazowa migracja
+  z Sober do Textured, zapamiętany wcześniejszy wybór, bez zmiany
+  plików scen i bez wpisów w read-only screenshotach), a po pokazaniu
+  `MainWindow` wywołuje `open_studio_library()`.
+  `LibraryPanel::focus_category` teraz **naprawdę ustawia filtr
+  kategorii**, nie tylko przewija listę.
+  `C:\Users\tomas\Desktop\PrawkoRoadStudio.lnk` już wskazuje na
+  `F:\PrawkoRoadStudio\build\dev-windows\editor\roadmaker-editor.exe`
+  i dotychczasowy projekt `agent/projects/prawko_urban_curve/scene.xodr`.
+  Nie wymaga od użytkownika kopiowania assetów, instalacji ani
+  ręcznego zapisywania.
+- **Testy**: `s2.2k-library-build.log`: `BUILD_PASS: all`,
+  `AGENT_BINDING_SYNC_PASS`; `s2.2k-quality-gate.log`:
+  `QUALITY_GATE_PASS` (C++/agent); `s2.2k-qt-full-final.log`:
+  **1292 PASS, 1 SKIPPED, 0 FAIL**. Nowe testy 6 profilów
+  obejmują prawdziwe indeksy siatki krawężników, walidację XODR,
+  style do zastosowania na drogach, Undo, 12 miniaturek qresource;
+  testy migracji ustawień i automatycznej kategorii.
+  Pierwszy pełny Qt ujawnił sztywne liczniki 59 elementów i przestarzałe
+  zachowanie `focus_category`; zaktualizowano testy oczekujące
+  teraz 71 elementów i prawdziwy filtr, a następnie wszystkie PASS.
+  `scripts/check_asset_licenses.py`: **PASS** po dodaniu 12 wpisów
+  dla miniatur original-work Apache-2.0.
+  `archive/visual-regression/s2.2k-library-gui.png` potwierdza działanie
+  GUI i teksturowaną scenę; to screenshot trybu `--screenshot-ui`
+  z `--raise-dock`, więc z definicji pokazuje All categories;
+  osobny test `MainWindowLayoutTest.StudioLibraryOpensTheNewRoadTemplatesWithoutUserSetup`
+  potwierdza wybór nowej kategorii przy rzeczywistym normalnym starcie.
+- **Granice zrealizowanego zakresu:** wysokość krawężnika jest
+  standardem generatora 0,15 m — NIE ma osobnych prefabrykatów
+  krawężnika najazdowego/obniżonego niezależnego od przejścia,
+  wysepki jako osobnego zasobu ani narzędzia osobnego stawiania
+  luźnych segmentów. Poprawki nie stanowią dowodu pełnego
+  fotorealizmu. Nie nadpisano ani nie zapisywano scen użytkownika.
+
+**Pierwsze następne zadanie:** po pierwszym uruchomieniu przez
+skrót potwierdzić normalne środowisko i bibliotekę na ekranie;
+następnie zaprojektować i wdrożyć osobne parametryczne
+prefabrykaty obniżonego krawężnika, wysepki i strefy przejścia
+bez nakładania atrap na siatkę (osobne testy ODR i przecięć),
+oraz wrócić do nieodebranego światła i oceny realistycznych
+materiałów przy dużych scenach. Nie zaczynać nowego projektu.
 
 ## Gotowe polecenie do nowej rozmowy
 
@@ -540,7 +608,7 @@ różnice w renderze Blendera i neutralnym obrazie GUI.
 - `prawko_qt_edit_probe` (manualny `EXCLUDE_FROM_ALL`) używa widocznego Windows Qt `ViewportWidget`, prawdziwego `Document` oraz produkcyjnego `update_node_drag` / `begin_preview` / `update_preview` / remesh / upload GPU, bez zapisu plików scen. `archive/visual-regression/s2.2j-edit-fps-{x,t,y}.json`: **X 60,02 FPS p95 17,27 ms, CPU edycji p95 7,89 ms, 205 zmian siatki; T 60,00 FPS p95 17,23 ms, CPU 6,82 ms, 206 zmian; Y 60,01 FPS p95 17,37 ms, CPU 5,21 ms, 206 zmian; wszystkie 0 klatek >33,33 ms**. `real_edit_verified=true` i aktywna sesja preview. Skrypt wymusza pozycje węzłów timerem 16 ms — NIE jest testem fizycznej myszy ani przeciążonej kilkunastotysięcznej sceny. Dodatkowo pełne GUI `prawko_qt_fps_probe` `s2.2j-qt-fps-{x,t,y}.json`: ~60 FPS, p95 obrotu X 17,20, T 17,23, Y 17,23 ms, 0 jank.
 - Kompilacja `s2.2j-final-build.log`: **BUILD_PASS all**, synchronizacja agenta PASS; `s2.2j-final-gate.log`: **QUALITY_GATE_PASS** (C++ 2072 PASS, Python 7 PASS), `s2.2j-final-qt.log`: **1287 PASS + 1 SKIPPED**, 0 FAIL. Po cofnięciu redundantnego `setFormat` ponowiono pełny build i testy. **Uwaga na żywą pracę użytkownika:** od 13:36 `roadmaker-editor.exe` PID 4744, tytuł `scene.xodr* - PrawkoRoadStudio...` (**asterysk = niezapisane zmiany**). Nie ubijać, nie przeładowywać i nie nadpisywać tej sceny. Ponowiony opt-in benchmark edycji dla ostatecznej wersji binarnej celowo **wstrzymano**, żeby nie obciążać aktywnej sesji graficznej; powyższy benchmark edycji był wykonany wcześniej z jedyną eksperymentalną zmianą `setFormat`, potem cofniętą po ablacjach FBO. Nie uznawać braku końcowego powtórzenia za PASS tego konkretnego porównania.
 
-**Pierwsze następne zadanie S2.2k:** po zamknięciu/zapisaniu GUI przez użytkownika powtórzyć `prawko_qt_edit_probe` X/T/Y na finalnym binarium, następnie wykonać **test obciążeniowy większych scen** (wiele dróg/props, rzeczywisty ruch myszy i drag/remesh, p95/p99, rzeczywisty VRAM, bez sztucznego limitu 60 FPS). Osobno ujednolicić model oświetlenia, ekspozycję i shading czoła krawężników Qt/Blender, zmniejszyć nadal widoczne długie spękania w 16 m atlasie. Brak akceptacji pełnego fotorealizmu; nie ruszać globalnego CDT, OpenDRIVE ani goldenów bez uzasadnienia.
+**Pierwsze następne zadanie S2.2l:** obecny etap biblioteki GUI jest zamknięty w sekcji S2.2k na początku pliku. Kolejno wdrożyć i przetestować parametryczny krawężnik obniżony/rampę oraz wysepkę jako samodzielnie przeciągany obiekt z zachowaniem integralności siatki, a potem powtórzyć test obciążeniowy większych scen (wiele dróg/props, ruch myszy, drag/remesh, p95/p99, VRAM). Oddzielnie wykończyć oświetlenie Qt/Blender oraz widoczne długie spękania. Nie uznawać fotorealizmu za ukończony. Nie zmieniać CDT/OpenDRIVE/goldenów bez uzasadnienia.
 
 
 
@@ -557,7 +625,7 @@ Nie uznawać obecnych materiałów za realistycznie odebrane.
 **Kontynuować przebudowę realistycznej geometrii dróg i chodników.** Nie zaczynać ponownie od konfiguracji Git ani migracji folderów.
 
 1. Uruchomić `scripts/prawko-resume.ps1` i sprawdzić oba repozytoria oraz otwarte sceny. Nie przeładowywać niezapisanych dokumentów.
-2. **Testy Qt Windows:** ostatnia pełna sesja **S2.2j 1287 PASS, 1 SKIPPED, 0 FAIL**, `archive/visual-regression/s2.2j-final-qt.log`; `qoffscreen.dll` w `build/dev-windows/editor/platforms/`. Nie zmieniać `qt_gtest_main.cpp` bez odtwarzalnej regresji.
+2. **Testy Qt Windows:** ostatnia pełna sesja **S2.2k 1292 PASS, 1 SKIPPED, 0 FAIL**, `archive/visual-regression/s2.2k-qt-full-final.log`; `qoffscreen.dll` w `build/dev-windows/editor/platforms/`. Nowe 12 pozycji biblioteki są wbudowane w exe i dostępne od startu, nie trzeba ich importować.
 3. **S2.2c — odbiór bazowej geometrii X/T/Y i niezależnego GLB wykonany.** Zrzut bieżącego GUI, kamera kierowcy i izolat narożnika w Blenderze oraz import GLB są w lokalnym `archive/visual-regression/`. Testy i dowody wyżej. Zwróć uwagę na segmentację łuku — nie mylić z ostatecznym wyglądem.
 4. **S2.2j edycja geometrii i MSAA:** 205–206 aktualizacji siatki na scenę X/T/Y z prawdziwą sesją preview, 60 FPS, p95 17,23–17,37 ms (timer testowy). GL_SAMPLE_BUFFERS=1 i GL_SAMPLES=4 — wcześniejsze `format().samples()==0` było niemiarodajne. **Następne:** test pełnej sceny pod obciążeniem i fizycznej myszy, gdy użytkownik zamknie lub zapisze otwarty niezapisany dokument. Nie zmieniać CDT, OpenDRIVE ani goldenów.
 5. **S2.2j odciążenie materiałów wykonane:** zimny upload 0,268–0,280 s, GLB 5,4–5,5 MB, 30 widoków RGB regresja PASS, Blender X/T/Y PASS. Światło Qt/Blender porównano z kontrolowanym ambient+SUN, ale wynik nadal nie jest fotometrycznie równoważny, krawężnik i długie spękania w 16 m atlasie nadal potrzebują dopracowania.
@@ -575,7 +643,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File F:\PrawkoRoadStudio\scripts\
 ```
 
 - `prawko-resume.ps1` czyta **bieżący Git** i ten dokument, sygnalizuje odchylenia względem `origin`.
-- `-Verify` uruchamia Quality Gate jądra i agenta; **nie obejmuje testów Qt edytora**. Te ostatnie trzeba budować oddzielnie (target `roadmaker_editor_tests` lub `prawko-build-win.ps1 -Target all`) i uruchamiać z `QT_QPA_PLATFORM=offscreen` oraz Qt `bin` w `PATH`; plugin `qoffscreen.dll` kopiuje CMake. Ostatnia kompletna seria S2.2j: **1287 PASS, 1 SKIPPED**, dodatkowo pełny BUILD_PASS; widoczne GUI i Blender to osobne pomiary.
+- `-Verify` uruchamia Quality Gate jądra i agenta; **nie obejmuje testów Qt edytora**. Te ostatnie trzeba budować oddzielnie (target `roadmaker_editor_tests` lub `prawko-build-win.ps1 -Target all`) i uruchamiać z `QT_QPA_PLATFORM=offscreen` oraz Qt `bin` w `PATH`; plugin `qoffscreen.dll` kopiuje CMake. Ostatnia kompletna seria S2.2k: **1292 PASS, 1 SKIPPED**, dodatkowo pełny BUILD_PASS i kontrola biblioteki w widocznym Qt.
 - Start programu: `build/dev-windows/editor/roadmaker-editor.exe`.
 - Agent: `scripts/prawko-agent.cmd`.
 - Główne wymagania: `docs/PRAWKO-ROAD-STUDIO.md`.
