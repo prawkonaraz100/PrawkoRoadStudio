@@ -22,10 +22,12 @@
 #include <QDropEvent>
 #include <QItemSelectionModel>
 #include <QLineEdit>
+#include <QLabel>
 #include <QListView>
 #include <QMenu>
 #include <QMimeData>
 #include <QSplitter>
+#include <QSizePolicy>
 #include <QStringList>
 #include <QUrl>
 #include <QVBoxLayout>
@@ -137,6 +139,13 @@ LibraryPanel::LibraryPanel(LibraryListModel& model, QWidget* parent)
   search_->setPlaceholderText(tr("Search the library…"));
   search_->setClearButtonEnabled(true);
 
+  drag_instructions_ = new QLabel(tr("Przeciągnij element z biblioteki na scenę"), this);
+  drag_instructions_->setObjectName(QStringLiteral("library_drag_instructions"));
+  drag_instructions_->setWordWrap(true);
+  drag_instructions_->setContentsMargins(5, 4, 5, 4);
+  drag_instructions_->setMinimumHeight(37);
+  drag_instructions_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+
   view_ = new QListView(this);
   view_->setModel(&proxy_);
   view_->setViewMode(QListView::IconMode);
@@ -151,6 +160,12 @@ LibraryPanel::LibraryPanel(LibraryListModel& model, QWidget* parent)
   view_->setEditTriggers(QAbstractItemView::NoEditTriggers);
   view_->setDragEnabled(true); // drag an item onto the viewport to create it
   view_->setDragDropMode(QAbstractItemView::DragOnly);
+  connect(view_, &QListView::doubleClicked, this, [this](const QModelIndex& index) {
+    if (!index.isValid()) return;
+    if (const LibraryItem* item = model_.item(proxy_.mapToSource(index).row())) {
+      emit asset_activated(item->key);
+    }
+  });
 
   connect(search_, &QLineEdit::textChanged, &proxy_, &QSortFilterProxyModel::setFilterFixedString);
   connect(category_combo_, &QComboBox::currentIndexChanged, this, [this](int) {
@@ -185,6 +200,7 @@ LibraryPanel::LibraryPanel(LibraryListModel& model, QWidget* parent)
   catalogue_layout->setSpacing(6);
   catalogue_layout->addWidget(category_combo_);
   catalogue_layout->addWidget(search_);
+  catalogue_layout->addWidget(drag_instructions_);
   catalogue_layout->addWidget(view_, 1);
 
   files_ = new ProjectFilesPanel(this);
@@ -256,6 +272,24 @@ void LibraryPanel::handle_current_changed(const QModelIndex& index) {
   const LibraryItem* item = model_.item(proxy_.mapToSource(index).row());
   if (item == nullptr) {
     return;
+  }
+  switch (item->kind) {
+  case LibraryItem::Kind::RoadTemplate:
+    drag_instructions_->setText(tr("Przeciągnij na teren, dodaj punkty. Enter kończy, Esc anuluje."));
+    break;
+  case LibraryItem::Kind::RoadStyle:
+    drag_instructions_->setText(tr("Upuść na drogę lub kliknij 2×, aby zmienić zaznaczoną drogę."));
+    break;
+  case LibraryItem::Kind::Material:
+  case LibraryItem::Kind::Marking:
+    drag_instructions_->setText(tr("Przeciągnij na odpowiedni pas jezdni. Ctrl+Z cofa."));
+    break;
+  case LibraryItem::Kind::Assembly:
+    drag_instructions_->setText(tr("Przeciągnij na drogę, aby wstawić skrzyżowanie."));
+    break;
+  default:
+    drag_instructions_->setText(tr("Przeciągnij na scenę. Podgląd pokaże miejsce upuszczenia."));
+    break;
   }
   // Every valid selection updates the "current Library asset" so MainWindow can
   // arm the matching placement tool (Library-first, #367).

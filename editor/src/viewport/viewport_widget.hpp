@@ -169,7 +169,8 @@ public slots:
   /// is dragged over the viewport. MainWindow resolves the drag through the same
   /// resolve_library_drop the drop commit uses, so the ghost marks exactly where
   /// the element lands (ghost==commit); `valid` false tints it as a rejected drop.
-  void set_drop_preview(double world_x, double world_y, bool valid);
+  void set_drop_preview(double world_x, double world_y, bool valid,
+                        const QString& instruction = {});
 
   /// Clears the drop ghost (drag left the viewport or completed).
   void clear_drop_preview();
@@ -585,6 +586,7 @@ private:
     double x = 0.0;
     double y = 0.0;
     bool valid = false;
+    QString instruction;
   };
 
   std::optional<DropPreview> drop_preview_;

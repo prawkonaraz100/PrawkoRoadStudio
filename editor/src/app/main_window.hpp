@@ -188,6 +188,9 @@ private:
   [[nodiscard]] const LibraryItem* current_library_item() const;
   /// Tracks the Library selection and arms the matching placement tool (#367).
   void on_library_asset_current_changed(const QString& key);
+  /// Double-click the catalogue tile: apply a road style to the selected road
+  /// or arm Create Road for the selected template (no extra dialogs).
+  void on_library_asset_activated(const QString& key);
   /// Activates the placement tool that applies `item` (prop → Prop Point,
   /// stencil → Marking Point, crosswalk → Crosswalk, prop set → Prop Curve, text
   /// sign → Sign). Kinds with no single-placement mode leave the active tool as

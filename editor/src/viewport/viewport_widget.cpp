@@ -1219,8 +1219,14 @@ void ViewportWidget::emit_drag_preview_request(const QDropEvent* event) {
   emit library_item_drag_moved(key, world ? (*world)[0] : 0.0, world ? (*world)[1] : 0.0);
 }
 
-void ViewportWidget::set_drop_preview(double world_x, double world_y, bool valid) {
-  drop_preview_ = DropPreview{.x = world_x, .y = world_y, .valid = valid};
+void ViewportWidget::set_drop_preview(double world_x,
+                                      double world_y,
+                                      bool valid,
+                                      const QString& instruction) {
+  drop_preview_ = DropPreview{.x = world_x,
+                              .y = world_y,
+                              .valid = valid,
+                              .instruction = instruction};
   update();
 }
 
@@ -1276,6 +1282,28 @@ void ViewportWidget::draw_drag_ghost(QPainter& painter) const {
                    QPointF(center.x() + kRadius, center.y()));
   painter.drawLine(QPointF(center.x(), center.y() - kRadius),
                    QPointF(center.x(), center.y() + kRadius));
+  if (!drop_preview_->instruction.isEmpty()) {
+    // Live explanation at the actual, snapped landing point. The cursor and
+    // marker alone do not tell a novice whether this changes an existing road
+    // or starts a new one. Keep it small, readable and inside the viewport.
+    QFont caption_font = painter.font();
+    caption_font.setPointSizeF(9.0);
+    painter.setFont(caption_font);
+    const QFontMetrics metrics(caption_font);
+    const QString caption = metrics.elidedText(drop_preview_->instruction,
+                                               Qt::ElideRight, 310);
+    const qreal box_w = metrics.horizontalAdvance(caption) + 20.0;
+    const qreal box_h = metrics.height() + 14.0;
+    const qreal left = std::clamp(center.x() + 16.0, 5.0,
+                                  std::max(5.0, width() - box_w - 5.0));
+    const qreal top = std::clamp(center.y() - 48.0, 5.0,
+                                 std::max(5.0, height() - box_h - 5.0));
+    painter.setPen(QPen(color, 1.0));
+    painter.setBrush(QColor(22, 26, 32, 234));
+    painter.drawRoundedRect(QRectF(left, top, box_w, box_h), 5.0, 5.0);
+    painter.setPen(Qt::white);
+    painter.drawText(QPointF(left + 10.0, top + 7.0 + metrics.ascent()), caption);
+  }
   painter.restore();
 }
 

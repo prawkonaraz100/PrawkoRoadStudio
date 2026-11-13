@@ -1149,6 +1149,8 @@ void MainWindow::build_docks() {
           &LibraryPanel::asset_current_changed,
           this,
           &MainWindow::on_library_asset_current_changed);
+  connect(library_panel_, &LibraryPanel::asset_activated,
+          this, &MainWindow::on_library_asset_activated);
   connect(library_panel_,
           &LibraryPanel::new_crosswalk_asset_requested,
           this,
@@ -2205,6 +2207,37 @@ void MainWindow::on_library_asset_current_changed(const QString& key) {
   }
 }
 
+void MainWindow::on_library_asset_activated(const QString& key) {
+  const LibraryItem* item = library_model_.item_for_key(key);
+  if (item == nullptr) return;
+  if (item->kind == LibraryItem::Kind::RoadTemplate) {
+    if (!actions_->tool_create_road->isChecked()) actions_->tool_create_road->trigger();
+    if (create_road_tool_ != nullptr) create_road_tool_->set_profile(profile_for(item->profile));
+    viewport_->show_toast(tr("Wybierz początek drogi na mapie, Enter kończy, Esc anuluje"),
+                          ToastSeverity::Info);
+    return;
+  }
+  if (item->kind != LibraryItem::Kind::RoadStyle) return;
+  const auto selected = selection_.selected_roads();
+  if (selected.size() != 1) {
+    viewport_->show_toast(tr("Najpierw zaznacz jedną drogę lub przeciągnij styl na jezdnię"),
+                          ToastSeverity::Warning);
+    return;
+  }
+  const RoadId road = selected.front();
+  auto command = edit::apply_road_style(document_.network(), road, style_for(item->style));
+  if (command != nullptr && document_.push_command(std::move(command)).has_value()) {
+    if (!actions_->tool_select->isChecked()) actions_->tool_select->trigger();
+    selection_.select(SelectionEntry{.road = road});
+    properties_dock_->show();
+    properties_dock_->raise();
+    viewport_->show_toast(tr("Zmieniono: %1 — Ctrl+Z cofa").arg(item->label),
+                          ToastSeverity::Success);
+  } else {
+    viewport_->show_toast(tr("Nie można zmienić tej drogi"), ToastSeverity::Warning);
+  }
+}
+
 void MainWindow::arm_tool_for_library_item(const LibraryItem& item) {
   // Map a content asset to the tool that applies it. Only the fixed-default
   // placement tools have a Library counterpart; every other tool is a geometric
@@ -2506,7 +2539,25 @@ void MainWindow::on_library_drop(const QString& key, double world_x, double worl
     viewport_->show_toast(action.toast, ToastSeverity::Info);
     viewport_->clear_drag_target_road();
     break;
-  case LibraryDropKind::RoadStyle:
+  case LibraryDropKind::RoadStyle: {
+    const RoadId target = action.target_road;
+    if (document_.push_command(std::move(action.command)).has_value()) {
+      // The next natural interaction after dropping a style is editing the
+      // modified road. Select it and reveal its normal Properties controls;
+      // don't leave the user stuck in an earlier creation/placement tool.
+      if (!actions_->tool_select->isChecked()) actions_->tool_select->trigger();
+      if (target.is_valid()) {
+        selection_.select(SelectionEntry{.road = target});
+        properties_dock_->show(); // direct access to editing controls
+        properties_dock_->raise();
+      }
+      viewport_->show_toast(action.toast, ToastSeverity::Success);
+    } else {
+      viewport_->show_toast(tr("Nie można zmienić tej drogi"), ToastSeverity::Warning);
+    }
+    viewport_->clear_drag_target_road();
+    break;
+  }
   case LibraryDropKind::Assembly:
   case LibraryDropKind::Tree:
   // A composite prop is ONE command for however many parts, so it joins the
@@ -2563,7 +2614,29 @@ void MainWindow::on_library_drag_moved(const QString& key, double world_x, doubl
   // only the resolved landing point drives the preview.
   const LibraryDropAction action =
       resolve_library_drop(*item, document_.network(), world_x, world_y);
-  viewport_->set_drop_preview(action.preview.x, action.preview.y, action.preview.valid);
+  QString instruction;
+  if (!action.preview.valid || action.kind == LibraryDropKind::None) {
+    instruction = action.toast.isEmpty() ? tr("Tutaj nie można upuścić elementu")
+                                         : action.toast;
+  } else {
+    switch (action.kind) {
+    case LibraryDropKind::RoadTemplate:
+      instruction = tr("Nowa droga — puść i klikaj punkty"); break;
+    case LibraryDropKind::RoadStyle:
+      instruction = tr("Puść, aby zmienić przekrój drogi"); break;
+    case LibraryDropKind::Material:
+      instruction = tr("Puść, aby nałożyć materiał"); break;
+    case LibraryDropKind::Tree:
+    case LibraryDropKind::PropAssembly:
+      instruction = tr("Puść, aby umieścić obiekt"); break;
+    case LibraryDropKind::Assembly:
+      instruction = tr("Puść, aby dodać skrzyżowanie"); break;
+    default:
+      instruction = tr("Puść, aby zastosować %1").arg(item->label); break;
+    }
+  }
+  viewport_->set_drop_preview(action.preview.x, action.preview.y,
+                              action.preview.valid, instruction);
   // A road-style drag highlights the road it would apply to (ghost==target);
   // every other item kind clears any lingering highlight.
   if (action.kind == LibraryDropKind::RoadStyle) {

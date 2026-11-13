@@ -19,8 +19,10 @@
 #include <QComboBox>
 #include <QIcon>
 #include <QLineEdit>
+#include <QLabel>
 #include <QListView>
 #include <QSignalSpy>
+#include <QTest>
 #include <filesystem>
 
 #include "document/library_list_model.hpp"
@@ -38,6 +40,35 @@ LibraryListModel& populated_model() {
     model.set_manifest(*manifest);
   }
   return model;
+}
+
+TEST(LibraryPanel, RoadStyleHasActionableHelpAndRealDoubleClick) {
+  LibraryPanel panel(populated_model());
+  panel.resize(420, 560);
+  panel.show();
+  panel.focus_category(QStringLiteral("Prawko | Krawężniki i chodniki"));
+  auto* message = panel.findChild<QLabel*>(QStringLiteral("library_drag_instructions"));
+  ASSERT_NE(message, nullptr);
+  EXPECT_TRUE(message->text().contains(QStringLiteral("2×")));
+  EXPECT_TRUE(message->text().contains(QStringLiteral("zaznaczoną drogę")));
+  const QModelIndex first = panel.view()->model()->index(0, 0);
+  ASSERT_TRUE(first.isValid());
+  QSignalSpy activated(&panel, &LibraryPanel::asset_activated);
+  ASSERT_TRUE(activated.isValid());
+  QApplication::processEvents();
+  const QRect tile = panel.view()->visualRect(first);
+  ASSERT_TRUE(tile.isValid());
+  // Qt's item view needs an initial click to establish the pressed index.
+  QTest::mouseClick(panel.view()->viewport(), Qt::LeftButton, Qt::NoModifier, tile.center());
+  QTest::mouseDClick(panel.view()->viewport(), Qt::LeftButton, Qt::NoModifier, tile.center());
+  ASSERT_EQ(activated.count(), 1);
+  EXPECT_EQ(activated.front().at(0).toString(),
+            panel.view()->model()->data(first, LibraryListModel::KeyRole).toString());
+
+  panel.focus_category(QStringLiteral("Prawko | Gotowe drogi"));
+  EXPECT_TRUE(message->text().contains(QStringLiteral("Enter")));
+  panel.focus_category(QStringLiteral("Materials"));
+  EXPECT_TRUE(message->text().contains(QStringLiteral("pas")));
 }
 
 TEST(LibraryPanel, ShowsEveryCatalogueItem) {

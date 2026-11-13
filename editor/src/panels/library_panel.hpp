@@ -32,6 +32,7 @@
 
 class QComboBox;
 class QLineEdit;
+class QLabel;
 class QListView;
 class QSplitter;
 
@@ -74,6 +75,7 @@ public:
   explicit LibraryPanel(LibraryListModel& model, QWidget* parent = nullptr);
 
   [[nodiscard]] QListView* view() { return view_; }
+  [[nodiscard]] QLabel* drag_instructions() const { return drag_instructions_; }
 
   /// Scrolls to and selects the first item of `category` (the manifest's
   /// spelling, e.g. "Props") — what an engaged Attributes-pane slot asks for.
@@ -120,6 +122,10 @@ signals:
   /// mode leave the active tool untouched.
   void asset_current_changed(const QString& key);
 
+  /// A deliberate double click: apply a style to the selected road or arm the
+  /// drawing tool for a template. Single click only changes the selection.
+  void asset_activated(const QString& key);
+
   /// The context menu's "New crosswalk asset…" was chosen — MainWindow creates
   /// a project-overlay crosswalk asset and opens its editor.
   void new_crosswalk_asset_requested();
@@ -162,6 +168,7 @@ private:
   LibraryFilterProxy proxy_;
   QComboBox* category_combo_;
   QLineEdit* search_;
+  QLabel* drag_instructions_;
   QListView* view_;
   QSplitter* splitter_;
   ProjectFilesPanel* files_;
