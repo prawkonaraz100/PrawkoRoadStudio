@@ -425,8 +425,34 @@ nie spełniają jeszcze docelowego standardu realizmu.
   3 kanałami PBR oraz UV i niezerową geometrią faz/czoła.
 - Sprzęt GTX 1050 Ti: QOpenGLWidget 1600×900 / Alt+LMB
   X/T/Y ~60 FPS (p95 ~17,11–17,36 ms); GPU GLRenderer p50
-  ukośnie ~0,43–0,49 ms. Większy atlas zwiększa jednak
-  koszt początkowego wczytania tekstur do 0,55–0,63 s
-  i GLB do ~16,7 MB. Następny etap to optymalizacja
-  pamięci/zimnego startu i test jank podczas remesh, potem
-  dodatkowy odbiór renderu porównawczego Qt vs Blender.
+  ukośnie ~0,43–0,49 ms. Większy atlas zwiększył wtedy
+  koszt zimnego wczytania do 0,55–0,63 s i GLB ~16,7 MB.
+  **Zobacz zweryfikowane zmiany S2.2j poniżej.**
+
+## S2.2j — optymalizacja kosztu PBR i pomiar edycji (13.11.2026)
+
+- Parametry UV, topologia, geometria i oryginalne obrazy albedo 2048²
+  bez zmian. Normal i roughness 1024², normal ponownie znormalizowany;
+  generator deterministyczny, testy map oraz licencji PASS.
+  Qt i GLB czytają te same trzy kanały.
+- Rozmiary eksportu GLB X/T/Y 5,49 / 5,42 / 5,40 MB (około 67% mniej).
+  Cold decode+GPU upload X/T/Y 268 / 273 / 280 ms (poprzednio
+  612 / 626 / 551 ms). Około 50% mniej obliczeniowego rozmiaru
+  RGBA8 i mipmap, nie jest to pomiar rezydentnej pamięci VRAM.
+  30 statycznych porównań obrazu z S2.2i: maksymalna średnia
+  różnica 0,1741/255 RGB; żadnych pikseli ze zmianą >16/255.
+- MSAA **4 próbki w rzeczywistym FBO**, także bez dodatkowego
+  `ViewportWidget::setFormat`: poprzedni odczyt
+  `viewport->format().samples()==0` nie potwierdzał braku
+  antyaliasingu. Diagnostyka opt-in używa teraz
+  `GL_SAMPLE_BUFFERS` i `GL_SAMPLES`; kod produkcyjny bez zmian.
+- Osobny widoczny benchmark produkcyjnego `Document` i
+  `update_node_drag`/remesh: X/T/Y około 60 FPS, p95 17,23–17,37 ms,
+  205–206 sygnałów zmiany siatki na scenę, bez przerw >33 ms.
+  Sterowanie ruchem węzła odbywało się z timera, nie fizycznej myszy.
+  Otwartej niezapisanej sceny użytkownika nie dotykano.
+- Blender 5.3 import X/T/Y PASS, oświetlenie referencyjne SUN +
+  ambient w trybie Standard; nie ma pełnego fizycznego parytetu
+  kolorów i oświetlenia z Qt. Fotorealizm pozostaje OTWARTY.
+  Szczegółowy raport wyników, ścieżki logów i następny krok
+  znajdują się w `HANDOFF.md`.
