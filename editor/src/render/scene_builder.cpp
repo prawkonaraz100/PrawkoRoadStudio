@@ -102,7 +102,7 @@ std::array<float, 4> lane_color(LaneType type) {
   case LaneType::Median:
     return {0.30F, 0.45F, 0.30F, 1.0F};
   case LaneType::Curb:
-    return {0.55F, 0.55F, 0.50F, 1.0F};
+    return {0.61F, 0.61F, 0.59F, 1.0F};
   case LaneType::None:
   case LaneType::Other:
     return {0.35F, 0.35F, 0.35F, 1.0F};

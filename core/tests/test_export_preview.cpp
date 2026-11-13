@@ -297,6 +297,17 @@ TEST(ExportPreview, RaisedJunctionChamfersSurviveGlbRoundTripWithNormalsAndUVs) 
 
   const ScenePreview preview = preview_mesh_export(mesh, MeshExportFormat::Gltf);
   const tinygltf::Model model = export_and_reload(mesh, "prawko_s2_2c_chamfer.glb");
+  // Realistic concrete response starts with the same neutral base and matte
+  // roughness in the preview and GLB; scanned PBR textures are a later step.
+  for (const LaneType type : {LaneType::Curb, LaneType::Sidewalk}) {
+    const std::string name = io_common::lane_material_name(type);
+    const auto found = std::find_if(model.materials.begin(), model.materials.end(),
+                                    [&](const tinygltf::Material& m) { return m.name == name; });
+    ASSERT_NE(found, model.materials.end()) << name;
+    EXPECT_NEAR(found->pbrMetallicRoughness.roughnessFactor, 0.78, 1e-9);
+    EXPECT_EQ(found->pbrMetallicRoughness.metallicFactor, 0.0);
+    EXPECT_EQ(found->pbrMetallicRoughness.baseColorTexture.index, -1);
+  }
   EXPECT_EQ(preview.mesh_count, model.meshes.size());
   EXPECT_EQ(preview.total_triangles, file_triangles(model));
   EXPECT_EQ(triangles_by_material(preview), triangles_by_material(model));

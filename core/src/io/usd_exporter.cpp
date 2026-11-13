@@ -204,7 +204,7 @@ Expected<void> export_usda(const NetworkMesh& mesh, const std::filesystem::path&
     for (const RoadMesh::LanePatch& patch : road.lanes) {
       const std::string material = io_common::lane_material_name(patch.material);
       materials.emplace(material,
-                        MaterialDef{lane_color3(patch.material), io_common::kLaneRoughness});
+                        MaterialDef{lane_color3(patch.material), io_common::lane_material_roughness(patch.material)});
       const std::string lane_name =
           sanitize_identifier("lane_" + std::to_string(patch.odr_lane_id), "lane");
       sectionPrim.add_child(
@@ -240,7 +240,7 @@ Expected<void> export_usda(const NetworkMesh& mesh, const std::filesystem::path&
     // the roads feeding them (a distinct junction color read as a patch).
     const std::string material = io_common::lane_material_name(floor.mesh.material);
     materials.emplace(material,
-                      MaterialDef{lane_color3(floor.mesh.material), io_common::kLaneRoughness});
+                      MaterialDef{lane_color3(floor.mesh.material), io_common::lane_material_roughness(floor.mesh.material)});
     worldPrim.add_child(make_mesh(sanitize_identifier(floor.mesh.name, "junction"),
                                   floor.mesh.positions,
                                   floor.mesh.normals,
@@ -253,7 +253,7 @@ Expected<void> export_usda(const NetworkMesh& mesh, const std::filesystem::path&
     for (const SubMesh& detail : floor.details) {
       const std::string detail_material = io_common::lane_material_name(detail.material);
       materials.emplace(detail_material,
-                        MaterialDef{lane_color3(detail.material), io_common::kLaneRoughness});
+                        MaterialDef{lane_color3(detail.material), io_common::lane_material_roughness(detail.material)});
       worldPrim.add_child(make_mesh(sanitize_identifier(detail.name, "junction_detail"),
                                     detail.positions,
                                     detail.normals,
@@ -306,7 +306,7 @@ Expected<void> export_usda(const NetworkMesh& mesh, const std::filesystem::path&
   for (const BridgeMesh& span : mesh.bridges) {
     const std::string material = io_common::lane_material_name(span.mesh.material);
     materials.emplace(material,
-                      MaterialDef{lane_color3(span.mesh.material), io_common::kLaneRoughness});
+                      MaterialDef{lane_color3(span.mesh.material), io_common::lane_material_roughness(span.mesh.material)});
     worldPrim.add_child(make_mesh(sanitize_identifier(span.mesh.name, "bridge"),
                                   span.mesh.positions,
                                   span.mesh.normals,

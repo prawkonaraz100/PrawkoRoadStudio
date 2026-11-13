@@ -235,7 +235,7 @@ private:
     }
     const auto color = io_common::lane_material_color(type);
     const int index =
-        add_material(io_common::lane_material_name(type), color, io_common::kLaneRoughness);
+        add_material(io_common::lane_material_name(type), color, io_common::lane_material_roughness(type));
     lane_materials_.emplace(type, index);
     return index;
   }

@@ -2,7 +2,7 @@
 
 > **Jedyny aktualizowany dziennik przekazania między rozmowami.**
 > Kolejny agent ma czytać ten plik **przed edycją kodu**.
-> Stan dokumentu: 2026-11-13, S2.2c: niezależne oględziny geometrii GLB X/T/Y i bieżącego GUI potwierdzone; naprawiono nieaktualny moduł Python agenta i dodano test regresyjny. Odbiór bazowej bryły krawężnika PASS dla sprawdzonych scen; realism/PBR, wygładzenie łuków i pomiar remesh pozostają OTWARTE. Najbliższy krok poniżej.
+> Stan dokumentu: 2026-11-13, S2.2d: poprawione normalne faz krawężników i neutralna charakterystyka betonu, import GLB w Blenderze X/T/Y PASS, pełne testy C++/Qt/agent PASS. Próba zagęszczenia obrysu została wycofana z powodu regresji jakości triangulacji. Docelowy realizm PBR, sylwetka łuków i profilowanie remesh pozostają OTWARTE.
 > Poniższe SHA to punkt kontrolny, nie zamiennik aktualnego `git status`.
 
 ## Gotowe polecenie do nowej rozmowy
@@ -245,6 +245,64 @@ materiałowego i finalny odbiór wizualny produktu NIE SĄ PASS.**
 edytora i pełny Quality Gate (aktualny log lokalny w
 `archive/visual-regression/s2.2c-final-quality-gate.log`).
 
+**S2.2d — korekta wizualna normalnych i betonu (13.11.2026):**
+Analiza scen X/T/Y w Blenderze potwierdziła, że na fazie krawężnika
+każdy trójkąt miał własną płaską normalną. W `junction_surface.cpp`
+dodano deterministyczne, ważone polem uśrednianie normalnych we
+wspólnych punktach **wyłącznie tej samej fazy**. Jej górna granica
+z chodnikiem i dolna granica z pionową ścianą pozostają ostre, a
+współrzędne wierzchołków, trójkąty i format OpenDRIVE są niezmienione.
+Na podstawie surowych danych GLB X: 136 niezgodności normalnych >0,05°
+na zduplikowanych wierzchołkach -> 0; maks. rozbieżność 6,7358°
+-> 0,0165° (float32), 72 trójkąty faz przed/po. T: 210 wspólnych
+wierzchołków fazy i 0 niezgodności; Y: 138 i 0 niezgodności.
+
+Żółtawo-zielony odcień betonu krawężnika (`0.55/0.55/0.50`)
+zastąpiono neutralnym `0.61/0.61/0.59` w GUI oraz w eksporcie.
+Dla typów `Curb/Sidewalk/Border` ustawiono wspólną chropowatość
+`0.78` (pozostałe pasy nadal `0.95`) w glTF, USD i podglądzie
+manifestu; test kontroluje zgodność. **To nie są materiały PBR
+z teksturami!** GLB nadal ma dla pasa krawężnika wyłącznie
+`baseColorFactor`, `roughnessFactor` i UV; brak obrazów albedo,
+normal i roughness w jego materiale. Istniejące katalogowe tekstury
+edytora nie są jeszcze osadzane w GLB.
+
+Próba globalnego zagęszczenia łuków (sagitta 8->4 mm,
+`kBoundarySimplify` 5->1 mm, próg tangencji 8->4 cm)
+**została odrzucona i w całości wycofana**: pełne testy
+wykryły 6 i 4 wąskie trójkąty przy dopuszczalnych 2
+na wlotach T oraz niezgodność z goldenem prostych skrzyżowań.
+Przywrócono dotychczasową geometrię i wszystkie te testy znów PASS.
+Nie podnosić gęstości globalnej ani nie aktualizować złotego wzorca
+bez odrębnie zweryfikowanego rozwiązania. Segmentowana **sylwetka**
+łuku nie jest usunięta (zmiana normalnych koryguje oświetlenie,
+nie obrys).
+
+**Niezależny GLB/Blender 5.3:** aktualne `s2.2d-x.glb`,
+`s2.2d-t.glb`, `s2.2d-y.glb` wyeksportowane przez agenta,
+zaimportowane do Blender 5.3; X: 4 fazy i 4 ściany,
+T/Y: po 3 fazy i 3 ściany, UV dostępne, wszystkie trójkąty
+niezerowe, wysokie części 0,15 m, roughness 0,78. Render X
+przed/po z tym samym ustawieniem kamery oraz widoki T/Y:
+`archive/visual-regression/s2.2d-before-x-*.png`,
+`s2.2d-after-x-*.png`, `s2.2d-after-t-*.png`,
+`s2.2d-after-y-*.png`. Dodatkowo włączono realne GUI
+Windows na osobnej scenie testowej X, zapisano zrzut
+`s2.2d-current-editor-gui.png` i zamknięto okno bez zapisu.
+Pliki obrazów/GLB w `archive` są lokalne i ignorowane przez Git.
+Zgoda użytkownika na udoskonalanie zapisanych scen jest aktualna,
+ale w tym etapie nie trzeba było modyfikować żadnego XODR: wygląd
+zmienia się globalnie po przebudowie edytora.
+
+**Wyniki:** `BUILD_PASS: all`, `AGENT_BINDING_SYNC_PASS`,
+`AGENT_BINDING_PARITY_PASS`, C++ 2068 PASS / 10 DISABLED,
+Qt 1284 PASS / 1 SKIPPED / 0 FAIL, 7 testów agenta PASS;
+`QUALITY_GATE_PASS`. Logi: `s2.2d-final-build.log`,
+`s2.2d-final-gate.log`, `s2.2d-final-qt.log` w lokalnym
+`archive/visual-regression/`. Nie wykonano pomiaru kosztu
+`remesh_objects` ani zatwierdzenia realizmu z kamery kierowcy
+w samym edytorze. **PBR i finalny realizm — OTWARTE.**
+
 **Historyczny plan S2.2c:** dokończyć 5 cm fazę krawężnika
 przez cały łuk narożnika (obecna ściana narożnika jest
 pionowa, a faza drogi zwęża się przed wlotem), zszyć
@@ -258,8 +316,8 @@ Nie uznawać obecnych materiałów za realistycznie odebrane.
 1. Uruchomić `scripts/prawko-resume.ps1` i sprawdzić oba repozytoria oraz otwarte sceny. Nie przeładowywać niezapisanych dokumentów.
 2. **Testy Qt Windows już odblokowane:** przed zmianami GUI sprawdzić `roadmaker_editor_tests` i `qoffscreen.dll` w `build/dev-windows/editor/platforms/`; CMake kopiuje plugin automatycznie. Ostatnia pełna sesja: 1284 PASS, 1 SKIPPED, 0 FAIL; wyniki oraz konfiguracja w akapicie S2.2b powyżej. Nie zmieniać `qt_gtest_main.cpp` bez odtwarzalnej regresji.
 3. **S2.2c — odbiór bazowej geometrii X/T/Y i niezależnego GLB wykonany.** Zrzut bieżącego GUI, kamera kierowcy i izolat narożnika w Blenderze oraz import GLB są w lokalnym `archive/visual-regression/`. Testy i dowody wyżej. Zwróć uwagę na segmentację łuku — nie mylić z ostatecznym wyglądem.
-4. **NASTĘPNE:** zmierzyć koszt `remesh_objects` przy przejściach na sieci X/T/Y, sprawdzić większe nachylenia i brak z-fightingu w kolejnych niskich ujęciach GUI; ocenić i poprawić gęstość próbkowania łuków, jeśli segmentacja jest widoczna z perspektywy kursanta. Nie modyfikować starego formatu OpenDRIVE.
-5. Po potwierdzeniu jakości bryły i płynności edycji przejść do materiałów PBR, skali UV, oświetlenia, proceduralnych detali i docelowego porównania scen. Obecny rendering nie jest fotorealistyczny.
+4. **NASTĘPNE:** zweryfikować wydajność `remesh_objects` w scenach X/T/Y z przejściami; sprawdzić większe pochylenia, brak z-fightingu i zbliżenia z kamery kierowcy w GUI. Sylwetka łuków pozostaje segmentowa: opracować i przetestować osobną bezpieczną metodę zwiększenia detalu (np. LOD renderowania) **bez zmian goldenów prostych wlotów i bez przekroczenia budżetu sliverów**. Nie wprowadzać globalnie prób z S2.2d.
+5. **PBR NADAL OTWARTE:** przeanalizować wykorzystanie istniejących legalnie dołączonych map concrete/asphalt (albedo, normal, roughness) w GUI i glTF z rzeczywistą skalą UV, bez sztucznych jaskrawych materiałów. Potem dopracować światło i detale oraz przeprowadzić odbiór realistycznego wyglądu. Obecny rendering nie jest fotorealistyczny.
 
 **Kryterium ukończenia:** kod + testy + rzeczywista ocena GUI; potem commity, push i aktualizacja TEGO pliku. Bez zgadywania stanu na podstawie dawnych raportów.
 

@@ -73,7 +73,7 @@ namespace roadmaker::io_common {
   case LaneType::Median:
     return {0.30, 0.45, 0.30, 1.0};
   case LaneType::Curb:
-    return {0.55, 0.55, 0.50, 1.0};
+    return {0.61, 0.61, 0.59, 1.0};
   case LaneType::None:
   case LaneType::Other:
     return {0.35, 0.35, 0.35, 1.0};
@@ -93,6 +93,15 @@ inline constexpr std::array<double, 4> kPavedGroundColor{0.34, 0.34, 0.35, 1.0};
 
 // Roughness per material class (PBR metallic-roughness / UsdPreviewSurface).
 inline constexpr double kLaneRoughness = 0.95;
+
+/// Unpainted concrete is materially different from near-matte asphalt.
+/// Match the existing editor concrete roughness (0.75) without claiming
+/// full scanned PBR textures are embedded in the interchange file.
+[[nodiscard]] inline double lane_material_roughness(LaneType type) {
+  return type == LaneType::Curb || type == LaneType::Sidewalk || type == LaneType::Border
+             ? 0.78
+             : kLaneRoughness;
+}
 inline constexpr double kMarkingRoughness = 0.6;
 
 inline constexpr const char* kMarkingMaterialName = "lane_marking";

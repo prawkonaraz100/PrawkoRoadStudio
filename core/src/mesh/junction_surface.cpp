@@ -291,6 +291,44 @@ void push_triangle(SubMesh& sub,
   sub.indices.insert(sub.indices.end(), {base, base + 1, base + 2});
 }
 
+/// Smooth only the chamfer's longitudinal shading. The curb wall and the
+/// sidewalk top stay separate meshes (their intentionally sharp edges remain
+/// sharp), while duplicated triangle corners on the SAME bevel share a normal.
+/// Area-weighted geometric normals are deterministic and use the exact shared
+/// vertex coordinates, so no tolerance-based cross-region weld is introduced.
+void smooth_bevel_normals(SubMesh& bevel) {
+  using Point = std::array<double, 3>;
+  std::map<Point, Point> sums;
+  const auto at = [&](std::size_t i) -> Point {
+    return {bevel.positions[3 * i], bevel.positions[3 * i + 1],
+            bevel.positions[3 * i + 2]};
+  };
+  for (std::size_t i = 0; i + 2 < bevel.indices.size(); i += 3) {
+    const Point p = at(bevel.indices[i]);
+    const Point q = at(bevel.indices[i + 1]);
+    const Point r = at(bevel.indices[i + 2]);
+    const Point u{q[0] - p[0], q[1] - p[1], q[2] - p[2]};
+    const Point v{r[0] - p[0], r[1] - p[1], r[2] - p[2]};
+    const Point cross{u[1] * v[2] - u[2] * v[1],
+                      u[2] * v[0] - u[0] * v[2],
+                      u[0] * v[1] - u[1] * v[0]};
+    for (std::size_t j = 0; j < 3; ++j) {
+      auto& sum = sums[at(bevel.indices[i + j])];
+      for (int axis = 0; axis < 3; ++axis) sum[axis] += cross[axis];
+    }
+  }
+  for (std::size_t i = 0; i < bevel.positions.size() / 3; ++i) {
+    const auto it = sums.find(at(i));
+    if (it == sums.end()) continue;
+    const Point& sum = it->second;
+    const double len = std::hypot(sum[0], sum[1], sum[2]);
+    if (len <= 1e-12) continue;
+    for (int axis = 0; axis < 3; ++axis) {
+      bevel.normals[3 * i + axis] = sum[axis] / len;
+    }
+  }
+}
+
 /// Signed plan area of a closed ring (positive = CCW).
 double ring_area(const std::vector<std::array<double, 3>>& ring) {
   double area = 0.0;
@@ -1502,6 +1540,7 @@ JunctionFloorSplit build_junction_floor_split(const RoadNetwork& network,
         result.curb_faces.push_back(std::move(curbs[k]));
       }
       if (!bevels[k].indices.empty()) {
+        smooth_bevel_normals(bevels[k]);
         bevels[k].material = LaneType::Curb;
         bevels[k].surface = "concrete";
         bevels[k].name = fmt::format("junction {} corner bevel {}", junction.odr_id, k);

@@ -46,6 +46,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <map>
 #include <numbers>
 #include <stdexcept>
 #include <string>
@@ -485,6 +486,27 @@ TEST_P(SidewalkBandMatrix, RaisedCornerHasElevatedTopAndTrueCurbWall) {
       EXPECT_EQ(detail.indices.size() % (bevel ? 3U : 6U), 0U);
       ASSERT_EQ(detail.positions.size(), detail.normals.size());
       ASSERT_EQ(detail.uvs.size() * 3, detail.positions.size() * 2);
+      if (bevel) {
+        using Point3 = std::array<double, 3>;
+        std::map<Point3, Point3> normals_at_point;
+        std::size_t matching_seams = 0;
+        for (std::size_t v = 0; v < detail.positions.size() / 3; ++v) {
+          const Point3 p{detail.positions[3 * v], detail.positions[3 * v + 1],
+                         detail.positions[3 * v + 2]};
+          const Point3 n{detail.normals[3 * v], detail.normals[3 * v + 1],
+                        detail.normals[3 * v + 2]};
+          EXPECT_NEAR(std::hypot(n[0], n[1], n[2]), 1.0, 1e-8);
+          auto [it, inserted] = normals_at_point.emplace(p, n);
+          if (!inserted) {
+            ++matching_seams;
+            for (int axis = 0; axis < 3; ++axis) {
+              EXPECT_NEAR(n[axis], it->second[axis], 1e-8)
+                  << "faceted normal seam inside a continuous curb chamfer";
+            }
+          }
+        }
+        if (detail.indices.size() >= 6) EXPECT_GT(matching_seams, 0U);
+      }
       double min_height = 1e9;
       double max_height = -1e9;
       for (std::size_t v = 0; v + 2 < detail.positions.size(); v += 3) {

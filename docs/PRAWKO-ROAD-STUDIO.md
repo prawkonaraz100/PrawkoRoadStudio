@@ -276,3 +276,24 @@ nie spełniają jeszcze docelowego standardu realizmu.
   materiały PBR, skala tekstur, światło i odbiór fotorealizmu.
 - Aktualne wyniki testów, SHA obu repozytoriów i dokładny kolejny krok:
   `HANDOFF.md` (jedyne bieżące przekazanie).
+
+## Implementacja S2.2d — shading faz krawężnika i charakterystyka betonu (13.11.2026)
+
+- W `junction_surface.cpp` normalne powierzchni fazy są uśredniane
+  deterministycznie, z wagą równą polu trójkąta, między duplikatami
+  rzeczywiście wspólnych wierzchołków. Nie są wygładzane krawędzie
+  między fazą, pionową ścianą i górną płytą chodnika. Nie zmieniono
+  obrysów, liczby trójkątów ani formatu OpenDRIVE.
+- Ujednolicono neutralny kolor betonu krawężników w edytorze i eksportach.
+  Materiały Curb/Sidewalk/Border mają `roughnessFactor = 0.78`
+  w GLB/USD i manifestach; testy sprawdzają zgodność. Eksport nadal
+  **nie osadza** map albedo/normal/roughness dla tych materiałów.
+- Odrzucono próbę globalnego zwiększenia gęstości łuków, ponieważ
+  naruszała jakość siatki ciasnych T oraz golden prostych wlotów.
+  Segmentacja sylwetki łuku pozostaje do rozwiązania osobno, bez
+  osłabienia kontroli triangulacji.
+- Ponowny import X/T/Y w Blenderze 5.3 sprawdził liczbę powierzchni,
+  UV, brak zdegenerowanych trójkątów, wysokości i chropowatość.
+  Zapisano lokalnie zestaw renderów przed/po i zrzut działającego GUI.
+  **PBR, światło i fotorealizm nadal nie są odebrane.**
+- Wyniki testów i dokładny następny etap zapisano w `HANDOFF.md`.

@@ -114,7 +114,7 @@ public:
   void add_lane(LaneType type, std::size_t triangles) {
     add(io_common::lane_material_name(type),
         io_common::lane_material_color(type),
-        io_common::kLaneRoughness,
+        io_common::lane_material_roughness(type),
         triangles,
         false);
   }
