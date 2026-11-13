@@ -1,17 +1,49 @@
 # PrawkoRoadStudio — PRZEKAZANIE PRACY / START TUTAJ
 
-> **Jedyny aktualizowany dziennik przekazania między rozmowami.**
-> Kolejny agent ma czytać ten plik **przed edycją kodu**.
-> **Aktualny kierunek produktu:** jedno okno do budowy, edycji, odtwarzania i nagrywania scenariuszy drogowych. Poniżej odbiór pierwszego etapu i punkt startu integracji MP4.
-> Stan dokumentu: 2026-11-13, **S2.2o — naprawa wyboru i przesuwania rzeczywistego złożonego prefabrykatu, naprawa zakończona: kod, pełne testy i rzeczywisty ruch myszy PASS**. Przy teście masztu sygnalizacyjnego przeciągnięcie cienkiego słupa początkowo chwytało drogę; potem wykryto, że niepoprawne wywołanie `edit::move_object` dla części rzeczywistego `rm:assembly` jest słusznie odrzucane przez jądro. Poprawka: 7-pikselowy screen-edge hit wyłącznie w już zaznaczonej grupie, `move_object_command` → `edit::move_assembly_by_part` dla całego prefabrykatu, bez fałszywego komunikatu sukcesu przy odrzuconym ruchu; odrębne wieloselekcje wolnych obiektów zachowują kompozyt. **BUILD_PASS all, 46/46 testów ruchu PASS, 28/28 testów Gizmo PASS, Qt 1304 PASS + 1 SKIPPED (0 FAIL)**. **Rzeczywista mysz Windows w nowym Qt: PASS** — czteroczęściowy signal_mast przesunięty jako jedna sztywna całość o Δs=+5.0914 m, Δt=−1.1220 m; zapisane verified-{before,after,undo,redo}-f.xodr, drogi bitowo niezmienione, Undo/Redo PASS. Własna scena testowa zamknięta bez ingerencji w inne okna. **Otwarte:** ponowne otwarcie obróconej kopii, stencil/marking oraz regresje innych prefabrykatów. Oryginałów scen nie zmieniano.
-> Poniższe SHA to punkt kontrolny, nie zamiennik aktualnego `git status`.
+> Stan na 13.11.2026. Przed zmianą kodu przeczytaj ten plik i `AGENTS.md`. Kolejność prac wyznacza **Aktywny plan** na początku pliku.
 
-## 13.11.2026 — kierunek VICOM, dostęp do scenariusza i eksport PNG
+## Cel PrawkoNaRaz
 
-- **Kierunek potwierdzony przez użytkownika:** tworzenie, edycja, odtwarzanie i nagrywanie scen z jednego programu. Priorytet mają funkcje. Publicznie opisane możliwości VICOM, luki produktu i odbiór etapów zapisano w [PRAWKO-VICOM.md](docs/PRAWKO-VICOM.md), podlinkowanym w wymaganiach nadrzędnych.
+Instruktor tworzy i edytuje sytuację drogową, odtwarza ją, wybiera kamerę i eksportuje PNG lub MP4 w jednym programie Windows. Funkcjonalnym punktem odniesienia jest VICOM. Najpierw doprowadzamy cały przepływ do działania na dostępnych modelach. Wspólny model C++ oraz OpenDRIVE i OpenSCENARIO obsługują edytor i agenta. [Zakres funkcji i kryteria produktu](docs/PRAWKO-VICOM.md)
+
+## Stan bieżący
+
+- **Kod produktu sprawdzony przed aktualizacją tego planu.** Edytor `feature/realistic-road-surfaces` na `56ed4c8f10445697ccc72c4a486be55cfc08b61c`, agent `main` na `35c48c11cdb7efca8e08d1be731463657bbe7a32`. `prawko-resume.ps1 -Verify` potwierdził zgodność obu z `origin` i czyste katalogi na starcie.
 - **Wdrożono:** przycisk `Scenario` i `View → Scenario Mode`. Tryb wyświetla `Actor`, `Route` i otwiera `Storyboard`. W opcjach `Actor` jest wybór samochodu, ciężarówki, autobusu, motocykla, roweru lub pieszego, pobierany z katalogu C++. `File → Export Scene Image…` zapisuje PNG w rozdzielczości aktualnego widoku z bieżącej kamery. Eksport pomija siatkę, prowadnice, podświetlenia i narzędzia, zapis przez `QSaveFile`.
-- **Weryfikacja:** `BUILD_PASS: all`, `AGENT_BINDING_SYNC_PASS`, Qt **1306 PASS + 1 SKIPPED**, C++ **2072 PASS** (10 wyłączonych), Python agent **7 PASS**, `QUALITY_GATE_PASS`. W rzeczywistym Qt Windows otwarto kopię `vicom-workflow-test.xodr`, uruchomiono `View → Scenario Mode`, potwierdzono `Actor`, `Route` i wczytane `event_1` w Storyboardzie. Z menu Plik zapisano i odczytano czysty kadr **1297 × 779** w `archive/vicom-workflow/2026-11-13/scenario-frame.png`. Narzędzie pulpitu nie dostarczyło współrzędnych kliknięć w obszarze 3D. Ręczne wstawienie aktora i poprowadzenie trasy oczekują na odbiór myszą. Kopia testowa zamknięta, oryginalnych scen nie zapisywano.
-- **Następny krok:** jeden kontrolowany przebieg esmini w tle, wyniki i zdarzenia z wersjonowanej migawki oraz odtwarzanie pozycji w istniejącym widoku Qt. Zbudować ścieżkę **Odtwórz → Pauza / suwak → Eksportuj MP4** dla jednej sceny ze sprawdzonym ruchem aktora. Eksport PNG i opisane wymagania są gotowe. Nagrywanie filmu oraz odtwarzanie w edytorze pozostają otwarte. Błędy zapisu i odzyskiwania pary XODR/XOSC pozostają w zakresie przed wydaniem produkcyjnym.
+- **Weryfikacja.** Bieżące testy dały **2072 PASS C++** (10 wyłączonych), **7 PASS Python** i **1306 PASS Qt + 1 SKIPPED**, `QUALITY_GATE_PASS`. Ostatni build kodu dał `BUILD_PASS: all` oraz `AGENT_BINDING_SYNC_PASS`. W rzeczywistym Qt Windows potwierdzono zmianę trybu, widoczność narzędzi, wczytanie `event_1` i eksport kadru **1297 × 779**. Plik i logi są w `archive/vicom-workflow/2026-11-13/`. Nadal trzeba odebrać myszą wstawienie aktora i poprowadzenie trasy na osobnej kopii.
+- **Otwarte.** Podgląd esmini uruchamia osobne okno i nie przekazuje przebiegu do edytora. Odtwarzanie na osi czasu oraz eksport MP4 są do wdrożenia. Autosave pomija XOSC, a błąd zapisu XOSC może zostawić dokument oznaczony jako zapisany.
+
+## Aktywny plan
+
+### 1. Następne zadanie — kontrolowany przebieg esmini w tle
+
+Zacznij od [esmini_preview.cpp](editor/src/document/esmini_preview.cpp). Wykorzystaj istniejący eksport migawki z bieżącego dokumentu i wykrywanie programu esmini. Dodaj zarządzany przebieg w tle z osobnym katalogiem roboczym, stałym krokiem i zapisanym ziarnem. Zwracaj czas, identyfikator aktora, pozycję, orientację i zdarzenia razem z informacją o migawce. Raportuj w GUI start, wynik oraz brak silnika, błąd wejścia, przerwanie lub przekroczenie limitu czasu. Zachowaj dane i powiązania z mapą źródłową. Testuj na kopiach.
+
+**Odbiór etapu.** Przebieg wywołany z okna edytora nie zamraża GUI ani nie otwiera osobnego okna esmini. Test pozytywny potwierdza ruch aktora i wykonanie oczekiwanego zdarzenia. Test negatywny wykrywa koniec bez oczekiwanego zdarzenia mimo kodu procesu 0. Wykorzystaj jako punkt odniesienia wyniki w `archive/scenario-audit/2026-11-13/fresh_cut_in/`. W próbce z progiem 15 m warunek jest spełniony od startu i zdarzenie się nie uruchamia. Kopia z progiem 4 m daje ruch i zdarzenie, a także wykrytą kolizję, więc służy do testu telemetrii. W bieżącym etapie wystarczy odebrać przebieg i jego wynik.
+
+### 2. Odtwarzanie w istniejącym widoku Qt
+
+Pokaż pozycje aktorów z przebiegu w widoku 3D. Dodaj **Odtwórz**, **Pauza**, **Od początku**, suwak i znaczniki zdarzeń. Dane odtwarzania nie zapisują zmian do mapy ani stosu Undo. Po zmianie sceny pokaż, że przebieg pochodzi ze starszej rewizji. Odbierz przewijanie do zdarzenia i zgodność pozycji z telemetrią, a przy tej okazji zweryfikuj myszą dodanie aktora i trasy.
+
+### 3. Pierwsze nagranie MP4
+
+Eksportuj wybrany zakres odtworzonego przebiegu z bieżącej kamery. Renderuj klatki z widoku Qt bez elementów edycyjnych. Edytor zarządza kodowaniem, postępem, przerwaniem i zapisem wyniku. Sprawdź rozdzielczość, FPS i długość pliku, ruch aktora na co najmniej dwóch klatkach oraz zachowanie istniejącego eksportu przy anulowaniu lub błędzie. Odbierz działanie przez GUI na Windows.
+
+### 4. Scena wzorcowa, kamery i bezpieczny zapis
+
+Przygotuj **Widoczność przed przejściem dla pieszych** z trasą auta i pieszego, przesłoną oraz dwoma wariantami. Dodaj ujęcie z kamery kierowcy i z góry. Przed wydaniem instruktorom zweryfikuj spójny zapis, ponowne otwarcie i odzyskiwanie mapy, scenariusza i ustawień ujęcia. Awaria zapisu jednego pliku pozostawia poprzednią spójną wersję, a edytor sygnalizuje niezapisane zmiany.
+
+### 5. Dalsze funkcje wzorowane na VICOM
+
+Rozwijaj gotowe szablony otoczenia, swobodne i wspomagane rozmieszczanie uczestników, wymienne warianty otoczenia, pogodę, porę dnia i sezon, dodatkowe ujęcia, kokpit i eksport wielu wariantów. Do wizualnego dopracowania modeli i materiałów wróć po potwierdzeniu przepływu pracy.
+
+## Gotowe polecenie do nowej rozmowy
+
+> Kontynuuj PrawkoRoadStudio w `F:\PrawkoRoadStudio`. Przeczytaj `HANDOFF.md` i `AGENTS.md`, uruchom `scripts/prawko-resume.ps1 -Verify` i potwierdź stan obu repozytoriów GitHub, ostatnie commity oraz testy. Kontynuuj pierwszy niewykonany etap z **Aktywnego planu**. Testuj na kopiach i nie nadpisuj niezapisanych scen. Po zakończeniu etapu wykonaj testy, uaktualnij stan i kolejny krok w `HANDOFF.md`, zacommituj, wypchnij i wykonaj `scripts/prawko-git.ps1 -Action finish`.
+
+## Historia prac
+
+Poniższe wpisy dokumentują wcześniejsze odbiory i wyniki. Bieżące zadanie znajdziesz w sekcji **Aktywny plan**.
 
 ## 13.11.2026 — audyt scenariuszy dla szkoły jazdy PrawkoNaRaz
 
@@ -20,7 +52,6 @@
 - **Stan produktu:** istnieje wspólny model C++ dróg, aktorów, tras, zdarzeń i sygnalizacji, a Qt eksportuje migawkę do esmini. W działającym Windows Qt na kopii `cut_in` widoczny jest podgląd esmini, a `View` nie zawiera `Scenario Mode`. Kod tworzy akcję bez domyślnego skrótu i podpina tryb, ale nie dodaje przełącznika do menu. `Document::save` oznacza dokument jako czysty także po błędzie XOSC. Autosave zapisuje mapę i ustawienia widoku bez XOSC.
 - **Symulacja na kopiach:** świeże `cut_in` z 0 błędów walidacji dwukrotnie kończy się kodem 0 bez manewru. W esmini 3.5.0 przy kroku 0,05 s oba CSV mają taki sam SHA-256. Warunek `rising` z progiem 15 m jest spełniony już w pierwszym kroku, co kontrola `none` wykazała przy odległości 7,21 m. Próba z progiem 4 m przy `rising` wyzwala zmianę pasa o 1,95 s i zgłasza kolizję o 4,50 s. `urban_crossing` kończy próbę po 30,05 s, a oba pojazdy ruszają od skrzyżowania. Logi, telemetria i kopie testowe są lokalnie w `archive/scenario-audit/2026-11-13/`.
 - **Repo i testy:** punkt wyjścia edytora `b6ed5d7bcd15a1d1643148037eb2a322b18d4e41`, agenta `35c48c11cdb7efca8e08d1be731463657bbe7a32`, oba potwierdzone w `origin`. Odzyskany test obrotu i dowód z zachowanych kopii zapisano osobno w `9552a8e6302f96599940a4c861183b1e9eec811f` i wypchnięto. Pełny build `BUILD_PASS: all`, `AGENT_BINDING_SYNC_PASS`, C++ 2072 PASS (10 wyłączonych), Qt 1304 PASS + 1 SKIPPED, agent 7 PASS, `QUALITY_GATE_PASS`, demo 0 błędów. Esmini 3.5.0 przyjął 3 poprawne repozytoryjne XOSC i odrzucił 1 uszkodzony. Testy esmini i GUI korzystały z kopii. Oryginalnych scen nie zapisano. SHA256 `agent/projects/prawko_urban_curve/scene.xodr` pozostał `879fe41c58cc83bc7393d456681c329b5d84574b0eabda0d73b2f600b13c540e`.
-- **Pierwszy rekomendowany etap wdrożenia:** udostępnić widoczne przejście Map ↔ Scenario i zweryfikować rzeczywistą myszą wstawienie aktora, trasę i edycję zdarzenia na kopii. Dodać przebieg esmini z telemetrią i asercjami dla poprawnie wykonanej zmiany pasa oraz limitu czasu bez zdarzenia. Następnie zbudować pełną lekcję **Widoczność przed przejściem dla pieszych** z kamerą kierowcy, decyzją kursanta, powtórką i zabezpieczeniem zapisu całej rewizji. Szczegóły etapów oraz warunki odbioru są w raporcie. Tematy S2.2o niżej opisują dalsze prace nad edytorem mapy.
 
 ## S2.2o — test rzeczywistego prefabrykatu i korekta przeciągania (13.11.2026)
 
@@ -342,10 +373,6 @@ wysepki i strefy przejścia bez nakładania atrap na siatkę
 do nieodebranego światła i realistycznych materiałów przy
 dużych scenach. Nie zaczynać nowego projektu.
 
-## Gotowe polecenie do nowej rozmowy
-
-> **Kontynuuj PrawkoRoadStudio od miejsca przerwania. Połącz się z moim komputerem przez Desktop Commander. Zacznij od `F:\PrawkoRoadStudio\HANDOFF.md` i `AGENTS.md`; uruchom `scripts/prawko-resume.ps1`, sprawdź oba repozytoria Git oraz testy. Nie zgaduj stanu z poprzedniej rozmowy. Realizuj bieżący cel użytkownika, korzystając z potwierdzonego stanu na początku HANDOFF.md. Po każdym ukończonym etapie zaktualizuj HANDOFF.md, wykonaj commity, push i Quality Gate. Nie nadpisuj niezapisanych scen.**
-
 ## Gdzie pracować
 
 - Komputer przez Desktop Commander: `DESKTOP-G2FV0GJ`.
@@ -357,7 +384,7 @@ dużych scenach. Nie zaczynać nowego projektu.
 - Kopia oryginału `reference/RoadMaker/` jest **tylko referencyjna** — nie edytuj, nie wysyłaj zmian do upstream.
 - `toolchain/`, `.qt/`, `build/`, `agent/projects/` i `archive/` pozostają na dysku; część jest ignorowana przez Git i nie występuje w publicznych repozytoriach.
 
-## Ostatnie potwierdzone wykonanie
+## Historyczny punkt kontrolny po przeniesieniu projektu
 
 1. Przeniesiono projekt do jednego katalogu, poprawiono ścieżki skryptów i skrótu na pulpicie.
 2. Skompilowano edytor i moduł Python: `BUILD_PASS: editor`.
@@ -371,7 +398,7 @@ Punkt kontrolny sprzed tego dokumentu:
 - edytor: `73b547e4adb9be04d0983904a917ccb33247d3cc` (`main` i `feature/realistic-road-surfaces`);
 - agent: `147a08d537530a4b07b0bd7840f6197dc9f62512` (`main`).
 
-## Co robimy dalej — najbliższe zadanie
+## Historyczny plan rozwoju geometrii i wyglądu
 
 **Uzgodniony standard wizualny (12.11.2026):** szczegółowe wymagania
 bryły, materiałów PBR, skali tekstur, detali proceduralnych, oświetlenia
@@ -891,7 +918,7 @@ przejścia na ciasnych T/Y. Następnie eksport glTF,
 test wizualny z kamery kierowcy i dopiero później PBR.
 Nie uznawać obecnych materiałów za realistycznie odebrane.
 
-**Kontynuować przebudowę realistycznej geometrii dróg i chodników.** Nie zaczynać ponownie od konfiguracji Git ani migracji folderów.
+**Historyczna lista odbiorów geometrii po S2.2j i S2.2k.**
 
 1. Uruchomić `scripts/prawko-resume.ps1` i sprawdzić oba repozytoria oraz otwarte sceny. Nie przeładowywać niezapisanych dokumentów.
 2. **Testy Qt Windows:** ostatnia pełna sesja **S2.2k 1292 PASS, 1 SKIPPED, 0 FAIL**, `archive/visual-regression/s2.2k-qt-full-final.log`; `qoffscreen.dll` w `build/dev-windows/editor/platforms/`. Nowe 12 pozycji biblioteki są wbudowane w exe i dostępne od startu, nie trzeba ich importować.
@@ -912,7 +939,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File F:\PrawkoRoadStudio\scripts\
 ```
 
 - `prawko-resume.ps1` czyta **bieżący Git** i ten dokument, sygnalizuje odchylenia względem `origin`.
-- `-Verify` uruchamia Quality Gate jądra i agenta; **nie obejmuje testów Qt edytora**. Te ostatnie trzeba budować oddzielnie (target `roadmaker_editor_tests` lub `prawko-build-win.ps1 -Target all`) i uruchamiać z `QT_QPA_PLATFORM=offscreen` oraz Qt `bin` w `PATH`; plugin `qoffscreen.dll` kopiuje CMake. Ostatnia kompletna seria S2.2k: **1292 PASS, 1 SKIPPED**, dodatkowo pełny BUILD_PASS i kontrola biblioteki w widocznym Qt.
+- `-Verify` obejmuje Quality Gate jądra i agenta. Testy Qt uruchom oddzielnie po `prawko-build-win.ps1 -Target all`, z `QT_QPA_PLATFORM=offscreen` i Qt `bin` w `PATH`. Plik wykonywalny to `build/dev-windows/editor/roadmaker_editor_tests.exe`. Aktualne wyniki zapisuj w sekcji **Stan bieżący**.
 - Start programu: `build/dev-windows/editor/roadmaker-editor.exe`.
 - Agent: `scripts/prawko-agent.cmd`.
 - Główne wymagania: `docs/PRAWKO-ROAD-STUDIO.md`.
@@ -920,7 +947,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File F:\PrawkoRoadStudio\scripts\
 
 ## Reguła przekazywania stanu — po każdym ważnym etapie i na końcu
 
-**Nie czekaj na zakończenie rozmowy.** Po każdym ukończonym kroku aktualizuj poniższy stan, zapisuj commity i wypychaj je na GitHub. Nagłe urwanie rozmowy nie powinno oznaczać utraty poprzednich punktów kontrolnych.
+**Zapisuj postęp po każdym ukończonym etapie.** Wykonaj właściwe testy, zaktualizuj sekcje **Stan bieżący** i **Aktywny plan** na górze, zacommituj zmiany i wypchnij je na GitHub.
 
 1. Nie zostawiaj rozpoczętych zmian bez informacji. Jeśli praca została przerwana, wpisz do tego pliku **co zmieniono, co nie zostało przetestowane i co powinno być zrobione jako pierwsze**. Nie nazywaj takiego kroku PASS.
 2. Wpisz aktualny stan i następny konkretny krok do **tej samej sekcji** (bez mnożenia notatek). Zmień znacznik `agent_head` poniżej po ostatnim commicie agenta.
