@@ -2,7 +2,7 @@
 
 > **Jedyny aktualizowany dziennik przekazania między rozmowami.**
 > Kolejny agent ma czytać ten plik **przed edycją kodu**.
-> Stan dokumentu: 2026-11-13, S2.2e: pomiar `remesh_objects` X/T/Y z przejściami PASS; GLB z osadzonymi mapami CC0 albedo/normal/roughness i UV 4 m/tiling zweryfikowany w Blenderze 5.3 X/T/Y; Quality Gate 2071 C++ i 7 agent PASS, Qt 1284 PASS + 1 SKIPPED. **Odbiór wizualny nadal OTWARTY:** segmentacja sylwetki, powtarzalność tekstur, materiały/światło w GUI oraz wydajność kompletnej interakcji, nie tylko CPU remesh.
+> Stan dokumentu: 2026-11-13, **S2.2f**: w GUI oraz GLB agenta działa opcjonalny, bezpieczny post-CDT LOD zakrzywionych faz krawężników na X/T/Y, bez nowych sliverów i bez zmian historycznych goldenów; 2072/2072 C++ PASS (10 DISABLED), 7/7 agent PASS, Qt 1284 PASS + 1 SKIPPED, GLB/Blender 5.3 X/T/Y PASS, pełny Windows BUILD PASS. **Odbiór finalnego fotorealizmu i wydajności GPU nadal OTWARTY.**
 > Poniższe SHA to punkt kontrolny, nie zamiennik aktualnego `git status`.
 
 ## Gotowe polecenie do nowej rozmowy
@@ -383,6 +383,76 @@ Okno testowe zamknięte bez zapisu. **GUI nie korzysta jeszcze ze
 wszystkich map PBR tak samo jak eksport GLB**, czego dowodzą
 różnice w renderze Blendera i neutralnym obrazie GUI.
 
+**S2.2f — lokalny LOD faz krawężników bez naruszenia CDT (13.11.2026):**
+
+- W `core/src/mesh/junction_curb_refinement.hpp` wprowadzono **opcjonalny**
+  podział trójkątów na wspólnej zakrzywionej krawędzi jezdnia/chodnik.
+  Działa PO pierwotnej triangulacji CDT i klasyfikacji pasów. Tę samą
+  nową pozycję wierzchołka dzielą OBA sąsiednie trójkąty, a ściana fazy
+  i górna płyta podążają za granicą, więc nie ma T-seam w nowym detalu.
+  Korekta Catmull-Rom jest tylko prostopadła do cięciwy, ograniczona
+  do 8 mm / 1% cięciwy. Dzielone są tylko odcinki 0,45–5,0 m
+  z dwoma dobrze uwarunkowanymi sąsiadami (>=8 stopni, >=22% pola).
+  Klasyfikacja, oryginalne wejściowe obrysy, historyczne goldeny
+  oraz zapis ASAM OpenDRIVE są bez zmian.
+- Nowa opcja `MeshOptions.curb_render_lod` domyślnie = **false**
+  w jądrze; działa wyłącznie razem z `raised_sidewalks=true`.
+  Chroni zgodność oryginalnych siatek zwykłych i wyniesionych.
+  `studio_mesh_options()` Qt włącza ją do rzeczywistego GUI, także
+  dla `remesh_junctions` i `remesh_objects`; Python agent/GLB również
+  włącza ją jawnie, a regresja agenta porównuje liczbę trójkątów
+  GLB względem domyślnej wersji bez LOD.
+- Test `JunctionSidewalkBands.VisualCurbArcLODAddsSharedVerticesWithoutSlivers`
+  porównuje X/T/Y: trójkąty jezdnia+chodniki 676->828,
+  469->555, 522->662; slivery <5 stopni odpowiednio 16->16,
+  5->5, 18->18 (liczone na całych tych powierzchniach,
+  nie mylić z osobnym budżetem CDT T-junction!). Dodatkowo
+  test sprawdza deterministyczne bufory, orientację/niedegenerację,
+  exact-match dolnych krawędzi ścian z wierzchołkami jezdni.
+- Rzeczywisty agent GLB X/T/Y: triangulacja **faz** X 72->120,
+  T 108->174, Y 72->116; ściany również X 72->120,
+  T 108->174, Y 72->116. Podział jest zapisany w GLB.
+  Blender 5.3 ponownie importował/działające PBR X/T/Y: PASS.
+  Wyeksportowane pliki: `archive/visual-regression/s2.2f-opt-{x,t,y}.glb`.
+  Logi: `s2.2f-opt-blender-{x,t,y}.log`, render EEVEE
+  `s2.2f-opt-x-eevee.png`. Geometria before/after w tych samych
+  kamerach: `s2.2f-before-x-{top,driver,isolated}.png`,
+  `s2.2f-after-x-{top,driver,isolated}.png`,
+  `s2.2f-after-{t,y}-{top,driver}.png`. To lokalne, ignorowane
+  przez Git dowody; nie są kopią poza dyskiem F:.
+- Test wydajności `PrawkoRemeshBudget` uruchamia teraz **optyczną
+  wersję LOD**, a nie tylko stary kształt: podczas focused Qt+core
+  X mediana/p95 ~10,37/10,90 ms, T 6,21/7,17 ms,
+  Y 7,00/7,70 ms (zmienne wraz z obciążeniem PC).
+  Nie są to wyniki uploadu GPU ani FPS.
+- `BUILD_PASS: all`, `AGENT_BINDING_SYNC_PASS`,
+  `AGENT_BINDING_PARITY_PASS`, pełny `QUALITY_GATE_PASS`:
+  C++ **2072/2072 PASS** (10 DISABLED), Python **7/7 PASS**;
+  testy Qt Windows **1284 PASS, 1 SKIPPED, 0 FAIL**.
+  W Qt `DocumentCommands.NearJunctionCrosswalkDeleteAndUndoKeepRaisedMeshParity`
+  nadal rygorystycznie porównuje bufory pełnego i inkrementalnego
+  budowania, ale od S2.2f używa tej samej opcji LOD co GUI.
+  Logi: `s2.2f-opt-final-gate.log`, `s2.2f-opt-qt-final.log`,
+  `s2.2f-isolated-build-all.log`, `s2.2f-opt-qt-fix-build.log`.
+  Realny edytor Windows otworzył testową kopię X (bez awarii),
+  screenshot: `s2.2f-current-editor-gui.png`; okno zamknięto
+  bez zapisywania scen. Żadna scena użytkownika nie została zmieniona.
+- **Ocena estetyczna:** z bliskiej kamery geometria jest lepiej
+  podzielona, lecz w statycznych renderach różnica sylwetki jest
+  subtelna (przesunięcie geometrii <=8 mm). Nie deklarować
+  docelowej płynności, fotorealizmu, odbioru z kamery kierowcy
+  w SAMYM edytorze ani GPU/FPS. Trzeba sprawdzić większe skosy,
+  z-fighting, powtarzanie tekstur, światło i detale.
+- Osobne repo agenta po zmianie: `35c48c11cdb7efca8e08d1be731463657bbe7a32`
+  (origin/main). Należy zawsze sprawdzić aktualny HEAD obu repo.
+
+**Następne pierwsze niewykonane zadanie:** PBR w GUI i lokalny detal
+łuków z perspektywy kierowcy; dokładnie zmierzyć błąd sylwetki
+na ekranie w różnych odległościach/pochyleniach, rozważyć większy
+LOD tylko przy spełnieniu jakości siatki; osobno mierzyć koszt
+GPU-upload i czas wyświetlenia klatki. Nie globalnie zagęszczać
+CDT. Nadal otwarte powtarzalne spękania asfaltu i oświetlenie.
+
 **Historyczny plan S2.2c:** dokończyć 5 cm fazę krawężnika
 przez cały łuk narożnika (obecna ściana narożnika jest
 pionowa, a faza drogi zwęża się przed wlotem), zszyć
@@ -396,7 +466,7 @@ Nie uznawać obecnych materiałów za realistycznie odebrane.
 1. Uruchomić `scripts/prawko-resume.ps1` i sprawdzić oba repozytoria oraz otwarte sceny. Nie przeładowywać niezapisanych dokumentów.
 2. **Testy Qt Windows już odblokowane:** przed zmianami GUI sprawdzić `roadmaker_editor_tests` i `qoffscreen.dll` w `build/dev-windows/editor/platforms/`; CMake kopiuje plugin automatycznie. Ostatnia pełna sesja: 1284 PASS, 1 SKIPPED, 0 FAIL; wyniki oraz konfiguracja w akapicie S2.2b powyżej. Nie zmieniać `qt_gtest_main.cpp` bez odtwarzalnej regresji.
 3. **S2.2c — odbiór bazowej geometrii X/T/Y i niezależnego GLB wykonany.** Zrzut bieżącego GUI, kamera kierowcy i izolat narożnika w Blenderze oraz import GLB są w lokalnym `archive/visual-regression/`. Testy i dowody wyżej. Zwróć uwagę na segmentację łuku — nie mylić z ostatecznym wyglądem.
-4. **NASTĘPNE — sylwetka łuków:** dla X/T/Y zaprojektować izolowany LOD renderowania lub lokalne bezpieczne dosiatkowanie tylko wizualizacji krawężnika, nie globalny `kFilletArcSagitta`. Wymaga nowego testu zbliżeń, braku sliverów (budżet <=2), zachowania goldenów prostych T oraz zgodności wprowadzonej geometrii w GLB. Nie wolno przemilczeć reguł z S2.2d. Dodatkowo zmierzyć czas uploadu GPU i renderowania klatki na tym PC, sprawdzić niwelety i z-fighting w GUI z perspektywy kursanta. Test CPU `remesh_objects` X/T/Y jest już zrobiony.
+4. **NASTĘPNE — odbiór wyglądu i kosztu GPU:** opcjonalny `curb_render_lod` S2.2f jest wdrożony i przechodzi Quality Gate, nie trzeba go budować ponownie. Wykonać ilościowy test sylwetki przy kamerze kierowcy w GUI (zbliżenia i większe nachylenia) oraz rozróżnić subtelny zysk <=8 mm od wizualnej gotowości. Sprawdzić z-fighting i normy faz, mierzyć GPU upload, całkowity frametime i ewentualne zacięcia edycji, nie tylko CPU `remesh_objects`. Bez zmian starego formatu OpenDRIVE i globalnych parametrów triangulacji.
 5. **NASTĘPNE — materiały i oświetlenie:** usunąć wyraźne powtarzanie spękań 4-metrowej tekstury, urealnić tint i rozkład roughness, sprawdzić przejścia asfalt/beton oraz oświetlenie na niskim ujęciu i w samym edytorze. Export GLB zawiera już CC0 albedo/normal/roughness (Blender X/T/Y PASS), ale realizm, instalacja materiałów i pełna zgodność wyglądu GUI vs Blender **nie** są odebrane.
 
 **Kryterium ukończenia:** kod + testy + rzeczywista ocena GUI; potem commity, push i aktualizacja TEGO pliku. Bez zgadywania stanu na podstawie dawnych raportów.
@@ -429,4 +499,4 @@ powershell -NoProfile -ExecutionPolicy Bypass -File F:\PrawkoRoadStudio\scripts\
 5. **Nie nadpisuj otwartej niezapisanej sceny.** Pliki `agent/projects/` nie są objęte Git; backupują się lokalnie, ale niezapisanej sceny GUI nie da się odzyskać z tych kopii.
 6. Jeśli nie ma dostępu do komputera lub testów, opisz ograniczenie, zamiast twierdzić, że praca została wykonana.
 
-<!-- agent_head: 02cbdeb5e943f7a710d3292a9fbc5e85d3cc95fc -->
+<!-- agent_head: 35c48c11cdb7efca8e08d1be731463657bbe7a32 -->

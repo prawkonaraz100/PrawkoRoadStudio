@@ -327,3 +327,25 @@ nie spełniają jeszcze docelowego standardu realizmu.
   Python), Qt 1284 PASS / 1 SKIPPED. **Nie ogłaszać końcowego
   fotorealizmu ani bezpieczeństwa globalnej zmiany gęstości łuków.**
   Kolejne działania i szczegóły: HANDOFF.md.
+
+## Implementacja S2.2f — opt-in LOD łuków krawężnika (13.11.2026)
+
+- Bez zmiany parametrów wyjściowej triangulacji CDT i bez zmiany
+  OpenDRIVE, dodatkowy etap w render-meshu dzieli bezpieczne odcinki
+  zakrzywionej krawędzi Driving/Sidewalk po obu stronach tej samej
+  granicy. Korekta położenia punktu ma najwyżej 8 mm,
+  a kryterium jakości nowych trójkątów to minimum 8° i >=22%
+  poprzedniego pola (bez odwróceń).
+- Opcja MeshOptions.curb_render_lod jest domyślnie wyłączona w
+  jądrze; tylko GUI PrawkoRoadStudio i agent eksportujący GLB
+  świadomie włączają ją razem z raised_sidewalks. Dotychczasowe
+  goldeny i kompatybilność domyślnej siatki pozostają bez zmian.
+- Pomiary X/T/Y: trójkąty jezdnia + chodniki 676->828,
+  469->555, 522->662; liczba sliverów <5° bez wzrostu
+  (16/16, 5/5, 18/18). Fazy w prawdziwym GLB X 72->120,
+  T 108->174, Y 72->116; Blender 5.3 X/T/Y PASS.
+- BUILD_PASS all, 2072/2072 aktywnych testów C++ PASS,
+  7/7 testów agenta PASS, Qt 1284 PASS + 1 SKIPPED.
+  Rzeczywiste okno GUI otwiera kontrolną scenę X, ale
+  **odbiór pełnego realizmu materiałowego i pomiar GPU są otwarte**.
+  Szczegółowe logi, ścieżki renderów i dalsze kroki w HANDOFF.md.
