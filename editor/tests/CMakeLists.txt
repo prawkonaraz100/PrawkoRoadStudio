@@ -2,7 +2,15 @@
 # QSignalSpy and QAbstractItemModelTester. The custom main sets the offscreen
 # platform so the suite runs headless; the ctest ENVIRONMENT covers the
 # discovery invocation on bare CI runners too.
-find_package(Qt6 ${RM_QT_VERSION} REQUIRED COMPONENTS Test)
+find_package(Qt6 ${RM_QT_VERSION} REQUIRED COMPONENTS Test OpenGL)
+
+# S2.2g: opt-in real GPU profiling (no CI/headless invocation or production
+# render-path changes). Invoked manually on the target NVIDIA card; excludes
+# GUI presentation/compositor but uses the very same GLRenderer + PBR textures.
+add_executable(prawko_gpu_probe EXCLUDE_FROM_ALL prawko_gpu_probe.cpp)
+target_link_libraries(prawko_gpu_probe PRIVATE roadmaker_editor_lib Qt6::OpenGL)
+rm_apply_warnings(prawko_gpu_probe)
+
 
 # Soak driver (hardening sprint §4.3): one library, two consumers — the
 # standalone runner CI soaks under ASan, and the fixed-seed smoke gtest in
