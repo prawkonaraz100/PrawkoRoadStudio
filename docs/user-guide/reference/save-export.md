@@ -24,6 +24,12 @@ preview also runs the checker over the network as it stands, so you do not have
 to save to find out what a consumer would say. See
 [Export previews](export-preview.md).
 
+## Export a scene image
+
+Frame the scene in the 3D view, then choose **File → Export Scene Image…**
+and save a PNG. The export uses the current camera and viewport resolution.
+It leaves out the editor grid, reference guides, selection and tool overlays.
+
 ## Export meshes
 
 From the Python package you can export the tessellated network:

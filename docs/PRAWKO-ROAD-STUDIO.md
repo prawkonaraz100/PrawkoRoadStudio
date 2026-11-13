@@ -6,12 +6,21 @@ Gałąź projektowa: `feature/realistic-road-surfaces`, fork lokalny RoadMaker
 
 ## Kierunek produktu
 
-Budujemy **nową jakość wizualną geometrii**, a nie nakładkę kolorystyczną
-na stary edytor. Pozostajemy przy natywnym C++20/Qt 6, OpenDRIVE i
-OpenSCENARIO. Żaden element nie może być dostępny wyłącznie przez CLI:
-każda funkcja projektowania musi również działać w interfejsie myszką.
+PrawkoRoadStudio ma być **jednym programem do tworzenia, edycji, odtwarzania
+i nagrywania sytuacji drogowych dla PrawkoNaRaz**. Punktem odniesienia jest
+publicznie opisany sposób pracy w VICOM. Instruktor wybiera szablon otoczenia,
+układa drogi i uczestników ruchu, ustawia przebieg oraz kamerę, ogląda próbę
+i eksportuje obraz lub film z tego samego okna. Najpierw rozwijamy ten
+przepływ na dostępnych modelach zastępczych. Rozbudowa biblioteki modeli
+i dopracowanie wyglądu mają odrębny harmonogram.
 
-### Priorytety
+Pozostajemy przy C++20/Qt 6, OpenDRIVE i OpenSCENARIO. Narzędzia są dostępne
+myszką w aplikacji. Program może używać silnika symulacji i kodera w tle,
+a ich uruchamianie, komunikaty, postęp i wynik obsługuje interfejs edytora.
+[Opis VICOM](https://vicomeditor.de/#how_it_works) ·
+[Zakres funkcji i kryteria odbioru](PRAWKO-VICOM.md)
+
+### Wymagania dla geometrii i wyglądu
 
 1. Jezdnia: realna objętość i kształt przekroju, spadki poprzeczne,
    delikatne różnice wysokości i płynne przejścia, pasy i oznakowanie.

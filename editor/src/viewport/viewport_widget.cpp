@@ -30,6 +30,7 @@
 #include <QEvent>
 #include <QFontMetrics>
 #include <QImage>
+#include <QScopedValueRollback>
 #include <QKeyEvent>
 #include <QMimeData>
 #include <QMouseEvent>
@@ -472,6 +473,13 @@ QImage ViewportWidget::capture_frame() {
   return grabFramebuffer(); // makes the context current and re-renders
 }
 
+QImage ViewportWidget::capture_clean_frame() {
+  const QScopedValueRollback clean(clean_capture_, true);
+  QImage frame = capture_frame();
+  update();
+  return frame;
+}
+
 HighlightState ViewportWidget::item_state(const UploadedItem& item) const {
   // A road-style drag highlights its target road through the Hover state; it and
   // a live mouse hover are mutually exclusive (Qt suppresses hover during a drag).
@@ -591,7 +599,9 @@ void ViewportWidget::paintGL() {
   } else if (!pending_roads_.empty()) {
     apply_pending_road_updates();
   }
-  upload_tool_preview();
+  if (!clean_capture_) {
+    upload_tool_preview();
+  }
 
   // Span-lifetime rule: DrawItem::instances is a view, so the buffers it points
   // into must live until render() and never reallocate. Reserve both up front —
@@ -614,7 +624,10 @@ void ViewportWidget::paintGL() {
   // Reference layers first: they sit just above the procedural ground and below
   // the network, and are UNLIT because an orthophoto already contains its own
   // lighting — shading it again would make the imagery disagree with itself.
-  for (const UploadedReferenceLayer& layer : reference_layers_) {
+  const std::span<const UploadedReferenceLayer> reference_layers =
+      clean_capture_ ? std::span<const UploadedReferenceLayer>{}
+                     : std::span<const UploadedReferenceLayer>{reference_layers_};
+  for (const UploadedReferenceLayer& layer : reference_layers) {
     Material material;
     material.base_color = layer.texture; // invalid for a vector layer → flat colour
     material.uv_scale = 1.0F;            // UVs are already [0,1] across the quad
@@ -629,7 +642,7 @@ void ViewportWidget::paintGL() {
 
   for (const UploadedItem& item : items_) {
     draw_items.push_back(DrawItem{.mesh = item.handle,
-                                  .state = item_state(item),
+                                  .state = clean_capture_ ? HighlightState::None : item_state(item),
                                   .material = material_for(item.surface, item.material)});
   }
 
@@ -640,6 +653,14 @@ void ViewportWidget::paintGL() {
   const RoadId hovered_road = drag_target_road_.is_valid() ? drag_target_road_ : hovered_road_;
   const Material prop_material = material_for(SurfaceKind::Untextured, {});
   for (const UploadedPropBatch& batch : prop_batches_) {
+    if (clean_capture_) {
+      for (const RenderMeshHandle handle : batch.parts) {
+        draw_items.push_back(DrawItem{.mesh = handle,
+                                      .material = prop_material,
+                                      .instances = batch.transforms});
+      }
+      continue;
+    }
     std::vector<HighlightState> states;
     states.reserve(batch.instances.size());
     for (const ScenePropInstance& inst : batch.instances) {
@@ -688,25 +709,30 @@ void ViewportWidget::paintGL() {
     Material face_material;
     face_material.base_color = face.texture; // invalid handle → flat white fallback
     face_material.uv_scale = 1.0F;
-    const HighlightState state = phase_highlight(face.road,
-                                                 highlight_state_for(face.road,
-                                                                     {},
-                                                                     {},
-                                                                     face.signal,
-                                                                     {},
-                                                                     {},
-                                                                     selection_.entries(),
-                                                                     hovered_road,
-                                                                     hovered_lane_,
-                                                                     hovered_object_,
-                                                                     hovered_signal_,
-                                                                     hovered_junction_,
-                                                                     hovered_surface_));
+    HighlightState state = HighlightState::None;
+    if (!clean_capture_) {
+      state = phase_highlight(face.road,
+                              highlight_state_for(face.road,
+                                                  {},
+                                                  {},
+                                                  face.signal,
+                                                  {},
+                                                  {},
+                                                  selection_.entries(),
+                                                  hovered_road,
+                                                  hovered_lane_,
+                                                  hovered_object_,
+                                                  hovered_signal_,
+                                                  hovered_junction_,
+                                                  hovered_surface_));
+    }
     draw_items.push_back(DrawItem{.mesh = face.mesh, .state = state, .material = face_material});
   }
 
-  for (const RenderMeshHandle handle : preview_handles_) {
-    draw_items.push_back(DrawItem{.mesh = handle});
+  if (!clean_capture_) {
+    for (const RenderMeshHandle handle : preview_handles_) {
+      draw_items.push_back(DrawItem{.mesh = handle});
+    }
   }
 
   // Framebuffer pixels, not widget units (HiDPI rule).
@@ -714,7 +740,17 @@ void ViewportWidget::paintGL() {
   const auto fb_height = static_cast<int>(std::lround(height() * devicePixelRatioF()));
   const float aspect =
       fb_height > 0 ? static_cast<float>(fb_width) / static_cast<float>(fb_height) : 1.0F;
+  if (clean_capture_) {
+    BackdropColors backdrop = theme::current().backdrop();
+    backdrop.grid_major[3] = 0.0F;
+    backdrop.grid_minor[3] = 0.0F;
+    renderer_->set_backdrop(backdrop);
+  }
   renderer_->render(draw_items, camera_.matrices(aspect), fb_width, fb_height);
+  if (clean_capture_) {
+    apply_render_mode();
+    return;
+  }
 
   // QPainter overlays (handle sprites + the tool hint), painted over the GL
   // frame — supported on QOpenGLWidget when done last (no beginNativePainting).

@@ -52,6 +52,7 @@
 #include <QMessageBox>
 #include <QMimeData>
 #include <QPushButton>
+#include <QSaveFile>
 #include <QShowEvent>
 #include <QStackedWidget>
 #include <QStatusBar>
@@ -597,6 +598,14 @@ MainWindow::MainWindow(QWidget* parent, bool restore_saved_layout)
   // Document::push_scenario_command, onto the same undo stack as the roads.
   auto actor_tool = std::make_unique<ActorTool>(document_, selection_);
   wire_status(actor_tool.get());
+  connect(actor_kind_combo_,
+          &QComboBox::currentIndexChanged,
+          actor_tool.get(),
+          [combo = actor_kind_combo_, tool = actor_tool.get()](int index) {
+            if (index >= 0) {
+              tool->set_kind(static_cast<osc::ActorKind>(combo->itemData(index).toInt()));
+            }
+          });
   tool_manager_.register_tool(ToolId::ActorPlace, std::move(actor_tool));
 
   // Route: lay lane-anchored waypoints for a scenario actor (p8-s3, #247).
@@ -648,6 +657,7 @@ MainWindow::MainWindow(QWidget* parent, bool restore_saved_layout)
     tool_manager_.set_active(ToolId::Sign);
   });
   tool_manager_.set_active(ToolId::Select);
+  apply_editor_mode();
 
   // Merge Roads: enabled only for exactly two selected roads mergeable in some
   // orientation; the trigger normalizes the argument order and pushes the merge
@@ -1257,6 +1267,13 @@ void MainWindow::build_menus() {
   file_menu->addAction(actions_->save_as);
   file_menu->addSeparator();
   file_menu->addAction(actions_->export_glb);
+  auto* export_image = file_menu->addAction(tr("Export Scene &Image…"));
+  export_image->setObjectName(QStringLiteral("export_scene_image"));
+  export_image->setEnabled(false);
+  connect(&document_, &Document::loaded, export_image, [export_image] {
+    export_image->setEnabled(true);
+  });
+  connect(export_image, &QAction::triggered, this, &MainWindow::export_scene_image);
 #ifdef RM_HAVE_USD
   file_menu->addAction(actions_->export_usd);
 #endif
@@ -1319,6 +1336,7 @@ void MainWindow::build_menus() {
   view_menu->addAction(properties_dock_->toggleViewAction());
   view_menu->addAction(diagnostics_dock_->toggleViewAction());
   view_menu->addAction(editor2d_dock_->toggleViewAction());
+  view_menu->addAction(actions_->scenario_mode);
   view_menu->addSeparator();
   auto* textured_action = new QAction(tr("&Textured Rendering"), this);
   textured_action_ = textured_action;
@@ -1453,6 +1471,8 @@ void MainWindow::build_toolbar() {
   // saved layout still restores.
   core_toolbar_ = style_bar(addToolBar(tr("Main")), QStringLiteral("toolbar.main"));
   fill(core_toolbar_, shortcuts::ToolbarTab::kCore);
+  core_toolbar_->addSeparator();
+  core_toolbar_->addAction(actions_->scenario_mode);
 
   all_toolbars_.push_back(core_toolbar_);
 
@@ -1528,6 +1548,19 @@ void MainWindow::build_tool_options_bar() {
           template_button_,
           [mirror_template](QAction* action) { mirror_template(action); });
   template_action_ = options_bar_->addWidget(template_button_);
+
+  actor_kind_combo_ = new QComboBox(options_bar_);
+  actor_kind_combo_->setObjectName(QStringLiteral("actor_kind"));
+  actor_kind_combo_->setAccessibleName(tr("Actor type"));
+  actor_kind_combo_->setToolTip(tr("Choose what to place with the Actor tool"));
+  for (const auto& actor : osc::actor_catalog()) {
+    actor_kind_combo_->addItem(
+        QString::fromUtf8(actor.label.data(), static_cast<qsizetype>(actor.label.size())),
+        static_cast<int>(actor.kind));
+  }
+  actor_kind_combo_->setCurrentIndex(
+      actor_kind_combo_->findData(static_cast<int>(osc::ActorKind::Car)));
+  actor_kind_action_ = options_bar_->addWidget(actor_kind_combo_);
 
   // Terrain Brush options (p5-s4, #234): mode/radius/strength. Fixed-width
   // controls added once and shown only while the brush is active (a variable
@@ -1666,9 +1699,6 @@ void MainWindow::apply_editor_mode() {
   // toolbar_tab_of() means a tool added by a later pillar is gated correctly
   // the day it lands, with nothing here to update.
   //
-  // NOTE there is no tab to "switch to": #377 replaced the tabbed toolbar with
-  // one flat row, so the mode enables and disables actions in place. GW-6
-  // step 1's original wording described the removed UI and is amended.
   for (int raw = 0; raw < static_cast<int>(shortcuts::Id::kIdCount); ++raw) {
     const auto id = static_cast<shortcuts::Id>(raw);
     if (shortcuts::entry(id).toolbar_group == nullptr) {
@@ -1682,7 +1712,27 @@ void MainWindow::apply_editor_mode() {
     if (action == nullptr) {
       continue;
     }
-    action->setEnabled(tab == shortcuts::ToolbarTab::kScenario ? scenario : !scenario);
+    const bool available = (tab == shortcuts::ToolbarTab::kScenario) == scenario;
+    action->setEnabled(available);
+    action->setVisible(available);
+  }
+
+  // A run of hidden groups leaves several separators between visible tools.
+  QAction* pending_separator = nullptr;
+  bool has_visible_tool = false;
+  for (QAction* action : tool_toolbar_->actions()) {
+    if (action->isSeparator()) {
+      action->setVisible(false);
+      if (has_visible_tool) {
+        pending_separator = action;
+      }
+    } else if (action->isVisible()) {
+      if (pending_separator != nullptr) {
+        pending_separator->setVisible(true);
+        pending_separator = nullptr;
+      }
+      has_visible_tool = true;
+    }
   }
 
   // A tool that has just been disabled must not stay active — it would keep
@@ -1697,12 +1747,17 @@ void MainWindow::apply_editor_mode() {
     const bool allowed = tab == shortcuts::ToolbarTab::kCore ||
                          (tab == shortcuts::ToolbarTab::kScenario) == scenario;
     if (!allowed) {
-      tool_manager_.set_active(ToolId::Select);
       actions_->tool_select->setChecked(true);
+      tool_manager_.set_active(ToolId::Select);
     }
   }
 
   actions_->scenario_mode->setChecked(scenario);
+  if (scenario) {
+    editor2d_host_->show_page(QObject::tr("Storyboard"));
+    editor2d_dock_->show();
+    editor2d_dock_->raise();
+  }
 
   // Layer 2: the mode rides the next save, like the camera. It is framing, not
   // content, so switching mode does not make a scene need saving.
@@ -1722,6 +1777,7 @@ void MainWindow::update_tool_options() {
   // sit clear of the toolbars.
   options_caption_action_->setVisible(create_road);
   template_action_->setVisible(create_road);
+  actor_kind_action_->setVisible(active == actions_->tool_actor_place);
 
   const bool terrain_brush = active == actions_->tool_terrain_brush;
   for (QAction* option : brush_option_actions_) {
@@ -2785,6 +2841,39 @@ void MainWindow::save_welcome_thumbnail() {
     return; // GL-less session (tests) — the welcome tile keeps a placeholder
   }
   frame.scaled(440, 248, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation).save(thumb_path);
+}
+
+void MainWindow::export_scene_image() {
+  const QFileInfo scene(document_.file_path());
+  const QString suggested = document_.has_file()
+                                ? scene.dir().filePath(scene.completeBaseName() +
+                                                       QStringLiteral(".png"))
+                                : QStringLiteral("scene.png");
+  QFileDialog dialog(this, tr("Export Scene Image"), suggested, tr("PNG image (*.png)"));
+  dialog.setAcceptMode(QFileDialog::AcceptSave);
+  dialog.setDefaultSuffix(QStringLiteral("png"));
+  if (dialog.exec() != QDialog::Accepted) {
+    return;
+  }
+
+  const QString path = dialog.selectedFiles().constFirst();
+  if (QFileInfo(path).suffix().compare(QStringLiteral("png"), Qt::CaseInsensitive) != 0) {
+    QMessageBox::warning(this, tr("Export Scene Image"), tr("Choose a file ending in .png."));
+    return;
+  }
+  const QImage frame = viewport_->capture_clean_frame();
+  if (frame.isNull()) {
+    QMessageBox::warning(this, tr("Export Scene Image"), tr("The 3D view could not be captured."));
+    return;
+  }
+  QSaveFile file(path);
+  if (!file.open(QIODevice::WriteOnly) || !frame.save(&file, "PNG") || !file.commit()) {
+    QMessageBox::warning(this,
+                         tr("Export Scene Image"),
+                         tr("Could not write the image to %1.").arg(path));
+    return;
+  }
+  statusBar()->showMessage(tr("Exported scene image to %1").arg(path), 5000);
 }
 
 bool MainWindow::confirm_discard() {

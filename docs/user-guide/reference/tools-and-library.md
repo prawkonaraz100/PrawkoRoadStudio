@@ -4,6 +4,14 @@
 different jobs. Understanding the split makes the editor predictable: **tools
 are interaction modes, the Library is content.***
 
+## Scenario tools
+
+Click **Scenario** on the main toolbar or choose **View → Scenario Mode**.
+The editor shows **Actor** and **Route** and opens **Storyboard**. With
+**Actor** selected, choose a participant type in Tool Options and click a
+driving lane. Select a participant before adding waypoints with **Route**.
+Click **Scenario** again to return to the map tools.
+
 ## The rule
 
 - A **tool** on the toolbar is an *interaction mode* — a way of acting on the

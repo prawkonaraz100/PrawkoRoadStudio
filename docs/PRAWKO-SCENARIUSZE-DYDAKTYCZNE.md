@@ -1,5 +1,7 @@
 # PrawkoRoadStudio dla szkoły jazdy PrawkoNaRaz
 
+Aktualny priorytet po decyzji użytkownika to tworzenie, edycja, odtwarzanie i eksport materiałów w jednym oknie. [Plan funkcjonalny oparty na VICOM](PRAWKO-VICOM.md)
+
 Przegląd produktu i architektury z 13 listopada 2026. Badany kod edytora to `b6ed5d7bcd15a1d1643148037eb2a322b18d4e41` z odzyskanym testem obrotu masztu, zapisanym następnie w `9552a8e6302f96599940a4c861183b1e9eec811f`. Kod agenta to `35c48c11cdb7efca8e08d1be731463657bbe7a32`. Przegląd objął edycję sieci, model scenariuszy, zapis i odzyskiwanie, GUI, agenta, eksport oraz testy i uruchomienie scen w esmini na Windows.
 
 **Rekomendacja produktowa.** PrawkoRoadStudio powinno umożliwić instruktorowi przygotowanie krótkiego ćwiczenia, pokazanie sytuacji oczami kierowcy, przyjęcie decyzji kursanta i omówienie skutku. Pierwszą pełną lekcją powinna być **„Widoczność przed przejściem dla pieszych”**. Używa już dostępnych dróg, przejścia i aktorów, a wymusza spięcie tras, widoczności, zdarzeń, odtwarzania i informacji zwrotnej.

@@ -453,9 +453,10 @@ Actions::Actions(QUndoStack& undo_stack, QObject* parent) : QObject(parent) {
       tr("Show the active tool's hint in the viewport corner (H) — the status bar keeps it "
          "either way"));
 
-  // View ▸ Scenario Mode (p8-s2, #246). Checkable and menu-only; MainWindow owns
-  // the state and persists it per-scene in the sidecar.
+  // MainWindow persists the active editing mode per scene in its sidecar.
   scenario_mode = new QAction(tr("&Scenario Mode"), this);
+  scenario_mode->setObjectName(QStringLiteral("scenario_mode"));
+  scenario_mode->setIconText(tr("Scenario"));
   scenario_mode->setShortcuts(shortcuts::sequences(shortcuts::Id::ScenarioMode));
   scenario_mode->setCheckable(true);
   scenario_mode->setToolTip(
@@ -720,6 +721,9 @@ void Actions::apply_icons() {
   tool_terrain_brush->setIcon(Icons::get(QStringLiteral("terrain-brush")));
   tool_signal->setIcon(Icons::get(QStringLiteral("signal")));
   tool_sign->setIcon(Icons::get(QStringLiteral("sign")));
+  scenario_mode->setIcon(Icons::get(QStringLiteral("waypoints")));
+  tool_actor_place->setIcon(Icons::get(QStringLiteral("box")));
+  tool_route->setIcon(Icons::get(QStringLiteral("maneuver")));
   template_freeway->setIcon(Icons::get(QStringLiteral("template-highway")));
   template_arterial->setIcon(Icons::get(QStringLiteral("template-urban")));
   template_collector->setIcon(Icons::get(QStringLiteral("template-rural")));

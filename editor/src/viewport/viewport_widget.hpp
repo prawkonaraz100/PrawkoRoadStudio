@@ -220,6 +220,9 @@ public:
   /// when GL never initialized.
   [[nodiscard]] QImage capture_frame();
 
+  /// Captures the scene without editor highlights, guides, or tool overlays.
+  [[nodiscard]] QImage capture_clean_frame();
+
 signals:
   void hover_changed(const roadmaker::editor::HoverInfo& info);
 
@@ -541,6 +544,7 @@ private:
   /// The active tool's handle knobs (kernel frame), stashed by
   /// upload_tool_preview and painted as screen sprites by draw_handles.
   std::vector<Handle> handle_overlays_;
+  bool clean_capture_ = false;
 
   /// The active tool's dashed guide segments (kernel frame, xyz triples
   /// pairwise), stashed by upload_tool_preview and painted by

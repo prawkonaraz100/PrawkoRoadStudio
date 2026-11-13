@@ -236,6 +236,7 @@ private:
   /// user chose Save (and it succeeded) or Discard.
   bool confirm_discard();
   void export_file_dialog();
+  void export_scene_image();
 #ifdef RM_HAVE_USD
   void export_usd_dialog();
 #endif
@@ -362,6 +363,8 @@ private:
   /// any toolbar may have tool-dependent width (issue #332).
   QAction* options_caption_action_ = nullptr;
   QAction* template_action_ = nullptr;
+  QAction* actor_kind_action_ = nullptr;
+  QComboBox* actor_kind_combo_ = nullptr;
   /// View ▸ Textured Rendering. Held because a scene's sidecar may override the
   /// application default (fmt-s1, #325), and the menu has to agree with what
   /// the viewport is actually doing.

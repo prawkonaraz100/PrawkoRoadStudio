@@ -40,6 +40,7 @@
 #include <QTemporaryDir>
 #include <QToolBar>
 #include <QWidget>
+#include <QWidgetAction>
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
@@ -52,6 +53,8 @@
 #include "app/welcome_widget.hpp"
 #include "document/project.hpp"
 #include "document/scene_sidecar.hpp"
+#include "panels/editor2d_host.hpp"
+#include "roadmaker/xodr/writer.hpp"
 #include "viewport/viewport_widget.hpp"
 
 namespace roadmaker::editor {
@@ -84,6 +87,87 @@ TEST_F(MainWindowLayoutTest, ToolbarsHoldNoVariableWidthLabels) {
           << label->text().toStdString() << "'";
     }
   }
+}
+
+TEST_F(MainWindowLayoutTest, ScenarioModeIsReachableAndShowsScenarioToolsAndStoryboard) {
+  auto* mode = window_.findChild<QAction*>(QStringLiteral("scenario_mode"));
+  auto* main = window_.findChild<QToolBar*>(QStringLiteral("toolbar.main"));
+  auto* tools = window_.findChild<QToolBar*>(QStringLiteral("toolbar.tools"));
+  auto* storyboard_dock = window_.findChild<QDockWidget*>(QStringLiteral("dock.editor2d"));
+  auto* editor = window_.findChild<Editor2DHost*>();
+  auto* actor_kind = window_.findChild<QComboBox*>(QStringLiteral("actor_kind"));
+  auto* options = window_.findChild<QToolBar*>(QStringLiteral("toolbar.options"));
+  ASSERT_NE(mode, nullptr);
+  ASSERT_NE(main, nullptr);
+  ASSERT_NE(tools, nullptr);
+  ASSERT_NE(storyboard_dock, nullptr);
+  ASSERT_NE(editor, nullptr);
+  ASSERT_NE(actor_kind, nullptr);
+  ASSERT_NE(options, nullptr);
+  QWidgetAction* actor_kind_action = nullptr;
+  for (QAction* action : options->actions()) {
+    auto* widget_action = qobject_cast<QWidgetAction*>(action);
+    if (widget_action != nullptr && widget_action->defaultWidget() == actor_kind) {
+      actor_kind_action = widget_action;
+      break;
+    }
+  }
+  ASSERT_NE(actor_kind_action, nullptr);
+  ASSERT_TRUE(main->actions().contains(mode));
+  const auto menus = window_.menuBar()->actions();
+  EXPECT_TRUE(std::ranges::any_of(menus, [mode](QAction* entry) {
+    return entry->menu() != nullptr && entry->menu()->actions().contains(mode);
+  }));
+
+  const auto tool_named = [tools](const QString& name) -> QAction* {
+    const auto actions = tools->actions();
+    const auto found =
+        std::ranges::find_if(actions, [&name](QAction* action) { return action->iconText() == name; });
+    return found == actions.end() ? nullptr : *found;
+  };
+  auto* actor = tool_named(QStringLiteral("Actor"));
+  auto* route = tool_named(QStringLiteral("Route"));
+  auto* road = tool_named(QStringLiteral("Road"));
+  ASSERT_NE(actor, nullptr);
+  ASSERT_NE(route, nullptr);
+  ASSERT_NE(road, nullptr);
+  EXPECT_FALSE(actor->isVisible());
+  EXPECT_FALSE(route->isVisible());
+  EXPECT_TRUE(road->isVisible());
+
+  mode->trigger();
+  EXPECT_TRUE(mode->isChecked());
+  EXPECT_TRUE(actor->isVisible());
+  EXPECT_TRUE(actor->isEnabled());
+  EXPECT_TRUE(route->isVisible());
+  EXPECT_TRUE(route->isEnabled());
+  EXPECT_FALSE(road->isVisible());
+  EXPECT_FALSE(storyboard_dock->isHidden());
+  EXPECT_EQ(editor->current_title(), QStringLiteral("Storyboard"));
+  actor->trigger();
+  EXPECT_TRUE(actor_kind_action->isVisible());
+  EXPECT_GE(actor_kind->count(), 2);
+
+  mode->trigger();
+  EXPECT_FALSE(mode->isChecked());
+  EXPECT_TRUE(road->isVisible());
+  EXPECT_TRUE(road->isEnabled());
+  EXPECT_FALSE(actor->isVisible());
+  EXPECT_FALSE(route->isVisible());
+  EXPECT_FALSE(actor_kind_action->isVisible());
+}
+
+TEST_F(MainWindowLayoutTest, ImageExportIsEnabledWhenASceneOpens) {
+  auto* image = window_.findChild<QAction*>(QStringLiteral("export_scene_image"));
+  ASSERT_NE(image, nullptr);
+  EXPECT_FALSE(image->isEnabled());
+  QTemporaryDir directory;
+  ASSERT_TRUE(directory.isValid());
+  const auto file =
+      std::filesystem::path(directory.filePath(QStringLiteral("scene.xodr")).toStdString());
+  ASSERT_TRUE(roadmaker::save_xodr(RoadNetwork{}, file, "scene").has_value());
+  window_.load_file(file);
+  EXPECT_TRUE(image->isEnabled());
 }
 
 TEST_F(MainWindowLayoutTest, ToolbarIsTwoPlainGroupedRowsWithNoTabs) {
