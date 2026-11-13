@@ -83,10 +83,29 @@ struct LibraryDropAction {
   std::vector<std::pair<RoadId, Object>>
       objects; ///< Crosswalk: the crosswalk object, added as one macro with the link below
   std::optional<StopLineLink> stopline_link; ///< Crosswalk: its arm's stop line
-  RoadId target_road;       ///< RoadStyle: the road under the cursor (for highlight)
+  RoadId target_road;       ///< RoadStyle + material/marking target: road under cursor
+  LaneId target_lane;       ///< Material/Marking: lane to select and edit after drop
   QString toast;            ///< success message, or (kind None) a reject hint
   PlacementPreview preview; ///< where the ghost/commit lands (ghost==commit)
 };
+
+// Capture identity before a command, then recover ONLY newly created objects,
+// signals and junctions after commit. Arena ids can reuse free slots; comparing
+// IDs, not arena counts or order, avoids selecting someone else's old asset.
+struct LibraryEntitySnapshot {
+  std::vector<ObjectId> objects;
+  std::vector<SignalId> signal_ids;
+  std::vector<JunctionId> junctions;
+};
+struct LibraryCreatedEntity {
+  RoadId road;
+  ObjectId object;
+  SignalId signal;
+  JunctionId junction;
+};
+[[nodiscard]] LibraryEntitySnapshot capture_library_entities(const RoadNetwork& network);
+[[nodiscard]] std::vector<LibraryCreatedEntity> created_library_entities(
+    const LibraryEntitySnapshot& before, const RoadNetwork& after);
 
 /// The LaneProfile for a road-template profile name (local_road default);
 /// pre-#413 names resolve to their nearest road class.

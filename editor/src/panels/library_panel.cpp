@@ -281,8 +281,23 @@ void LibraryPanel::handle_current_changed(const QModelIndex& index) {
     drag_instructions_->setText(tr("Upuść na drogę lub kliknij 2×, aby zmienić zaznaczoną drogę."));
     break;
   case LibraryItem::Kind::Material:
+    drag_instructions_->setText(tr("Upuść na pas jezdni. Po zmianie edytuj materiał w Properties."));
+    break;
   case LibraryItem::Kind::Marking:
-    drag_instructions_->setText(tr("Przeciągnij na odpowiedni pas jezdni. Ctrl+Z cofa."));
+    drag_instructions_->setText(tr("Upuść na krawędź pasa. Zmienione oznakowanie zaznaczy się automatycznie."));
+    break;
+  case LibraryItem::Kind::Crosswalk:
+    drag_instructions_->setText(tr("Upuść przy wlocie skrzyżowania. Po wstawieniu edytuj przejście w Properties."));
+    break;
+  case LibraryItem::Kind::Signal:
+    drag_instructions_->setText(tr("Upuść znak lub sygnalizator przy drodze. Po wstawieniu edytuj pozycję i kierunek w Properties."));
+    break;
+  case LibraryItem::Kind::Tree:
+  case LibraryItem::Kind::PropAssembly:
+    drag_instructions_->setText(tr("Upuść przy drodze. Potem przesuń obiekt myszą lub edytuj jego rozmiar i obrót w Properties."));
+    break;
+  case LibraryItem::Kind::Stencil:
+    drag_instructions_->setText(tr("Upuść na pas. Po umieszczeniu możesz zmienić materiał oznaczenia w Properties."));
     break;
   case LibraryItem::Kind::Assembly:
     drag_instructions_->setText(tr("Przeciągnij na drogę, aby wstawić skrzyżowanie."));

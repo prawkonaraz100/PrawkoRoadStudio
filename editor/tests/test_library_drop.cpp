@@ -230,6 +230,53 @@ TEST(LibraryDrop, PrawkoPresetsArePresentInBundledMouseLibraryWithThumbnails) {
   }
 }
 
+TEST(LibraryDrop, FreshlyPlacedObjectsAndSignalsAreFoundByIdentityForProperties) {
+  RoadNetwork network = with_straight_road();
+  // A pre-existing prop must never become the active one after a second drop.
+  auto initial = resolve_library_drop(tree("tree_pine"), network, 25.0, 4.0);
+  ASSERT_EQ(initial.kind, LibraryDropKind::Tree);
+  ASSERT_TRUE(initial.command->apply(network).has_value());
+  const auto before = capture_library_entities(network);
+  ASSERT_EQ(before.objects.size(), 1U);
+
+  auto prop = resolve_library_drop(tree("tree_pine"), network, 40.0, 4.0);
+  ASSERT_EQ(prop.kind, LibraryDropKind::Tree);
+  ASSERT_TRUE(prop.command->apply(network).has_value());
+  auto placed = created_library_entities(before, network);
+  ASSERT_EQ(placed.size(), 1U);
+  EXPECT_TRUE(placed[0].object.is_valid());
+  EXPECT_EQ(placed[0].road, network.object(placed[0].object)->road);
+  EXPECT_NE(placed[0].object, before.objects.front());
+  EXPECT_FALSE(placed[0].signal.is_valid());
+  EXPECT_EQ(created_library_entities(capture_library_entities(network), network).size(), 0U);
+
+  const auto before_signal = capture_library_entities(network);
+  auto light = resolve_library_drop(signal("us.signal_head"), network, 70.0, -6.0);
+  ASSERT_EQ(light.kind, LibraryDropKind::Signal);
+  ASSERT_TRUE(light.command->apply(network).has_value());
+  placed = created_library_entities(before_signal, network);
+  ASSERT_EQ(placed.size(), 1U);
+  EXPECT_TRUE(placed[0].signal.is_valid());
+  EXPECT_FALSE(placed[0].object.is_valid());
+  EXPECT_EQ(placed[0].road, network.signal(placed[0].signal)->road);
+  EXPECT_EQ(network.signal_count(), 1U);
+  EXPECT_EQ(count_errors(validate_network(network)), 0U);
+}
+
+TEST(LibraryDrop, NewlyInsertedJunctionIsDistinguishedFromExistingAssets) {
+  RoadNetwork network = with_straight_road();
+  const auto before = capture_library_entities(network);
+  auto junction = resolve_library_drop(assembly("t"), network, 50.0, 0.0);
+  ASSERT_EQ(junction.kind, LibraryDropKind::Assembly);
+  ASSERT_TRUE(junction.command->apply(network).has_value());
+  const auto placed = created_library_entities(before, network);
+  EXPECT_TRUE(std::ranges::any_of(placed, [](const LibraryCreatedEntity& item) {
+    return item.junction.is_valid();
+  }));
+  ASSERT_TRUE(junction.command->revert(network).has_value());
+  EXPECT_TRUE(created_library_entities(before, network).empty());
+}
+
 TEST(LibraryDrop, TAssemblyDropPushesAValidStandaloneJunction) {
   RoadNetwork network;
   LibraryDropAction action = resolve_library_drop(assembly("t"), network, 0.0, 0.0);
@@ -722,6 +769,8 @@ TEST(LibraryDrop, MarkingDropOnLaneBoundaryPushesSetRoadMark) {
       resolve_library_drop(marking("solid_solid", "yellow"), network, 50.0, -3.0);
   ASSERT_EQ(action.kind, LibraryDropKind::Marking);
   ASSERT_NE(action.command, nullptr);
+  ASSERT_EQ(action.target_road, network.find_road("1"));
+  EXPECT_TRUE(action.target_lane.is_valid());
   EXPECT_EQ(action.command->name(), "Set Road Mark");
   EXPECT_FALSE(action.toast.isEmpty());
   ASSERT_TRUE(action.command->apply(network).has_value());
@@ -865,6 +914,9 @@ TEST(LibraryDrop, MaterialDropOnLanePushesSetLaneMaterial) {
       resolve_library_drop(material_item("asphalt_worn"), network, 50.0, -2.0);
   ASSERT_EQ(action.kind, LibraryDropKind::Material);
   ASSERT_NE(action.command, nullptr);
+  ASSERT_EQ(action.target_road, network.find_road("1"));
+  ASSERT_TRUE(action.target_lane.is_valid());
+  EXPECT_EQ(network.lane(action.target_lane)->odr_id, -1);
   EXPECT_EQ(action.command->name(), "Set Lane Material");
   EXPECT_TRUE(action.preview.valid);
   ASSERT_TRUE(action.command->apply(network).has_value());
@@ -987,6 +1039,7 @@ TEST(LibraryDrop, CrosswalkDropOnAnApproachPlacesItOnThatArm) {
   EXPECT_EQ(action.stopline_link->crosswalk_odr_id, action.objects.front().second.odr_id);
 
   // Applying the drop the way main_window does keeps the network valid.
+  const auto before = capture_library_entities(network);
   for (auto& [road, object] : action.objects) {
     auto command = edit::add_object(network, road, object);
     ASSERT_NE(command, nullptr);
@@ -999,6 +1052,10 @@ TEST(LibraryDrop, CrosswalkDropOnAnApproachPlacesItOnThatArm) {
                                           action.stopline_link->crosswalk_odr_id);
   ASSERT_NE(link, nullptr);
   ASSERT_TRUE(link->apply(network).has_value());
+  const auto created = created_library_entities(before, network);
+  ASSERT_EQ(created.size(), 1U);
+  ASSERT_TRUE(created.front().object.is_valid());
+  EXPECT_EQ(network.object(created.front().object)->type, ObjectType::Crosswalk);
   EXPECT_EQ(count_errors(validate_network(network)), 0U);
 }
 

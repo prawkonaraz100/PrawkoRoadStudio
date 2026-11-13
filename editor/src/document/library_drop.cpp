@@ -460,6 +460,8 @@ LibraryDropAction resolve_library_drop(const LibraryItem& item,
     action.command = edit::set_road_mark(network, lane, *mark);
     if (action.command != nullptr) {
       action.kind = LibraryDropKind::Marking;
+      action.target_road = on_road->road;
+      action.target_lane = lane;
       // Ghost sits ON the picked boundary (ghost==commit): the same station the
       // mark applies at, offset to the boundary's lateral t.
       const auto p = station_to_world(road->plan_view, on_road->s, boundary->t);
@@ -512,6 +514,8 @@ LibraryDropAction resolve_library_drop(const LibraryItem& item,
     action.command = edit::set_lane_material(network, lane, {record});
     if (action.command != nullptr) {
       action.kind = LibraryDropKind::Material;
+      action.target_road = on_road->road;
+      action.target_lane = lane;
       // Ghost sits ON the picked lane point (ghost==commit).
       const auto p = station_to_world(road->plan_view, on_road->s, on_road->t);
       action.preview = {p[0], p[1], true};
@@ -596,6 +600,35 @@ LibraryDropAction resolve_library_drop(const LibraryItem& item,
     break;
   }
   return action;
+}
+
+LibraryEntitySnapshot capture_library_entities(const RoadNetwork& network) {
+  LibraryEntitySnapshot snapshot;
+  network.for_each_object([&](ObjectId id, const Object&) { snapshot.objects.push_back(id); });
+  network.for_each_signal([&](SignalId id, const Signal&) { snapshot.signal_ids.push_back(id); });
+  network.for_each_junction([&](JunctionId id, const Junction&) { snapshot.junctions.push_back(id); });
+  return snapshot;
+}
+
+std::vector<LibraryCreatedEntity> created_library_entities(
+    const LibraryEntitySnapshot& before, const RoadNetwork& after) {
+  std::vector<LibraryCreatedEntity> created;
+  after.for_each_object([&](ObjectId id, const Object& object) {
+    if (std::ranges::find(before.objects, id) == before.objects.end()) {
+      created.push_back(LibraryCreatedEntity{.road = object.road, .object = id});
+    }
+  });
+  after.for_each_signal([&](SignalId id, const Signal& signal) {
+    if (std::ranges::find(before.signal_ids, id) == before.signal_ids.end()) {
+      created.push_back(LibraryCreatedEntity{.road = signal.road, .signal = id});
+    }
+  });
+  after.for_each_junction([&](JunctionId id, const Junction&) {
+    if (std::ranges::find(before.junctions, id) == before.junctions.end()) {
+      created.push_back(LibraryCreatedEntity{.junction = id});
+    }
+  });
+  return created;
 }
 
 } // namespace roadmaker::editor

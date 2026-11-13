@@ -2522,6 +2522,29 @@ void MainWindow::on_library_drop(const QString& key, double world_x, double worl
     return;
   }
   LibraryDropAction action = resolve_library_drop(*item, document_.network(), world_x, world_y);
+  // Compare stable arena identities before/after the actual command. Picking
+  // the asset on the road after a drop is unreliable (tiny signs, overlapping
+  // sidewalk/road); newly created objects and signals must be directly editable.
+  const LibraryEntitySnapshot before = capture_library_entities(document_.network());
+  const auto reveal_created = [this, &before, &action]() {
+    std::vector<SelectionEntry> entries;
+    for (const LibraryCreatedEntity& placed :
+         created_library_entities(before, document_.network())) {
+      entries.push_back(SelectionEntry{.road = placed.road, .object = placed.object,
+                                       .signal = placed.signal, .junction = placed.junction});
+    }
+    // Materials and painted boundaries edit an existing lane rather than
+    // creating an object, so select the exact lane the resolver changed.
+    if (entries.empty() && action.target_road.is_valid() && action.target_lane.is_valid()) {
+      entries.push_back(SelectionEntry{.road = action.target_road,
+                                       .lane = action.target_lane});
+    }
+    if (entries.empty()) return;
+    if (!actions_->tool_select->isChecked()) actions_->tool_select->trigger();
+    selection_.select_many(entries);
+    properties_dock_->show();
+    properties_dock_->raise();
+  };
   switch (action.kind) {
   case LibraryDropKind::RoadTemplate:
     actions_->tool_create_road->trigger(); // activate Create Road
@@ -2568,6 +2591,7 @@ void MainWindow::on_library_drop(const QString& key, double world_x, double worl
   case LibraryDropKind::Material:
   case LibraryDropKind::Stencil:
     if (document_.push_command(std::move(action.command)).has_value()) {
+      reveal_created();
       viewport_->show_toast(action.toast, ToastSeverity::Success);
     } else {
       viewport_->show_toast(tr("Couldn't place that here"), ToastSeverity::Warning);
@@ -2590,6 +2614,7 @@ void MainWindow::on_library_drop(const QString& key, double world_x, double worl
                                       action.stopline_link->crosswalk_odr_id));
     }
     document_.undo_stack()->endMacro();
+    reveal_created(); // select the actual authored crosswalk object
     viewport_->show_toast(action.toast, ToastSeverity::Success);
     viewport_->clear_drag_target_road();
     break;
