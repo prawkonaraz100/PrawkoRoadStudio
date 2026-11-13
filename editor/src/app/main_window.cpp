@@ -2836,7 +2836,7 @@ bool MainWindow::save_file() {
   if (!document_.has_file()) {
     return save_file_as();
   }
-  return save_to(std::filesystem::path(document_.file_path().toStdString()));
+  return save_to(std::filesystem::path(document_.file_path().toStdU16String()));
 }
 
 bool MainWindow::save_file_as() {
@@ -2852,7 +2852,7 @@ bool MainWindow::save_file_as() {
   if (path.isEmpty()) {
     return false;
   }
-  return save_to(std::filesystem::path(path.toStdString()));
+  return save_to(std::filesystem::path(path.toStdU16String()));
 }
 
 bool MainWindow::save_to(const std::filesystem::path& path) {
@@ -3102,7 +3102,7 @@ void MainWindow::open_file_dialog() {
   const QString path = QFileDialog::getOpenFileName(
       this, tr("Open OpenDRIVE file"), start_dir, tr("OpenDRIVE (*.xodr);;All files (*)"));
   if (!path.isEmpty()) {
-    load_file(std::filesystem::path(path.toStdString()));
+    load_file(std::filesystem::path(path.toStdU16String()));
   }
 }
 
@@ -3180,6 +3180,9 @@ void MainWindow::check_crash_reports() {
 }
 
 void MainWindow::check_recovery() {
+  if (document_.is_dirty()) {
+    return;
+  }
   const std::vector<RecoverySet> sets = AutosaveManager::pending_recoveries(
       AutosaveManager::default_recovery_dir(), autosave_.session());
   const RecoverySet* candidate = nullptr;
@@ -3212,7 +3215,8 @@ void MainWindow::check_recovery() {
     AutosaveManager::discard(*candidate);
     return;
   }
-  const auto result = document_.load(candidate->xodr);
+  const auto result = document_.load_recovery(candidate->xodr, candidate->original_path,
+                                              candidate->version < 2, candidate->has_scenario);
   if (!result) {
     // Keep the set on disk — the user can retry on the next start.
     QMessageBox::warning(this,
@@ -3221,10 +3225,15 @@ void MainWindow::check_recovery() {
                                           QString::fromStdString(result.error().context)));
     return;
   }
-  document_.mark_recovered(candidate->original_path);
-  AutosaveManager::discard(*candidate);
   // Re-protect the recovered (dirty) document under this session right away.
-  (void)autosave_.autosave_now();
+  if (autosave_.enabled()) {
+    if (auto protected_copy = autosave_.autosave_now(); protected_copy) {
+      AutosaveManager::discard(*candidate);
+    } else {
+      QMessageBox::warning(this, tr("Recovery copy kept"),
+                           tr("The previous recovery copy was kept. Save your recovered scene."));
+    }
+  }
   update_window_title();
 }
 

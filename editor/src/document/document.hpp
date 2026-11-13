@@ -61,10 +61,17 @@ public:
 
   /// Saves as OpenDRIVE (the .xodr IS the project file, §8). Runs
   /// validate_network first and publishes the findings as the document
-  /// diagnostics — checker findings never block the save; only a network
-  /// the writer cannot serialize fails. On success records `path`, marks
+  /// diagnostics without blocking the save on checker findings. Publishes the
+  /// map, scenario and scene state together. On success records `path`, marks
   /// the undo stack clean, and emits saved().
   [[nodiscard]] Expected<void> save(const std::filesystem::path& path);
+
+  /// Loads the recovered revision without writing to its original location.
+  /// Old autosaves carried only the map, so they use the last saved scenario.
+  [[nodiscard]] Expected<void> load_recovery(const std::filesystem::path& copy,
+                                             const QString& original,
+                                             bool legacy,
+                                             bool has_scenario);
 
   /// Re-runs the OpenDRIVE checker over the CURRENT network and republishes
   /// the findings, emitting diagnostics_changed(). Same semantics as save()'s
@@ -144,13 +151,6 @@ public:
   /// run over it. Both Document::save and AutosaveManager go through this, so
   /// a recovery copy never records a different camera than a real save would.
   [[nodiscard]] SceneState current_scene_state() const;
-
-  /// Re-points a just-loaded recovery copy at the document it recovers
-  /// (M3a #53): file_path() becomes the crashed session's original path
-  /// (empty when that document was never saved) and the document reads
-  /// dirty until the next explicit Save — recovered work must never look
-  /// already-saved.
-  void mark_recovered(const QString& original_path);
 
   /// Exports the current tessellation as a binary glTF (.glb).
   [[nodiscard]] Expected<void> export_glb(const std::filesystem::path& path) const;
@@ -395,6 +395,10 @@ private:
   /// malformed one warns and leaves an empty scenario behind. The `.xodr` alone
   /// is the scene — the same contract read_scene_sidecar keeps.
   void read_scenario(const std::filesystem::path& scene);
+  [[nodiscard]] Expected<void> load_scene(const std::filesystem::path& path,
+                                          const QString* original,
+                                          bool legacy,
+                                          bool has_scenario);
 
   /// Re-mesh + signals after any kernel mutation (full re-mesh in phase 0;
   /// incremental re-mesh is issue #4).
@@ -444,7 +448,7 @@ private:
   QString file_path_;
   SceneState scene_state_;
   /// Whether scene_state_ came off disk (rather than being the empty default).
-  /// mark_recovered() needs it: a recovery copy with no sidecar must not let
+  /// Legacy recovery needs it: a recovery copy with no sidecar must not let
   /// the next save overwrite the ORIGINAL scene's sidecar with defaults.
   bool scene_state_from_disk_ = false;
   std::function<void(SceneState&)> scene_state_provider_;

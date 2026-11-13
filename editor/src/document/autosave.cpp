@@ -16,15 +16,13 @@
 
 #include "document/autosave.hpp"
 
-#include "roadmaker/xodr/writer.hpp"
-
 #include <spdlog/spdlog.h>
 
 #include <QDateTime>
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QSaveFile>
+#include <QLockFile>
 #include <QStandardPaths>
 #include <QUndoStack>
 #include <algorithm>
@@ -33,15 +31,16 @@
 
 #include "document/document.hpp"
 #include "document/scene_sidecar.hpp"
+#include "document/scene_storage.hpp"
 
 namespace roadmaker::editor {
 namespace {
 
-constexpr int kSidecarVersion = 1;
+constexpr int kSidecarVersion = 2;
 
 std::filesystem::path
 member_path(const std::filesystem::path& dir, const QString& session, const char* extension) {
-  return dir / (session.toStdString() + extension);
+  return dir / std::filesystem::path((session + QLatin1String(extension)).toStdU16String());
 }
 
 } // namespace
@@ -69,6 +68,8 @@ AutosaveManager::AutosaveManager(Document& document,
     }
   });
 }
+
+AutosaveManager::~AutosaveManager() = default;
 
 void AutosaveManager::set_enabled(bool enabled) {
   enabled_ = enabled;
@@ -120,58 +121,42 @@ Expected<void> AutosaveManager::autosave_now() {
     return make_error(
         ErrorCode::IoFailure, "cannot create recovery directory: " + ec.message(), dir_.string());
   }
+  if (!session_lock_) {
+    auto lock = std::make_unique<QLockFile>(
+        QString::fromStdU16String(member_path(dir_, session_, ".session.lock").u16string()));
+    lock->setStaleLockTime(0);
+    if (!lock->tryLock(0)) {
+      return make_error(ErrorCode::IoFailure, "Could not lock this recovery session.");
+    }
+    session_lock_ = std::move(lock);
+  }
 
-  // Write-then-rename so a crash mid-write never leaves a truncated copy
-  // where the startup scanner will find it.
-  const std::filesystem::path target = xodr_path();
-  std::filesystem::path tmp = target;
-  tmp += ".tmp";
   const QString original = document_.file_path();
-  const std::string name = original.isEmpty()
-                               ? std::string("recovery")
-                               : std::filesystem::path(original.toStdString()).stem().string();
-  if (auto written = roadmaker::save_xodr(document_.network(), tmp, name); !written.has_value()) {
-    return written;
-  }
-  std::filesystem::rename(tmp, target, ec);
-  if (ec) {
-    return make_error(
-        ErrorCode::IoFailure, "cannot move recovery file: " + ec.message(), target.string());
-  }
-
   const qint64 now = clock_();
   const QJsonObject sidecar{
       {QStringLiteral("version"), kSidecarVersion},
       {QStringLiteral("originalPath"), original},
       {QStringLiteral("dirty"), true},
-      {QStringLiteral("saveToken"), ++save_token_},
+      {QStringLiteral("saveToken"), save_token_ + 1},
       {QStringLiteral("writtenMs"), now},
+      {QStringLiteral("hasScenario"), document_.has_scenario()},
   };
-  QSaveFile file(QString::fromStdString(sidecar_path().string()));
-  if (!file.open(QIODevice::WriteOnly) ||
-      file.write(QJsonDocument(sidecar).toJson(QJsonDocument::Compact)) < 0 || !file.commit()) {
-    return make_error(
-        ErrorCode::IoFailure, "cannot write recovery sidecar", sidecar_path().string());
+  const QByteArray status = QJsonDocument(sidecar).toJson(QJsonDocument::Compact);
+  if (auto written = scene_storage::save(document_, document_.current_scene_state(),
+                                         xodr_path(), &status);
+      !written) {
+    return written;
   }
-  // The scene's Layer-2 state beside the recovery copy (fmt-s1, #325), through
-  // the same current_scene_state() a real save uses so a recovered document
-  // never comes back at a different camera than Save would have recorded. Not
-  // fatal: losing the view is not losing the work.
-  if (const auto state = scene_sidecar::save(scene_state_path(), document_.current_scene_state());
-      !state) {
-    spdlog::warn(
-        "recovery scene state not written: {} ({})", state.error().message, state.error().context);
-  }
+  ++save_token_;
   last_autosave_ms_ = now;
   commands_since_autosave_ = 0;
   return {};
 }
 
 void AutosaveManager::clear_recovery() {
-  std::error_code ec;
-  std::filesystem::remove(xodr_path(), ec);
-  std::filesystem::remove(sidecar_path(), ec);
-  std::filesystem::remove(scene_state_path(), ec);
+  discard(RecoverySet{.xodr = xodr_path(), .sidecar = sidecar_path(),
+                      .scene_state = scene_state_path(), .session = session_});
+  session_lock_.reset();
   commands_since_autosave_ = 0;
 }
 
@@ -205,11 +190,22 @@ AutosaveManager::pending_recoveries(const std::filesystem::path& recovery_dir,
     if (entry.path().stem().extension() == ".rmscene") {
       continue;
     }
-    const QString session = QString::fromStdString(entry.path().stem().string());
+    const QString session = QString::fromStdU16String(entry.path().stem().u16string());
     if (session == current_session) {
       continue;
     }
-    QFile file(QString::fromStdString(entry.path().string()));
+    QLockFile owner(QString::fromStdU16String(
+        member_path(recovery_dir, session, ".session.lock").u16string()));
+    owner.setStaleLockTime(0);
+    if (!owner.tryLock(0)) {
+      continue; // Another editor still owns this unsaved scene.
+    }
+    const auto xodr = member_path(recovery_dir, session, ".xodr");
+    if (auto recovered = scene_storage::recover_interrupted_save(xodr); !recovered) {
+      spdlog::warn("recovery save remains pending: {}", recovered.error().message);
+      continue;
+    }
+    QFile file(QString::fromStdU16String(entry.path().u16string()));
     if (!file.open(QIODevice::ReadOnly)) {
       continue;
     }
@@ -218,15 +214,23 @@ AutosaveManager::pending_recoveries(const std::filesystem::path& recovery_dir,
       continue;
     }
     const QJsonObject object = sidecar.object();
+    const int version = object.value(QStringLiteral("version")).toInt(1);
+    if (version < 1 || version > kSidecarVersion ||
+        (version == kSidecarVersion &&
+         !object.value(QStringLiteral("hasScenario")).isBool())) {
+      continue;
+    }
     RecoverySet set{
-        .xodr = member_path(recovery_dir, session, ".xodr"),
+        .xodr = xodr,
         .sidecar = entry.path(),
-        .scene_state = scene_sidecar::path_for(member_path(recovery_dir, session, ".xodr")),
+        .scene_state = scene_sidecar::path_for(xodr),
         .session = session,
         .original_path = object.value(QStringLiteral("originalPath")).toString(),
         .dirty = object.value(QStringLiteral("dirty")).toBool(false),
         .save_token = object.value(QStringLiteral("saveToken")).toVariant().toLongLong(),
         .written_ms = object.value(QStringLiteral("writtenMs")).toVariant().toLongLong(),
+        .version = version,
+        .has_scenario = object.value(QStringLiteral("hasScenario")).toBool(),
     };
     std::error_code exists_ec;
     if (!std::filesystem::exists(set.xodr, exists_ec)) {
@@ -244,7 +248,12 @@ bool AutosaveManager::should_recover(const RecoverySet& set) {
 }
 
 void AutosaveManager::discard(const RecoverySet& set) {
+  if (!scene_storage::recover_interrupted_save(set.xodr)) {
+    return;
+  }
   std::error_code ec;
+  std::filesystem::remove(scene_storage::scenario_path(set.xodr), ec);
+  std::filesystem::remove(scene_storage::terrain_path(set.xodr), ec);
   std::filesystem::remove(set.xodr, ec);
   std::filesystem::remove(set.sidecar, ec);
   std::filesystem::remove(set.scene_state, ec);
@@ -252,7 +261,7 @@ void AutosaveManager::discard(const RecoverySet& set) {
 
 std::filesystem::path AutosaveManager::default_recovery_dir() {
   const QString base = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-  return std::filesystem::path(base.toStdString()) / "recovery";
+  return std::filesystem::path(base.toStdU16String()) / "recovery";
 }
 
 } // namespace roadmaker::editor

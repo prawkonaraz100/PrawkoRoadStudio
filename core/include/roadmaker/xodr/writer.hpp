@@ -24,6 +24,7 @@
 
 #include <filesystem>
 #include <string>
+#include <string>
 #include <vector>
 
 namespace roadmaker {
@@ -61,6 +62,10 @@ struct WriterOptions {
   /// is a whole-network geometry query, so a caller that only wants a
   /// well-formedness check can turn it off.
   double prop_obstruction_clearance = kPropVerticalClearance;
+
+  /// Override the filename of a populated terrain grid when making a scene copy.
+  /// An empty string keeps the network's stored reference or default filename.
+  std::string terrain_sidecar_name;
 };
 
 /// Checker-rule validation against the target version's catalog.

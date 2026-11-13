@@ -349,7 +349,9 @@ parse_reference_layers(const QJsonValue& value) {
 } // namespace
 
 std::filesystem::path path_for(const std::filesystem::path& scene) {
-  return scene.parent_path() / (scene.stem().string() + kSuffix);
+  auto name = scene.stem();
+  name += kSuffix;
+  return scene.parent_path() / name;
 }
 
 Expected<SceneState> parse(const QByteArray& json) {
@@ -415,7 +417,7 @@ Expected<SceneState> parse(const QByteArray& json) {
 }
 
 Expected<SceneState> load(const std::filesystem::path& path) {
-  QFile file(QString::fromStdString(path.string()));
+  QFile file(QString::fromStdU16String(path.u16string()));
   if (!file.open(QIODevice::ReadOnly)) {
     return make_error(ErrorCode::FileNotFound, "cannot read scene sidecar", path.string());
   }
@@ -475,7 +477,7 @@ Expected<void> save(const std::filesystem::path& path, const SceneState& state) 
   // QSaveFile: the sidecar appears atomically or not at all (Project::create
   // pattern) — a half-written file would be the one thing that CAN cost the
   // user their view state.
-  QSaveFile file(QString::fromStdString(path.string()));
+  QSaveFile file(QString::fromStdU16String(path.u16string()));
   if (!file.open(QIODevice::WriteOnly)) {
     return make_error(ErrorCode::IoFailure, "cannot open scene sidecar for writing", path.string());
   }

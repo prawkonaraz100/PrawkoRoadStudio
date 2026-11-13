@@ -24,7 +24,6 @@
 #include "roadmaker/osc/network_validation.hpp"
 #include "roadmaker/osc/reader.hpp"
 #include "roadmaker/osc/route.hpp"
-#include "roadmaker/osc/writer.hpp"
 #include "roadmaker/road/surface_derivation.hpp"
 #include "roadmaker/xodr/reader.hpp"
 #include "roadmaker/xodr/rules.hpp"
@@ -32,12 +31,15 @@
 
 #include <spdlog/spdlog.h>
 
+#include <QLockFile>
 #include <algorithm>
 #include <cassert>
+#include <optional>
 #include <utility>
 #include <vector>
 
 #include "document/editor_command.hpp"
+#include "document/scene_storage.hpp"
 
 namespace roadmaker::editor {
 
@@ -112,21 +114,67 @@ void Document::refresh_scenario_diagnostics() {
 }
 
 Expected<void> Document::load(const std::filesystem::path& path) {
+  return load_scene(path, nullptr, false, false);
+}
+
+Expected<void> Document::load_recovery(const std::filesystem::path& copy,
+                                      const QString& original,
+                                      bool legacy,
+                                      bool has_scenario) {
+  return load_scene(copy, &original, legacy, has_scenario);
+}
+
+Expected<void> Document::load_scene(const std::filesystem::path& path,
+                                   const QString* original,
+                                   bool legacy,
+                                   bool has_scenario) {
+  const auto load_failed = [this](const Error& error) -> Expected<void> {
+    diagnostics_.push_back(Diagnostic{.severity = Severity::Error,
+                                      .location = error.context,
+                                      .message = error.message});
+    spdlog::error("load failed: {} ({})", error.message, error.context);
+    emit diagnostics_changed();
+    return tl::unexpected(error);
+  };
+  auto lock = scene_storage::lock_for_read(path);
+  if (!lock) {
+    return load_failed(lock.error());
+  }
+  const std::filesystem::path original_scene(
+      original == nullptr ? std::u16string{} : original->toStdU16String());
+  std::unique_ptr<QLockFile> original_lock;
+  if (legacy && !original_scene.empty() && original_scene != path) {
+    auto guarded = scene_storage::lock_for_read(original_scene);
+    if (!guarded) {
+      return load_failed(guarded.error());
+    }
+    original_lock = std::move(*guarded);
+  }
   // Initiating a load ends any drag mid-flight; the revert happens against
   // the network the preview was applied to, before any swap.
   cancel_preview();
   auto result = roadmaker::load_xodr(path);
   if (!result) {
-    diagnostics_.push_back(Diagnostic{
-        .severity = Severity::Error,
-        .location = result.error().context,
-        .message = result.error().message,
-    });
-    spdlog::error("load failed: {} ({})", result.error().message, result.error().context);
-    emit diagnostics_changed();
-    return tl::unexpected(result.error());
+    return load_failed(result.error());
   }
 
+  std::optional<osc::XoscParseResult> recovered_scenario;
+  if (original != nullptr && !legacy) {
+    if (!result->network.terrain().sidecar.empty() && result->network.terrain().empty()) {
+      return make_error(ErrorCode::IoFailure, "The recovery copy is missing its terrain grid.",
+                        QString::fromStdU16String(path.u16string()).toStdString());
+    }
+    if (auto state = scene_sidecar::load(scene_sidecar::path_for(path)); !state) {
+      return load_failed(state.error());
+    }
+    if (has_scenario) {
+      auto parsed = osc::load_xosc(scene_storage::scenario_path(path));
+      if (!parsed) {
+        return load_failed(parsed.error());
+      }
+      recovered_scenario = std::move(*parsed);
+    }
+  }
   // Clear the stack (destroying its commands, which may discard against the
   // current network) BEFORE swapping in the loaded one, so no undone command
   // ever discards against a network it never touched (#271). The arena guards
@@ -134,20 +182,45 @@ Expected<void> Document::load(const std::filesystem::path& path) {
   undo_stack_.clear();
   network_ = std::move(result->network);
   diagnostics_ = std::move(result->diagnostics);
-  file_path_ = QString::fromStdString(path.string());
+  file_path_ = original == nullptr ? QString::fromStdU16String(path.u16string()) : *original;
   mesh_ = build_network_mesh(network_, studio_mesh_options());
   // Layer 2 (fmt-s1, #325): comfort state, read AFTER the network is in place
   // and never able to fail the load — the .xodr alone is the scene.
   read_scene_sidecar(path);
+  if (legacy && !scene_state_from_disk_ && !original_scene.empty()) {
+    read_scene_sidecar(original_scene);
+  }
   // The second Layer-0 document (p8-s2, #246), on the same terms: a scene with
   // no scenario is the common case and must load in silence.
-  read_scenario(path);
+  if (original == nullptr) {
+    read_scenario(path);
+  } else if (legacy && !original_scene.empty()) {
+    read_scenario(original_scene);
+  } else {
+    scenario_ = osc::Scenario{};
+    if (recovered_scenario) {
+      scenario_ = std::move(recovered_scenario->scenario);
+      auto& logic = scenario_.road_network.logic_file;
+      if (logic && !original_scene.empty()) {
+        logic->filepath = QString::fromStdU16String(original_scene.filename().u16string())
+                              .toStdString();
+      }
+      diagnostics_.insert(diagnostics_.end(),
+                          recovered_scenario->diagnostics.begin(),
+                          recovered_scenario->diagnostics.end());
+    }
+  }
+  if (original != nullptr) {
+    undo_stack_.resetClean();
+  }
 
   spdlog::info("loaded {} ({} roads, {} diagnostics)",
                path.string(),
                network_.road_count(),
                diagnostics_.size());
 
+  original_lock.reset();
+  lock->reset();
   emit loaded();
   emit mesh_changed({});
   emit scenario_changed();
@@ -165,9 +238,7 @@ std::filesystem::path Document::scenario_path() const {
   // Concatenation rather than replace_extension, the scene_sidecar::path_for
   // rule: a bare relative `scene.xodr` (empty parent path) must yield
   // `scene.xosc` and not something absolute-looking.
-  std::filesystem::path scene(file_path_.toStdString());
-  scene.replace_extension(".xosc");
-  return scene;
+  return scene_storage::scenario_path(std::filesystem::path(file_path_.toStdU16String()));
 }
 
 bool Document::has_scenario() const {
@@ -187,8 +258,7 @@ bool Document::has_scenario() const {
 void Document::read_scenario(const std::filesystem::path& scene) {
   scenario_ = osc::Scenario{};
 
-  std::filesystem::path path(scene);
-  path.replace_extension(".xosc");
+  const std::filesystem::path path = scene_storage::scenario_path(scene);
   std::error_code ec;
   if (!std::filesystem::exists(path, ec)) {
     return; // every scene without a scenario — silent, and the common case
@@ -269,7 +339,7 @@ std::filesystem::path Document::scene_directory() const {
   if (file_path_.isEmpty()) {
     return std::filesystem::current_path();
   }
-  return std::filesystem::path(file_path_.toStdString()).parent_path();
+  return std::filesystem::path(file_path_.toStdU16String()).parent_path();
 }
 
 void Document::report_diagnostics(std::vector<Diagnostic> findings) {
@@ -415,12 +485,16 @@ void Document::refresh_diagnostics() {
 }
 
 Expected<void> Document::save(const std::filesystem::path& path) {
+  if (preview_active()) {
+    return make_error(ErrorCode::InvalidArgument, "Finish the current edit before saving.");
+  }
   // Never blocks the save — only a network the writer cannot serialize fails.
   diagnostics_ = roadmaker::validate_network(network_);
 
-  const std::string name = path.stem().string();
-  auto written = roadmaker::save_xodr(network_, path, name.empty() ? "roadmaker" : name);
+  SceneState state = current_scene_state();
+  const auto written = scene_storage::save(*this, state, path);
   if (!written) {
+    undo_stack_.resetClean();
     diagnostics_.push_back(Diagnostic{
         .severity = Severity::Error,
         .location = written.error().context,
@@ -431,42 +505,9 @@ Expected<void> Document::save(const std::filesystem::path& path) {
     return written;
   }
 
-  file_path_ = QString::fromStdString(path.string());
-  // Layer 2 beside Layer 0/1 (fmt-s1, #325): a separate file, so the .xodr
-  // stays byte-for-byte the pure ASAM export. Written before saved() fires, so
-  // every listener (autosave sweep, welcome thumbnail) sees a complete pair.
-  // A failure here costs the camera, never the scene — it must not fail a save.
-  scene_state_ = current_scene_state();
-  if (const auto written_state = scene_sidecar::save(scene_sidecar::path_for(path), scene_state_);
-      written_state) {
-    scene_state_from_disk_ = true;
-  } else {
-    spdlog::error("scene sidecar not written: {} ({})",
-                  written_state.error().message,
-                  written_state.error().context);
-  }
-  // The second Layer-0 file (p8-s2, #246), stem-matched beside the .xodr per
-  // ADR-0014 §9.
-  //
-  // WRITTEN ONLY WHEN THERE IS A SCENARIO, so an ordinary road project does not
-  // sprout an empty .xosc beside every scene. And like the sidecar, a failure
-  // here NEVER fails a save that already wrote the .xodr: the roads are on
-  // disk, and reporting the scenario problem is more useful than pretending the
-  // whole save failed.
-  if (has_scenario()) {
-    const std::filesystem::path scenario_file = scenario_path();
-    if (const auto written_scenario = osc::save_xosc(scenario_, scenario_file); !written_scenario) {
-      spdlog::error("scenario not written: {} ({})",
-                    written_scenario.error().message,
-                    written_scenario.error().context);
-      diagnostics_.push_back(Diagnostic{
-          .severity = Severity::Error,
-          .location = scenario_file.filename().string(),
-          .message =
-              "the scene was saved but its scenario was not: " + written_scenario.error().message,
-      });
-    }
-  }
+  file_path_ = QString::fromStdU16String(path.u16string());
+  scene_state_ = std::move(state);
+  scene_state_from_disk_ = true;
 
   undo_stack_.setClean();
   spdlog::info("saved {} ({} roads, {} diagnostics)",
@@ -477,24 +518,6 @@ Expected<void> Document::save(const std::filesystem::path& path) {
   emit saved();
   emit diagnostics_changed();
   return {};
-}
-
-void Document::mark_recovered(const QString& original_path) {
-  // The recovery copy's own sidecar (autosaved beside it) wins — it is the
-  // newest state there is. When it is missing, fall back to the ORIGINAL
-  // scene's sidecar rather than keeping the empty default: file_path_ is about
-  // to point at the user's real file, and the next Save would otherwise
-  // overwrite their camera AND every retained forward-compat key with nothing.
-  if (!scene_state_from_disk_ && !original_path.isEmpty()) {
-    read_scene_sidecar(std::filesystem::path(original_path.toStdString()));
-  }
-  // No scene_state_loaded() here: the recovered document is already framed, and
-  // re-posing the camera under a recovery prompt would be jarring. The state is
-  // seated for the next save, which is what was at risk.
-  file_path_ = original_path;
-  // resetClean (not a moved index) — the loaded recovery stack IS empty,
-  // but the content differs from whatever sits at original_path.
-  undo_stack_.resetClean();
 }
 
 Expected<void> Document::export_glb(const std::filesystem::path& path) const {

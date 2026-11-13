@@ -297,7 +297,7 @@ TEST(DocumentSceneState, SceneStateLoadedFiresLastOnLoadAndOnReset) {
       << "File → New must re-publish the (empty) state";
 }
 
-TEST(DocumentSceneState, AnUnwritableSidecarDoesNotFailTheSave) {
+TEST(DocumentSceneState, AnUnwritableSidecarKeepsTheDocumentDirty) {
   QTemporaryDir dir;
   ASSERT_TRUE(dir.isValid());
   const std::filesystem::path scene = std::filesystem::path(dir.path().toStdString()) / "town.xodr";
@@ -308,15 +308,18 @@ TEST(DocumentSceneState, AnUnwritableSidecarDoesNotFailTheSave) {
   document.reset();
   document.set_scene_state_provider(provider(sample_view(), true));
   ASSERT_TRUE(document.push_command(make_road(0.0, "First")).has_value());
-  EXPECT_TRUE(document.save(scene).has_value()) << "comfort state must never cost a save";
-  EXPECT_TRUE(std::filesystem::exists(scene));
+  QSignalSpy saved(&document, &Document::saved);
+  EXPECT_FALSE(document.save(scene).has_value());
+  EXPECT_TRUE(document.is_dirty());
+  EXPECT_TRUE(saved.isEmpty());
+  EXPECT_FALSE(std::filesystem::exists(scene));
 }
 
 // ---------------------------------------------------------------------------
 // Crash recovery — the path where an absent sidecar could destroy a real one
 // ---------------------------------------------------------------------------
 
-TEST(DocumentSceneState, MarkRecoveredReSeatsTheStateFromTheOriginalScene) {
+TEST(DocumentSceneState, LegacyRecoveryRestoresTheStateFromTheOriginalScene) {
   QTemporaryDir dir;
   ASSERT_TRUE(dir.isValid());
   const auto root = std::filesystem::path(dir.path().toStdString());
@@ -334,7 +337,7 @@ TEST(DocumentSceneState, MarkRecoveredReSeatsTheStateFromTheOriginalScene) {
   Document document;
   ASSERT_TRUE(document.load(copy).has_value());
   EXPECT_FALSE(document.scene_state().view.has_value());
-  document.mark_recovered(QString::fromStdString(original.string()));
+  ASSERT_TRUE(document.load_recovery(copy, QString::fromStdString(original.string()), true, false));
 
   // Without the re-seat, the next Save would overwrite town.rmscene.json with
   // an empty document — losing the camera AND the retained `snap` block.
@@ -367,16 +370,14 @@ TEST(DocumentSceneState, TheRecoveryCopysOwnSidecarWinsOverTheOriginals) {
                  "distance": 999, "projection": "perspective"}})");
 
   Document document;
-  ASSERT_TRUE(document.load(copy).has_value());
-  document.mark_recovered(QString::fromStdString(original.string()));
+  ASSERT_TRUE(document.load_recovery(copy, QString::fromStdString(original.string()), true, false));
   ASSERT_TRUE(document.scene_state().view.has_value());
   EXPECT_EQ(document.scene_state().view->distance, 999.0F) << "the autosaved state is the newest";
 }
 
-TEST(DocumentSceneState, MarkRecoveredOnANeverSavedDocumentKeepsDefaults) {
+TEST(DocumentSceneState, LegacyRecoveryOnANeverSavedDocumentKeepsDefaults) {
   Document document;
-  ASSERT_TRUE(document.load(kSample).has_value());
-  document.mark_recovered(QString());
+  ASSERT_TRUE(document.load_recovery(kSample, {}, true, false));
   EXPECT_FALSE(document.scene_state().view.has_value());
 }
 

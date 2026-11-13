@@ -18,9 +18,8 @@
 
 // Autosave & crash recovery (M3a issue #53,
 // docs/design/m3a/05_editor_and_docs.md §3). The recovery copy is a valid
-// .xodr written through the same version-explicit writer as Save — never a
-// bespoke format — plus a JSON sidecar recording the original document path,
-// the dirty state, and a monotonic save token. The write policy (debounce
+// scene written through the same storage as Save, plus a JSON sidecar
+// recording the original document path, dirty state and save token. The write policy (debounce
 // interval, every-N-commands) and the recover-vs-clean decision live here so
 // a gtest can drive them with a fake clock; the periodic QTimer is a thin
 // MainWindow wrapper. Autosave NEVER writes to the user's own file.
@@ -31,15 +30,16 @@
 #include <QString>
 #include <filesystem>
 #include <functional>
+#include <memory>
 #include <vector>
+
+class QLockFile;
 
 namespace roadmaker::editor {
 
 class Document;
 
-/// One session's recovery set on disk: <session>.xodr, the <session>.json
-/// status record, and (fmt-s1, #325) the <session>.rmscene.json scene state,
-/// so a recovered document reopens at the camera the crash interrupted.
+/// One session's map, optional scenario and terrain, scene state and status record.
 struct RecoverySet {
   std::filesystem::path xodr;
   std::filesystem::path sidecar;
@@ -51,6 +51,8 @@ struct RecoverySet {
   bool dirty = false;
   qint64 save_token = 0;
   qint64 written_ms = 0; ///< epoch milliseconds of the last autosave
+  int version = 1;
+  bool has_scenario = false;
 };
 
 class AutosaveManager : public QObject {
@@ -71,6 +73,7 @@ public:
                   QString session_id,
                   Clock clock = {},
                   QObject* parent = nullptr);
+  ~AutosaveManager() override;
 
   /// Timer tick: writes when the document is dirty, no preview drag is in
   /// flight, and at least kIntervalMs elapsed since the last write.
@@ -123,6 +126,7 @@ private:
   std::filesystem::path dir_;
   QString session_;
   Clock clock_;
+  std::unique_ptr<QLockFile> session_lock_;
   qint64 last_autosave_ms_ = 0;
   qint64 save_token_ = 0;
   int commands_since_autosave_ = 0;

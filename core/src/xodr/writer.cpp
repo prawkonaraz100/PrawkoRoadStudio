@@ -67,7 +67,12 @@ void append_fragment(pugi::xml_node parent, const std::string& fragment) {
 /// ONE definition so `<userData code="rm:terrain">` and save_xodr can never
 /// name different files: an unset — or unsafe — stored reference falls back to
 /// the document's own stem.
-std::string sidecar_reference(const HeightField& field, std::string_view document_name) {
+std::string sidecar_reference(const HeightField& field,
+                              std::string_view document_name,
+                              const WriterOptions& options) {
+  if (!field.empty() && is_safe_sidecar_reference(options.terrain_sidecar_name)) {
+    return options.terrain_sidecar_name;
+  }
   if (is_safe_sidecar_reference(field.sidecar)) {
     return field.sidecar;
   }
@@ -2969,7 +2974,7 @@ Expected<std::string> write_xodr(const RoadNetwork& network,
   // against), and that shape has to re-emit the same element or the round-trip
   // would silently drop the scene's terrain.
   if (!network.terrain().empty() || !network.terrain().sidecar.empty()) {
-    const std::string reference = sidecar_reference(network.terrain(), document_name);
+    const std::string reference = sidecar_reference(network.terrain(), document_name, options);
     pugi::xml_node user_data = root.append_child("userData");
     user_data.append_attribute("code").set_value("rm:terrain");
     user_data.append_attribute("value").set_value(reference.c_str());
@@ -3007,6 +3012,7 @@ Expected<void> save_xodr(const RoadNetwork& network,
     return make_error(ErrorCode::IoFailure, "could not open file for writing", path.string());
   }
   stream << *text;
+  stream.close();
   if (!stream.good()) {
     return make_error(ErrorCode::IoFailure, "write failed", path.string());
   }
@@ -3017,7 +3023,7 @@ Expected<void> save_xodr(const RoadNetwork& network,
   // because an in-memory parse has no directory to resolve against — must not
   // overwrite or truncate the sidecar already sitting on disk.
   if (!network.terrain().empty()) {
-    const std::string reference = sidecar_reference(network.terrain(), document_name);
+    const std::string reference = sidecar_reference(network.terrain(), document_name, options);
     if (auto sidecar = save_terrain_asc(network.terrain(), path.parent_path() / reference);
         !sidecar) {
       return sidecar;

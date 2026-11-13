@@ -269,6 +269,7 @@ Expected<void> save_terrain_asc(const HeightField& field, const std::filesystem:
     return make_error(ErrorCode::IoFailure, "could not open file for writing", path.string());
   }
   stream << *text;
+  stream.close();
   if (!stream.good()) {
     return make_error(ErrorCode::IoFailure, "write failed", path.string());
   }

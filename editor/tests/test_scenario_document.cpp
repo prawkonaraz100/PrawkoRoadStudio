@@ -47,6 +47,7 @@
 #include <string>
 
 #include "document/document.hpp"
+#include "document/scene_storage.hpp"
 
 namespace roadmaker::editor {
 namespace {
@@ -165,6 +166,81 @@ TEST(ScenarioDocument, AnAuthoredScenarioSavesBesideTheSceneAndLoadsBack) {
   ASSERT_EQ(reader.scenario().entities.scenario_objects.size(), 1U);
   EXPECT_EQ(reader.scenario().entities.scenario_objects[0].name, "Car1");
   EXPECT_TRUE(reader.has_scenario());
+  ASSERT_TRUE(reader.scenario().road_network.logic_file);
+  EXPECT_EQ(reader.scenario().road_network.logic_file->filepath, "town.xodr");
+}
+
+TEST(ScenarioDocument, FailedScenarioWriteLeavesThePreviousSceneAndView) {
+  QTemporaryDir dir;
+  ASSERT_TRUE(dir.isValid());
+  const auto scene = std::filesystem::path(dir.path().toStdString()) / "town.xodr";
+  const auto scenario = scene_storage::scenario_path(scene);
+  const auto view = scene_sidecar::path_for(scene);
+  Document document;
+  author_a_road(document);
+  ASSERT_TRUE(document.save(scene));
+  const std::string map_before = read_bytes(scene);
+  const std::string view_before = read_bytes(view);
+  ASSERT_TRUE(std::filesystem::create_directory(scenario));
+
+  place_an_actor(document, "Car1");
+  ASSERT_TRUE(document.push_command(edit::create_road(
+      {Waypoint{.x = 0.0, .y = 40.0}, Waypoint{.x = 100.0, .y = 40.0}},
+      LaneProfile::two_lane_default(), "second")));
+  QSignalSpy saved(&document, &Document::saved);
+  EXPECT_FALSE(document.save(scene));
+  EXPECT_TRUE(document.is_dirty());
+  EXPECT_TRUE(saved.isEmpty());
+  EXPECT_EQ(read_bytes(scene), map_before);
+  EXPECT_EQ(read_bytes(view), view_before);
+  EXPECT_TRUE(std::filesystem::is_directory(scenario));
+
+  ASSERT_TRUE(std::filesystem::remove(scenario));
+  ASSERT_TRUE(document.save(scene));
+  EXPECT_FALSE(document.is_dirty());
+  EXPECT_EQ(saved.count(), 1);
+  Document loaded;
+  ASSERT_TRUE(loaded.load(scene));
+  EXPECT_EQ(loaded.network().road_count(), 2U);
+  EXPECT_EQ(loaded.scenario().entities.scenario_objects.size(), 1U);
+}
+
+TEST(ScenarioDocument, InterruptedPublicationRollsBackBeforeOpening) {
+  QTemporaryDir dir;
+  ASSERT_TRUE(dir.isValid());
+  const auto root = std::filesystem::path(dir.path().toStdString());
+  const auto scene = root / "town.xodr";
+  const auto scenario = scene_storage::scenario_path(scene);
+  Document document;
+  author_a_road(document);
+  place_an_actor(document, "Car1");
+  ASSERT_TRUE(document.save(scene));
+  const std::string map_before = read_bytes(scene);
+  const std::string scenario_before = read_bytes(scenario);
+  const std::string view_before = read_bytes(scene_sidecar::path_for(scene));
+
+  // Reproduce a stopped process after publishing XOSC and before publishing
+  // the view or XODR. The journal retains every previous file.
+  const auto journal = root / ".town.xodr.prawko-save";
+  ASSERT_TRUE(std::filesystem::create_directories(journal / "previous"));
+  ASSERT_TRUE(std::filesystem::copy_file(scenario, journal / "previous" / "town.xosc"));
+  ASSERT_TRUE(std::filesystem::copy_file(scene, journal / "town.xodr"));
+  ASSERT_TRUE(std::filesystem::copy_file(scene_sidecar::path_for(scene),
+                                         journal / "town.rmscene.json"));
+  {
+    std::ofstream(journal / "members.json")
+        << R"([{"name":"town.xosc","remove":false,"hadOriginal":true},)"
+           R"({"name":"town.rmscene.json","remove":false,"hadOriginal":true},)"
+           R"({"name":"town.xodr","remove":false,"hadOriginal":true}])";
+    std::ofstream(scenario) << "partial publication";
+  }
+  Document loaded;
+  ASSERT_TRUE(loaded.load(scene));
+  EXPECT_EQ(loaded.scenario().entities.scenario_objects.size(), 1U);
+  EXPECT_EQ(read_bytes(scene), map_before);
+  EXPECT_EQ(read_bytes(scenario), scenario_before);
+  EXPECT_EQ(read_bytes(scene_sidecar::path_for(scene)), view_before);
+  EXPECT_FALSE(std::filesystem::exists(journal));
 }
 
 TEST(ScenarioDocument, SaveReopenSaveIsByteIdentical) {

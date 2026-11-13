@@ -32,6 +32,9 @@
 #include "document/autosave.hpp"
 #include "document/document.hpp"
 #include "document/scene_sidecar.hpp"
+#include "document/scene_storage.hpp"
+#include "roadmaker/osc/catalog.hpp"
+#include "roadmaker/osc/edit.hpp"
 
 namespace roadmaker::editor {
 namespace {
@@ -205,12 +208,12 @@ TEST(Autosave, CrashRecoveryRoundTrip) {
   EXPECT_EQ(set.session, QStringLiteral("crashed"));
   EXPECT_EQ(set.original_path, QString::fromStdString(original.string()));
   EXPECT_EQ(set.save_token, 2);
+  EXPECT_EQ(set.version, 2);
   EXPECT_TRUE(AutosaveManager::should_recover(set));
 
   // Recover: load the copy, re-point at the original, dirty until Save.
   Document document;
-  ASSERT_TRUE(document.load(set.xodr).has_value());
-  document.mark_recovered(set.original_path);
+  ASSERT_TRUE(document.load_recovery(set.xodr, set.original_path, false, set.has_scenario));
   EXPECT_TRUE(document.is_dirty());
   EXPECT_EQ(document.file_path(), set.original_path);
   EXPECT_EQ(document.network().road_count(), 2U);
@@ -261,6 +264,116 @@ TEST(Autosave, WritesTheSceneStateBesideTheRecoveryCopy) {
   EXPECT_EQ(recovered.scene_state().view->projection, ProjectionMode::Orthographic);
 }
 
+TEST(Autosave, RecoversTheEditedScenarioAndCameraAsOneRevision) {
+  QTemporaryDir dir;
+  ASSERT_TRUE(dir.isValid());
+  const auto original = dir_path(dir) / "scene.xodr";
+  Document document;
+  AutosaveManager autosave(document, dir_path(dir), QStringLiteral("scenario"));
+  ASSERT_TRUE(document.push_command(make_road(0.0, "Main")));
+  const osc::LanePosition lane{.road_id = "1", .lane_id = "-1", .s = 20.0};
+  ASSERT_TRUE(document.push_scenario_command(osc::edit::place_scenario_object(
+      document.scenario(), osc::make_actor(osc::ActorKind::Car, "Ego"), lane)));
+  ASSERT_TRUE(document.save(original));
+  ASSERT_TRUE(document.push_scenario_command(osc::edit::place_scenario_object(
+      document.scenario(), osc::make_actor(osc::ActorKind::Pedestrian, "Walker"), lane)));
+  document.set_scene_state_provider([](SceneState& state) {
+    state.view = SceneViewState{.distance = 42.0F, .projection = ProjectionMode::Orthographic};
+  });
+  ASSERT_TRUE(autosave.autosave_now());
+  EXPECT_TRUE(AutosaveManager::pending_recoveries(dir_path(dir), QStringLiteral("other")).empty());
+  const auto own_copy = autosave.xodr_path();
+  const QString original_path = document.file_path();
+  // The live session's files may be inspected here, but startup must not offer
+  // them for recovery until the owning editor has closed or crashed.
+
+  Document disk;
+  ASSERT_TRUE(disk.load(original));
+  ASSERT_EQ(disk.scenario().entities.scenario_objects.size(), 1U);
+  Document recovered;
+  ASSERT_TRUE(recovered.load_recovery(own_copy, original_path, false, true));
+  EXPECT_TRUE(recovered.is_dirty());
+  EXPECT_EQ(recovered.file_path(), original_path);
+  ASSERT_EQ(recovered.scenario().entities.scenario_objects.size(), 2U);
+  EXPECT_EQ(recovered.scenario().entities.scenario_objects.back().name, "Walker");
+  ASSERT_TRUE(recovered.scene_state().view);
+  EXPECT_EQ(recovered.scene_state().view->distance, 42.0F);
+  EXPECT_EQ(recovered.scene_state().view->projection, ProjectionMode::Orthographic);
+
+  ASSERT_TRUE(std::filesystem::remove(scene_storage::scenario_path(own_copy)));
+  EXPECT_FALSE(disk.load_recovery(own_copy, original_path, false, true));
+  EXPECT_EQ(disk.scenario().entities.scenario_objects.size(), 1U);
+  EXPECT_FALSE(disk.is_dirty());
+}
+
+TEST(Autosave, UndoOfAnUnsavedScenarioRemovesTheOldRecoveryScenario) {
+  QTemporaryDir dir;
+  ASSERT_TRUE(dir.isValid());
+  Document document;
+  AutosaveManager autosave(document, dir_path(dir), QStringLiteral("undone"));
+  ASSERT_TRUE(document.push_command(make_road(0.0, "Main")));
+  const osc::LanePosition lane{.road_id = "1", .lane_id = "-1", .s = 20.0};
+  ASSERT_TRUE(document.push_scenario_command(osc::edit::place_scenario_object(
+      document.scenario(), osc::make_actor(osc::ActorKind::Car, "Ego"), lane)));
+  ASSERT_TRUE(autosave.autosave_now());
+  EXPECT_TRUE(std::filesystem::exists(scene_storage::scenario_path(autosave.xodr_path())));
+  document.undo_stack()->undo();
+  ASSERT_TRUE(autosave.autosave_now());
+  EXPECT_FALSE(std::filesystem::exists(scene_storage::scenario_path(autosave.xodr_path())));
+  Document recovered;
+  ASSERT_TRUE(recovered.load_recovery(autosave.xodr_path(), {}, false, false));
+  EXPECT_FALSE(recovered.has_scenario());
+}
+
+TEST(Autosave, LegacyRecoveryKeepsThePreviouslySavedScenario) {
+  QTemporaryDir dir;
+  ASSERT_TRUE(dir.isValid());
+  const auto original = dir_path(dir) / "original.xodr";
+  const auto recovery = dir_path(dir) / "legacy.xodr";
+  Document document;
+  ASSERT_TRUE(document.push_command(make_road(0.0, "Main")));
+  const osc::LanePosition lane{.road_id = "1", .lane_id = "-1", .s = 20.0};
+  ASSERT_TRUE(document.push_scenario_command(osc::edit::place_scenario_object(
+      document.scenario(), osc::make_actor(osc::ActorKind::Car, "Ego"), lane)));
+  ASSERT_TRUE(document.save(original));
+  ASSERT_TRUE(std::filesystem::copy_file(original, recovery));
+  Document recovered;
+  ASSERT_TRUE(recovered.load_recovery(recovery, document.file_path(), true, false));
+  EXPECT_TRUE(recovered.is_dirty());
+  ASSERT_EQ(recovered.scenario().entities.scenario_objects.size(), 1U);
+  EXPECT_EQ(recovered.scenario().entities.scenario_objects.front().name, "Ego");
+}
+
+TEST(Autosave, RecoveryAndSaveAsGiveTerrainCopiesIndependentNames) {
+  QTemporaryDir dir;
+  ASSERT_TRUE(dir.isValid());
+  const auto root = dir_path(dir);
+  const auto original = root / "original.xodr";
+  const auto variant = root / "variant.xodr";
+  Document document;
+  AutosaveManager autosave(document, root / "recovery", QStringLiteral("terrain"));
+  ASSERT_TRUE(document.push_command(make_road(0.0, "Main")));
+  HeightField terrain{.spacing = 10.0, .cols = 2, .rows = 2,
+                      .heights = {0.0, 0.0, 1.0, 1.0}};
+  ASSERT_TRUE(document.push_command(edit::set_terrain_field(document.network(), terrain)));
+  ASSERT_TRUE(document.save(original));
+  ASSERT_TRUE(document.load(original));
+  const auto first = file_bytes(scene_storage::terrain_path(original));
+  ASSERT_FALSE(first.empty());
+
+  terrain.heights[0] = 2.0;
+  ASSERT_TRUE(document.push_command(edit::set_terrain_field(document.network(), terrain)));
+  ASSERT_TRUE(autosave.autosave_now());
+  Document recovered;
+  ASSERT_TRUE(recovered.load_recovery(autosave.xodr_path(), document.file_path(), false, false));
+  EXPECT_EQ(recovered.network().terrain().heights, terrain.heights);
+  ASSERT_TRUE(recovered.save(variant));
+  EXPECT_EQ(file_bytes(scene_storage::terrain_path(original)), first);
+  EXPECT_NE(file_bytes(scene_storage::terrain_path(variant)), first);
+  ASSERT_TRUE(recovered.load(variant));
+  EXPECT_EQ(recovered.network().terrain().heights, terrain.heights);
+}
+
 TEST(Autosave, ClearRecoveryAndDiscardSweepTheSceneState) {
   QTemporaryDir dir;
   ASSERT_TRUE(dir.isValid());
@@ -278,10 +391,9 @@ TEST(Autosave, ClearRecoveryAndDiscardSweepTheSceneState) {
 
   ASSERT_TRUE(document.push_command(make_road(40.0, "Second")).has_value());
   ASSERT_TRUE(autosave.autosave_now().has_value());
-  const auto sets = AutosaveManager::pending_recoveries(dir_path(dir), QStringLiteral("other"));
-  ASSERT_EQ(sets.size(), 1U);
-  EXPECT_EQ(sets.front().scene_state, autosave.scene_state_path());
-  AutosaveManager::discard(sets.front());
+  AutosaveManager::discard(RecoverySet{.xodr = autosave.xodr_path(),
+                                       .sidecar = autosave.sidecar_path(),
+                                       .scene_state = autosave.scene_state_path()});
   EXPECT_FALSE(std::filesystem::exists(autosave.scene_state_path()));
 }
 

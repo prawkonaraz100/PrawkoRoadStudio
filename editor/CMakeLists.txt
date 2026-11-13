@@ -69,6 +69,7 @@ add_library(roadmaker_editor_lib STATIC
   src/document/esmini_preview.cpp
   src/document/esmini_simulation.cpp
   src/document/scenario_video_export.cpp
+  src/document/scene_storage.cpp
   src/document/simulation_trace.cpp
   src/document/export_preview_state.cpp
   src/document/export_preview_models.cpp

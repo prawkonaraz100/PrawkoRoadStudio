@@ -1948,6 +1948,7 @@ Expected<void> save_xosc(const Scenario& scenario,
     return make_error(ErrorCode::IoFailure, "could not open file for writing", path.string());
   }
   stream.write(text->data(), static_cast<std::streamsize>(text->size()));
+  stream.close();
   if (!stream.good()) {
     return make_error(ErrorCode::IoFailure, "write failed", path.string());
   }
