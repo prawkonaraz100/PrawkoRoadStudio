@@ -8,6 +8,8 @@
 #include <QStringList>
 #include <QVector>
 
+#include <array>
+
 namespace roadmaker::editor {
 
 struct SimulationSample {
@@ -38,6 +40,40 @@ struct SimulationTrace {
   QStringList unstarted_events;
   QStringList incomplete_events;
   QStringList ambiguous_events;
+};
+
+struct SimulationActorPose {
+  QString actor_name;
+  std::array<double, 3> position{};
+  double heading = 0.0;
+  double pitch = 0.0;
+  double roll = 0.0;
+};
+
+/// Time-indexed actor transforms shared by playback and frame capture.
+class SimulationPlayback {
+public:
+  SimulationPlayback(const SimulationTrace& trace, double timestep);
+
+  [[nodiscard]] double duration() const { return duration_; }
+  [[nodiscard]] QVector<SimulationActorPose> poses_at(double time) const;
+
+private:
+  struct Keyframe {
+    double time;
+    std::array<double, 3> position;
+    double heading;
+    double pitch;
+    double roll;
+  };
+  struct Track {
+    QString name;
+    QVector<Keyframe> frames;
+  };
+
+  QVector<Track> tracks_;
+  double duration_ = 0.0;
+  double timestep_;
 };
 
 /// Reads extended dat2csv output and esmini's storyboard transitions.

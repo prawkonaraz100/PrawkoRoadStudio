@@ -232,6 +232,24 @@ TEST(ActorRendering, TheBoxSitsOnTheGroundRatherThanHalfBuriedInIt) {
   EXPECT_NEAR(actors[0].transform.model[14], static_cast<float>(car.height / 2.0), 1e-5F);
 }
 
+TEST(ActorRendering, PitchAndRollRotateTheBoxAndItsOffset) {
+  const osc::BoundingBox box{.center_x = 1.0,
+                            .center_y = 2.0,
+                            .center_z = 3.0,
+                            .width = 2.0,
+                            .length = 4.0,
+                            .height = 6.0};
+  const auto matrix =
+      actor_transform({10.0, 20.0, 30.0}, 0.0, box, std::numbers::pi / 2, std::numbers::pi / 2)
+          .model;
+  EXPECT_NEAR(matrix[2], -4.0F, 1e-5F); // forward points down
+  EXPECT_NEAR(matrix[4], 2.0F, 1e-5F);  // left points along +x
+  EXPECT_NEAR(matrix[9], -6.0F, 1e-5F); // up points along -y
+  EXPECT_NEAR(matrix[12], 12.0F, 1e-5F);
+  EXPECT_NEAR(matrix[13], 17.0F, 1e-5F);
+  EXPECT_NEAR(matrix[14], 29.0F, 1e-5F);
+}
+
 TEST(ActorRendering, TheUnitCubeIsClosedAndFlatShaded) {
   const RenderMeshData mesh = actor_box_mesh();
   // Six faces x four corners, each face with its own vertices so the normals

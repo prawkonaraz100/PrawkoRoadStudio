@@ -3,10 +3,14 @@
 #include "document/simulation_trace.hpp"
 
 #include <QFile>
+#include <QHash>
 #include <QRegularExpression>
 #include <QSet>
+#include <algorithm>
 #include <array>
 #include <cmath>
+#include <iterator>
+#include <numbers>
 
 namespace roadmaker::editor {
 namespace {
@@ -69,7 +73,7 @@ Expected<QVector<SimulationSample>> read_samples(const QString& path) {
     sample.road_id = fields.at(9 + extra).trimmed();
     bool lane_ok = false;
     sample.lane_id = fields.at(10 + extra).toInt(&lane_ok);
-    if (!valid || !id_ok || !lane_ok || sample.actor_name.isEmpty() ||
+    if (!valid || !id_ok || !lane_ok || sample.time < 0.0 || sample.actor_name.isEmpty() ||
         (!samples.isEmpty() && sample.time < samples.back().time)) {
       return invalid_csv();
     }
@@ -82,6 +86,74 @@ Expected<QVector<SimulationSample>> read_samples(const QString& path) {
 }
 
 } // namespace
+
+SimulationPlayback::SimulationPlayback(const SimulationTrace& trace, double timestep)
+    : duration_(trace.samples.isEmpty() ? 0.0 : trace.samples.back().time), timestep_(timestep) {
+  QHash<int, qsizetype> actor_tracks;
+  for (const SimulationSample& sample : trace.samples) {
+    auto track = actor_tracks.constFind(sample.actor_id);
+    if (track == actor_tracks.cend()) {
+      const qsizetype index = tracks_.size();
+      tracks_.push_back(Track{sample.actor_name, {}});
+      actor_tracks.insert(sample.actor_id, index);
+      track = actor_tracks.constFind(sample.actor_id);
+    }
+    auto& frames = tracks_[track.value()].frames;
+    const Keyframe frame{
+        sample.time, {sample.x, sample.y, sample.z}, sample.heading, sample.pitch, sample.roll};
+    if (!frames.isEmpty() && frames.back().time == frame.time) {
+      frames.back() = frame;
+    } else {
+      frames.push_back(frame);
+    }
+  }
+}
+
+QVector<SimulationActorPose> SimulationPlayback::poses_at(double time) const {
+  QVector<SimulationActorPose> poses;
+  poses.reserve(tracks_.size());
+  if (!std::isfinite(time)) {
+    return poses;
+  }
+  time = std::clamp(time, 0.0, duration_);
+  // Absorb CSV rounding errors at exact simulation ticks.
+  constexpr double epsilon = 1e-7;
+  for (const Track& track : tracks_) {
+    auto next = std::lower_bound(track.frames.cbegin(),
+                                 track.frames.cend(),
+                                 time - epsilon,
+                                 [](const Keyframe& frame, double t) { return frame.time < t; });
+    if (next != track.frames.cend() && std::abs(next->time - time) <= epsilon) {
+      poses.push_back({track.name, next->position, next->heading, next->pitch, next->roll});
+      continue;
+    }
+    if (next == track.frames.cbegin()) {
+      continue;
+    }
+    const Keyframe& previous = *std::prev(next);
+    // A gap in an actor's recording can mean it was removed and re-added.
+    if (next == track.frames.cend() || next->time - previous.time > 1.5 * timestep_) {
+      if (time - previous.time < timestep_ - epsilon) {
+        poses.push_back(
+            {track.name, previous.position, previous.heading, previous.pitch, previous.roll});
+      }
+      continue;
+    }
+    const double t = (time - previous.time) / (next->time - previous.time);
+    SimulationActorPose pose{.actor_name = track.name};
+    for (std::size_t axis = 0; axis < pose.position.size(); ++axis) {
+      pose.position[axis] = std::lerp(previous.position[axis], next->position[axis], t);
+    }
+    const auto angle = [t](double from, double to) {
+      return from + t * std::remainder(to - from, 2.0 * std::numbers::pi);
+    };
+    pose.heading = angle(previous.heading, next->heading);
+    pose.pitch = angle(previous.pitch, next->pitch);
+    pose.roll = angle(previous.roll, next->roll);
+    poses.push_back(pose);
+  }
+  return poses;
+}
 
 Expected<SimulationTrace> read_simulation_trace(const QString& csv_path,
                                                 const QString& log_path,

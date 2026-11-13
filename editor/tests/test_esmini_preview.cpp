@@ -38,16 +38,25 @@
 
 #include <gtest/gtest.h>
 
+#include <QComboBox>
 #include <QFile>
 #include <QFileInfo>
+#include <QPushButton>
 #include <QSignalSpy>
+#include <QSlider>
 #include <QTemporaryDir>
+#include <QTest>
+#include <algorithm>
+#include <cmath>
 #include <filesystem>
+#include <numbers>
 #include <string>
 
+#include "app/settings.hpp"
 #include "document/document.hpp"
 #include "document/esmini_preview.hpp"
 #include "document/esmini_simulation.hpp"
+#include "panels/simulation_panel.hpp"
 
 namespace roadmaker::editor {
 namespace {
@@ -192,6 +201,38 @@ TEST(SimulationTrace, RejectsMissingOrMalformedTelemetry) {
   EXPECT_FALSE(read_simulation_trace(csv, log, {}));
 }
 
+TEST(SimulationPlayback, InterpolatesOnlyBetweenSamplesOfTheSameActor) {
+  const auto sample = [](int id, double time, double x, double heading) {
+    return SimulationSample{.time = time,
+                            .actor_id = id,
+                            .actor_name = QString::number(id),
+                            .x = x,
+                            .y = x / 2,
+                            .z = x / 4,
+                            .heading = heading};
+  };
+  SimulationTrace trace;
+  trace.samples = {sample(7, 0.0, 0.0, 6.2), sample(7, 0.05, 4.0, 0.2),
+                   sample(9, 0.05, 30.0, 1.0), sample(9, 0.1, 32.0, 1.2),
+                   sample(7, 0.2, 40.0, 0.3)};
+  const SimulationPlayback playback(trace, 0.05);
+  ASSERT_DOUBLE_EQ(playback.duration(), 0.2);
+  const auto middle = playback.poses_at(0.025);
+  ASSERT_EQ(middle.size(), 1);
+  EXPECT_EQ(middle.front().actor_name, QStringLiteral("7"));
+  EXPECT_DOUBLE_EQ(middle.front().position[0], 2.0);
+  EXPECT_DOUBLE_EQ(middle.front().position[1], 1.0);
+  EXPECT_DOUBLE_EQ(middle.front().position[2], 0.5);
+  EXPECT_NEAR(middle.front().heading, std::numbers::pi + 3.2, 1e-12);
+  const auto exact = playback.poses_at(0.05);
+  ASSERT_EQ(exact.size(), 2);
+  EXPECT_DOUBLE_EQ(exact.front().heading, 0.2);
+  EXPECT_TRUE(playback.poses_at(0.18).isEmpty());
+  const auto end = playback.poses_at(10.0);
+  ASSERT_EQ(end.size(), 1);
+  EXPECT_DOUBLE_EQ(end.front().position[0], 40.0);
+}
+
 TEST(EsminiSimulation, RequiresAnActorAndTheEngine) {
   Document document;
   EsminiSimulation simulation;
@@ -264,6 +305,78 @@ TEST(EsminiSimulation, RealEngineCanBeCancelledAndRunAgain) {
   ASSERT_TRUE(!finished.isEmpty() || finished.wait(15'000));
   EXPECT_TRUE(finished.takeFirst().at(0).toString().isEmpty());
   EXPECT_TRUE(simulation.result());
+}
+
+TEST(SimulationPanel, PlaysAndSeeksRealTelemetryThenInvalidatesAfterAMapEdit) {
+  const QString engine = resolve_esmini({});
+  if (engine.isEmpty() || EsminiSimulation::find_converter(engine).isEmpty()) {
+    GTEST_SKIP() << "Set ESMINI_PATH to test the real esmini release with dat2csv.";
+  }
+  const Settings::ReadOnlySession read_only;
+  Settings settings;
+  Document document;
+  author_simulation(document, 0.1, 2.0);
+  const int index_before = document.undo_stack()->index();
+  SimulationPanel panel(document, settings);
+  panel.show();
+  QSignalSpy frames(&panel, &SimulationPanel::preview_frame);
+  QSignalSpy closed(&panel, &SimulationPanel::preview_closed);
+  QVector<SimulationActorPose> poses;
+  QObject::connect(&panel, &SimulationPanel::preview_frame, &panel,
+                   [&poses](const auto& frame) { poses = frame; });
+  panel.run();
+  ASSERT_TRUE(!frames.isEmpty() || frames.wait(15'000));
+  ASSERT_TRUE(panel.result());
+  auto* timeline = panel.findChild<QSlider*>(QStringLiteral("simulation_timeline"));
+  auto* events = panel.findChild<QComboBox*>(QStringLiteral("simulation_events"));
+  auto* play = panel.findChild<QPushButton*>(QStringLiteral("simulation_play"));
+  auto* restart = panel.findChild<QPushButton*>(QStringLiteral("simulation_restart"));
+  ASSERT_NE(timeline, nullptr);
+  ASSERT_NE(events, nullptr);
+  ASSERT_NE(play, nullptr);
+  ASSERT_NE(restart, nullptr);
+  ASSERT_GE(events->count(), 3);
+
+  // Activate a marker as the widget would, then compare that frame to CSV.
+  const double event_time = panel.result()->trace.events.front().time;
+  events->activated(1);
+  EXPECT_EQ(timeline->value(), events->itemData(1).toInt());
+  const auto& samples = panel.result()->trace.samples;
+  const auto sample = std::ranges::find_if(samples, [event_time](const auto& keyframe) {
+    return std::abs(keyframe.time - event_time) < 1e-6;
+  });
+  ASSERT_NE(sample, samples.end());
+  ASSERT_EQ(poses.size(), 1);
+  EXPECT_NEAR(poses.front().position[0], sample->x, 1e-6);
+  EXPECT_NEAR(poses.front().position[1], sample->y, 1e-6);
+  EXPECT_NEAR(poses.front().position[2], sample->z, 1e-6);
+
+  play->click();
+  const auto emitted = frames.size();
+  ASSERT_TRUE(frames.wait(1000));
+  EXPECT_GT(frames.size(), emitted);
+  play->click();
+  const int paused_at = timeline->value();
+  QTest::qWait(50);
+  EXPECT_EQ(timeline->value(), paused_at);
+  timeline->setValue(timeline->maximum());
+  ASSERT_EQ(poses.size(), 1);
+  EXPECT_DOUBLE_EQ(poses.front().position[0], samples.back().x);
+  restart->click();
+  EXPECT_EQ(timeline->value(), 0);
+  ASSERT_EQ(poses.size(), 1);
+  EXPECT_DOUBLE_EQ(poses.front().position[0], samples.front().x);
+  EXPECT_EQ(document.undo_stack()->index(), index_before);
+
+  ASSERT_TRUE(document.begin_preview(edit::create_road(
+      {Waypoint{.x = 0.0, .y = 30.0}, Waypoint{.x = 100.0, .y = 30.0}},
+      LaneProfile::two_lane_default(), "other")));
+  EXPECT_EQ(closed.size(), 1);
+  EXPECT_FALSE(timeline->isEnabled());
+  EXPECT_FALSE(play->isEnabled());
+  EXPECT_FALSE(events->isEnabled());
+  EXPECT_TRUE(panel.result());
+  document.cancel_preview();
 }
 
 TEST(EsminiPreview, APreviewWritesThePairAndPointsTheScenarioAtIt) {

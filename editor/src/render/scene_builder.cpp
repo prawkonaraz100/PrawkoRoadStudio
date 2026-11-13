@@ -662,58 +662,39 @@ float underlay_z(const SceneBounds& bounds, std::size_t index) {
 
 InstanceData actor_transform(const std::array<double, 3>& position,
                              double heading,
-                             const osc::BoundingBox& box) {
-  // Column-major mat4 mapping the unit cube onto the actor's OWN frame, which
-  // is OpenSCENARIO's and the kernel's alike: +x longitudinal (forward), +y
-  // lateral (left), +z up.
-  //
-  //   col0 = length * forward   forward = ( cos h, sin h, 0)
-  //   col1 = width  * left      left    = (-sin h, cos h, 0)
-  //   col2 = height * up
-  //   col3 = position + the centre offset ROTATED into the same frame
-  //
-  // ★ TWO THINGS HERE ARE EASY TO GET WRONG AND BOTH RENDER CONVINCINGLY.
-  //
-  // First, LENGTH GOES ON THE FORWARD AXIS. Putting width there yields a car
-  // 2.13 m long and 5.79 m wide — a box of exactly the right volume, sitting
-  // across its lane instead of along it. A test that only checks the three
-  // scale factors are present passes on that; it takes a test that knows which
-  // axis is which to catch it.
-  //
-  // Second, THE CENTRE OFFSET IS ROTATED. An entity's reference point is the
-  // centre of its rear axle, so `center_x` pushes the body FORWARD along the
-  // actor's own heading. Adding it to the world x unrotated pushes every actor
-  // east instead — indistinguishable from correct for an actor that happens to
-  // face +x, and wrong for every other one.
-  const auto c = static_cast<float>(std::cos(heading));
-  const auto s = static_cast<float>(std::sin(heading));
-  const auto l = static_cast<float>(box.length);
-  const auto w = static_cast<float>(box.width);
-  const auto h = static_cast<float>(box.height);
+                             const osc::BoundingBox& box,
+                             double pitch,
+                             double roll) {
+  // Rz(heading) Ry(pitch) Rx(roll), with OpenSCENARIO's local x forward,
+  // y left and z up. The box center is relative to the actor reference point.
+  const double ch = std::cos(heading);
+  const double sh = std::sin(heading);
+  const double cp = std::cos(pitch);
+  const double sp = std::sin(pitch);
+  const double cr = std::cos(roll);
+  const double sr = std::sin(roll);
+  const std::array forward{ch * cp, sh * cp, -sp};
+  const std::array left{ch * sp * sr - sh * cr, sh * sp * sr + ch * cr, cp * sr};
+  const std::array up{ch * sp * cr + sh * sr, sh * sp * cr - ch * sr, cp * cr};
+  InstanceData transform;
+  for (std::size_t i = 0; i < forward.size(); ++i) {
+    transform.model[i] = static_cast<float>(forward[i] * box.length);
+    transform.model[4 + i] = static_cast<float>(left[i] * box.width);
+    transform.model[8 + i] = static_cast<float>(up[i] * box.height);
+    transform.model[12 + i] = static_cast<float>(
+        position[i] + forward[i] * box.center_x + left[i] * box.center_y + up[i] * box.center_z);
+  }
+  return transform;
+}
 
-  const double ox = (box.center_x * std::cos(heading)) - (box.center_y * std::sin(heading));
-  const double oy = (box.center_x * std::sin(heading)) + (box.center_y * std::cos(heading));
-
-  const auto px = static_cast<float>(position[0] + ox);
-  const auto py = static_cast<float>(position[1] + oy);
-  const auto pz = static_cast<float>(position[2] + box.center_z);
-
-  return InstanceData{{l * c,
-                       l * s,
-                       0.0F,
-                       0.0F, //
-                       -w * s,
-                       w * c,
-                       0.0F,
-                       0.0F, //
-                       0.0F,
-                       0.0F,
-                       h,
-                       0.0F, //
-                       px,
-                       py,
-                       pz,
-                       1.0F}};
+const osc::BoundingBox* actor_bounding_box(const osc::ScenarioObject& object) {
+  if (const auto* vehicle = std::get_if<osc::Vehicle>(&object.entity_object)) {
+    return &vehicle->bounding_box;
+  }
+  if (const auto* pedestrian = std::get_if<osc::Pedestrian>(&object.entity_object)) {
+    return &pedestrian->bounding_box;
+  }
+  return nullptr;
 }
 
 RenderMeshData actor_box_mesh() {
@@ -770,11 +751,7 @@ void append_scenario_actors(const osc::Scenario& scenario,
       if (object.name != entry.entity_ref) {
         continue;
       }
-      if (const auto* vehicle = std::get_if<osc::Vehicle>(&object.entity_object)) {
-        box = &vehicle->bounding_box;
-      } else if (const auto* pedestrian = std::get_if<osc::Pedestrian>(&object.entity_object)) {
-        box = &pedestrian->bounding_box;
-      }
+      box = actor_bounding_box(object);
       break;
     }
     if (box == nullptr) {
@@ -798,7 +775,7 @@ void append_scenario_actors(const osc::Scenario& scenario,
 
       if (batch == nullptr) {
         scene.prop_batches.push_back(ScenePropBatch{
-            .model_id = "rm:actor_box", .parts = {actor_box_mesh()}, .instances = {}});
+            .model_id = kActorBoxModelId, .parts = {actor_box_mesh()}, .instances = {}});
         batch = &scene.prop_batches.back();
       }
       batch->instances.push_back(

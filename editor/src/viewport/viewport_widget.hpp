@@ -26,6 +26,7 @@
 #include <QOpenGLWidget>
 #include <QPoint>
 #include <QString>
+#include <QVector>
 #include <array>
 #include <functional>
 #include <limits>
@@ -61,6 +62,8 @@ class QDragLeaveEvent;
 class QDropEvent;
 
 namespace roadmaker::editor {
+
+struct SimulationActorPose;
 
 /// Status-bar payload for the current mouse position. `world_*` come from the
 /// pick ray's ground-plane (z=0) intersection; s/t are set when a road is
@@ -195,6 +198,10 @@ public slots:
   /// Clears the signal-phase overlay (pane hidden, junction dropped, load).
   void clear_signal_phase_preview();
 
+  /// Playback supplies transient poses. An empty frame still hides authored actors.
+  void set_simulation_frame(const QVector<SimulationActorPose>& poses);
+  void clear_simulation_frame();
+
 public:
   [[nodiscard]] QString hint() const { return hint_text_; }
 
@@ -224,6 +231,8 @@ public:
   [[nodiscard]] QImage capture_clean_frame();
 
 signals:
+  void simulation_preview_exit_requested();
+
   void hover_changed(const roadmaker::editor::HoverInfo& info);
 
   /// A right-click without an orbit drag: the descriptor context under the
@@ -503,6 +512,8 @@ private:
   /// Instanced prop/signal batches (one per model), uploaded ONCE per rebuild.
   /// Props no longer flow through items_; they draw via the GL instanced path.
   std::vector<UploadedPropBatch> prop_batches_;
+  std::optional<std::vector<InstanceData>> simulation_transforms_;
+  RenderMeshHandle simulation_actor_mesh_;
 
   /// Editable text-sign faces — one uploaded textured quad per placed text sign.
   std::vector<UploadedSignFace> sign_faces_;

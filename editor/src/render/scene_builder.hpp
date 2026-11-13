@@ -143,7 +143,14 @@ prop_transform(const std::array<double, 3>& position, double heading, double sca
 /// then offsets it, which is what puts the body over the vehicle rather than
 /// over its rear axle (the OpenSCENARIO reference point).
 [[nodiscard]] InstanceData
-actor_transform(const std::array<double, 3>& position, double heading, const osc::BoundingBox& box);
+actor_transform(const std::array<double, 3>& position,
+                double heading,
+                const osc::BoundingBox& box,
+                double pitch = 0.0,
+                double roll = 0.0);
+
+[[nodiscard]] const osc::BoundingBox* actor_bounding_box(const osc::ScenarioObject& object);
+inline constexpr const char* kActorBoxModelId = "rm:actor_box";
 
 /// The shared unit-cube geometry every actor box instances, spanning
 /// [-0.5, 0.5] on each axis with flat per-face normals.

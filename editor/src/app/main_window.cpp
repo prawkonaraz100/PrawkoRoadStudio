@@ -1250,6 +1250,17 @@ void MainWindow::build_docks() {
   simulation_dock_ = new QDockWidget(tr("Simulation"), this);
   simulation_dock_->setObjectName(QStringLiteral("dock.simulation"));
   simulation_panel_ = new SimulationPanel(document_, settings_, simulation_dock_);
+  connect(simulation_panel_, &SimulationPanel::preview_frame,
+          viewport_, &ViewportWidget::set_simulation_frame);
+  connect(simulation_panel_, &SimulationPanel::preview_closed,
+          viewport_, &ViewportWidget::clear_simulation_frame);
+  connect(viewport_, &ViewportWidget::simulation_preview_exit_requested,
+          simulation_panel_, &SimulationPanel::leave_preview);
+  connect(simulation_dock_, &QDockWidget::visibilityChanged, simulation_panel_, [this](bool visible) {
+    if (!visible) {
+      simulation_panel_->leave_preview();
+    }
+  });
   simulation_dock_->setWidget(simulation_panel_);
   addDockWidget(Qt::BottomDockWidgetArea, simulation_dock_);
   simulation_dock_->hide();

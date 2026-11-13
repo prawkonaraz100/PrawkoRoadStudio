@@ -53,6 +53,7 @@
 
 #include "document/highlight.hpp"
 #include "document/library_list_model.hpp"
+#include "document/simulation_trace.hpp"
 #include "document/units.hpp"
 #include "render/gl_functions.hpp"
 #include "render/gl_renderer.hpp"
@@ -244,6 +245,7 @@ Material ViewportWidget::material_for(SurfaceKind surface, const std::string& ma
 
 void ViewportWidget::rebuild_scene() {
   renderer_->clear_meshes();
+  simulation_actor_mesh_ = {};
   items_.clear();
   prop_batches_.clear(); // clear_meshes() dropped their GL meshes; re-upload below
   sign_faces_.clear();   // ditto — face quad meshes re-upload below
@@ -276,6 +278,9 @@ void ViewportWidget::rebuild_scene() {
     uploaded.parts.reserve(batch.parts.size());
     for (const RenderMeshData& part : batch.parts) {
       uploaded.parts.push_back(renderer_->upload(part));
+    }
+    if (batch.model_id == kActorBoxModelId) {
+      simulation_actor_mesh_ = uploaded.parts.front();
     }
     uploaded.instances = batch.instances;
     uploaded.transforms.reserve(batch.instances.size());
@@ -593,13 +598,43 @@ void ViewportWidget::rebuild_reference_layers() {
   update();
 }
 
+void ViewportWidget::set_simulation_frame(const QVector<SimulationActorPose>& poses) {
+  if (!simulation_transforms_) {
+    simulation_transforms_.emplace();
+    unsetCursor();
+  }
+  auto& transforms = *simulation_transforms_;
+  transforms.clear();
+  transforms.reserve(static_cast<std::size_t>(poses.size()));
+  const auto& objects = document_.scenario().entities.scenario_objects;
+  for (const auto& pose : poses) {
+    const auto object = std::ranges::find(objects, pose.actor_name.toStdString(),
+                                          &osc::ScenarioObject::name);
+    if (object != objects.end()) {
+      if (const auto* box = actor_bounding_box(*object)) {
+        transforms.push_back(actor_transform(pose.position, pose.heading, *box, pose.pitch,
+                                             pose.roll));
+      }
+    }
+  }
+  update();
+}
+
+void ViewportWidget::clear_simulation_frame() {
+  if (simulation_transforms_) {
+    simulation_transforms_.reset();
+    update();
+  }
+}
+
 void ViewportWidget::paintGL() {
   if (scene_dirty_) {
     rebuild_scene();
   } else if (!pending_roads_.empty()) {
     apply_pending_road_updates();
   }
-  if (!clean_capture_) {
+  const bool show_editing = !clean_capture_ && !simulation_transforms_;
+  if (show_editing) {
     upload_tool_preview();
   }
 
@@ -642,7 +677,7 @@ void ViewportWidget::paintGL() {
 
   for (const UploadedItem& item : items_) {
     draw_items.push_back(DrawItem{.mesh = item.handle,
-                                  .state = clean_capture_ ? HighlightState::None : item_state(item),
+                                  .state = show_editing ? item_state(item) : HighlightState::None,
                                   .material = material_for(item.surface, item.material)});
   }
 
@@ -652,8 +687,19 @@ void ViewportWidget::paintGL() {
   // road via drag_target_road_, mirrored here for parity (it never lights props).
   const RoadId hovered_road = drag_target_road_.is_valid() ? drag_target_road_ : hovered_road_;
   const Material prop_material = material_for(SurfaceKind::Untextured, {});
+  if (simulation_transforms_ && !simulation_transforms_->empty()) {
+    if (!simulation_actor_mesh_.valid()) {
+      simulation_actor_mesh_ = renderer_->upload(actor_box_mesh());
+    }
+    draw_items.push_back(DrawItem{.mesh = simulation_actor_mesh_,
+                                  .material = prop_material,
+                                  .instances = *simulation_transforms_});
+  }
   for (const UploadedPropBatch& batch : prop_batches_) {
-    if (clean_capture_) {
+    if (simulation_transforms_ && batch.model_id == kActorBoxModelId) {
+      continue;
+    }
+    if (!show_editing) {
       for (const RenderMeshHandle handle : batch.parts) {
         draw_items.push_back(DrawItem{.mesh = handle,
                                       .material = prop_material,
@@ -710,7 +756,7 @@ void ViewportWidget::paintGL() {
     face_material.base_color = face.texture; // invalid handle → flat white fallback
     face_material.uv_scale = 1.0F;
     HighlightState state = HighlightState::None;
-    if (!clean_capture_) {
+    if (show_editing) {
       state = phase_highlight(face.road,
                               highlight_state_for(face.road,
                                                   {},
@@ -729,7 +775,7 @@ void ViewportWidget::paintGL() {
     draw_items.push_back(DrawItem{.mesh = face.mesh, .state = state, .material = face_material});
   }
 
-  if (!clean_capture_) {
+  if (show_editing) {
     for (const RenderMeshHandle handle : preview_handles_) {
       draw_items.push_back(DrawItem{.mesh = handle});
     }
@@ -749,6 +795,9 @@ void ViewportWidget::paintGL() {
   renderer_->render(draw_items, camera_.matrices(aspect), fb_width, fb_height);
   if (clean_capture_) {
     apply_render_mode();
+    return;
+  }
+  if (!show_editing) {
     return;
   }
 
@@ -1207,7 +1256,7 @@ bool ViewportWidget::has_library_mime(const QDropEvent* event) {
 }
 
 void ViewportWidget::dragEnterEvent(QDragEnterEvent* event) {
-  if (!has_library_mime(event)) {
+  if (simulation_transforms_ || !has_library_mime(event)) {
     return;
   }
   event->acceptProposedAction();
@@ -1215,7 +1264,7 @@ void ViewportWidget::dragEnterEvent(QDragEnterEvent* event) {
 }
 
 void ViewportWidget::dragMoveEvent(QDragMoveEvent* event) {
-  if (!has_library_mime(event)) {
+  if (simulation_transforms_ || !has_library_mime(event)) {
     return;
   }
   event->acceptProposedAction();
@@ -1231,7 +1280,7 @@ void ViewportWidget::dragLeaveEvent(QDragLeaveEvent* event) {
 void ViewportWidget::dropEvent(QDropEvent* event) {
   drop_preview_.reset();
   clear_drag_target_road();
-  if (!has_library_mime(event)) {
+  if (simulation_transforms_ || !has_library_mime(event)) {
     update();
     return;
   }
@@ -1677,6 +1726,10 @@ void ViewportWidget::mousePressEvent(QMouseEvent* event) {
     event->accept();
     return;
   }
+  if (simulation_transforms_) {
+    event->accept();
+    return;
+  }
   // A gizmo handle grab takes LMB before the tool sees it.
   if (event->button() == Qt::LeftButton && begin_gizmo_drag(event->position())) {
     event->accept();
@@ -1709,6 +1762,10 @@ void ViewportWidget::mouseMoveEvent(QMouseEvent* event) {
           static_cast<int>(std::lround(NavController::kContextDragSlop * devicePixelRatioF())))) {
     apply_nav_move(delta, event->position());
     update();
+    event->accept();
+    return;
+  }
+  if (simulation_transforms_) {
     event->accept();
     return;
   }
@@ -1764,10 +1821,14 @@ void ViewportWidget::mouseReleaseEvent(QMouseEvent* event) {
     // The chord may have unwound onto another gesture (⌥+LMB+RMB pan →
     // ⌥+LMB orbit), so the anchor is re-synced rather than simply dropped.
     sync_pan_anchor(event->position());
-    if (context_click) {
+    if (context_click && !simulation_transforms_) {
       emit context_menu_requested(build_menu_context(event->position()),
                                   event->globalPosition().toPoint());
     }
+    event->accept();
+    return;
+  }
+  if (simulation_transforms_) {
     event->accept();
     return;
   }
@@ -1800,6 +1861,10 @@ MenuContext ViewportWidget::build_menu_context(const QPointF& pos) const {
 }
 
 void ViewportWidget::mouseDoubleClickEvent(QMouseEvent* event) {
+  if (simulation_transforms_) {
+    event->accept();
+    return;
+  }
   if (Tool* tool = tools_.active(); tool != nullptr && event->button() == Qt::LeftButton &&
                                     tool->mouse_double_click(make_tool_event(event))) {
     update();
@@ -1808,6 +1873,15 @@ void ViewportWidget::mouseDoubleClickEvent(QMouseEvent* event) {
 }
 
 void ViewportWidget::keyPressEvent(QKeyEvent* event) {
+  if (simulation_transforms_) {
+    if (event->key() == Qt::Key_Escape) {
+      emit simulation_preview_exit_requested();
+      event->accept();
+    } else {
+      QOpenGLWidget::keyPressEvent(event);
+    }
+    return;
+  }
   // Esc cancels an in-flight gizmo drag before the tool sees the key.
   if (event->key() == Qt::Key_Escape && gizmo_drag_.active()) {
     cancel_gizmo_drag();
