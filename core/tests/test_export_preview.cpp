@@ -278,6 +278,45 @@ TEST(ExportPreview, ManifestReconcilesWithTheWrittenGlb) {
   }
 }
 
+TEST(ExportPreview, RaisedJunctionChamfersSurviveGlbRoundTripWithNormalsAndUVs) {
+  const auto parsed = load_xodr(
+      std::filesystem::path(RM_SAMPLES_DIR) / "gs1_urban_intersection.xodr");
+  ASSERT_TRUE(parsed.has_value());
+  MeshOptions options;
+  options.raised_sidewalks = true;
+  const NetworkMesh mesh = build_network_mesh(parsed->network, options);
+  std::size_t expected_bevel_tris = 0;
+  for (const JunctionFloor& floor : mesh.junction_floors) {
+    for (const SubMesh& detail : floor.details) {
+      if (detail.name.find("corner bevel") != std::string::npos) {
+        expected_bevel_tris += detail.indices.size() / 3;
+      }
+    }
+  }
+  ASSERT_GT(expected_bevel_tris, 0U);
+
+  const ScenePreview preview = preview_mesh_export(mesh, MeshExportFormat::Gltf);
+  const tinygltf::Model model = export_and_reload(mesh, "prawko_s2_2c_chamfer.glb");
+  EXPECT_EQ(preview.mesh_count, model.meshes.size());
+  EXPECT_EQ(preview.total_triangles, file_triangles(model));
+  EXPECT_EQ(triangles_by_material(preview), triangles_by_material(model));
+
+  std::size_t exported_bevel_tris = 0;
+  for (const tinygltf::Mesh& part : model.meshes) {
+    if (part.name.find("corner bevel") == std::string::npos) {
+      continue;
+    }
+    for (const tinygltf::Primitive& primitive : part.primitives) {
+      exported_bevel_tris += triangles_in(model, primitive);
+      EXPECT_TRUE(primitive.attributes.contains("POSITION"));
+      EXPECT_TRUE(primitive.attributes.contains("NORMAL"));
+      EXPECT_TRUE(primitive.attributes.contains("TEXCOORD_0"));
+    }
+  }
+  EXPECT_EQ(exported_bevel_tris, expected_bevel_tris)
+      << "glTF lost the new bevel strips or some of their triangles";
+}
+
 TEST(ExportPreview, VertexTotalMatchesTheUniqueAccessorsInTheFile) {
   const NetworkMesh mesh = mesh_of_sample("props_scale.xodr");
   const ScenePreview preview = preview_mesh_export(mesh, MeshExportFormat::Gltf);

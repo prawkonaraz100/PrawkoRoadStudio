@@ -1069,6 +1069,40 @@ SubMesh build_junction_surface(const RoadNetwork& network,
   return build_floor(network, junction, sampling).floor;
 }
 
+// Recompute smooth top normals after changing the corner height or offsetting
+// the inner edge. The curb strips use their own sharp normals.
+static void refresh_sidewalk_normals(SubMesh& band) {
+  std::vector<double> accum(band.normals.size(), 0.0);
+  for (std::size_t t = 0; t + 2 < band.indices.size(); t += 3) {
+    const auto a = static_cast<std::size_t>(band.indices[t]) * 3;
+    const auto b = static_cast<std::size_t>(band.indices[t + 1]) * 3;
+    const auto c = static_cast<std::size_t>(band.indices[t + 2]) * 3;
+    const double abx = band.positions[b] - band.positions[a];
+    const double aby = band.positions[b + 1] - band.positions[a + 1];
+    const double abz = band.positions[b + 2] - band.positions[a + 2];
+    const double acx = band.positions[c] - band.positions[a];
+    const double acy = band.positions[c + 1] - band.positions[a + 1];
+    const double acz = band.positions[c + 2] - band.positions[a + 2];
+    const std::array<double, 3> n{
+        (aby * acz) - (abz * acy),
+        (abz * acx) - (abx * acz),
+        (abx * acy) - (aby * acx)};
+    for (const std::size_t v : {a, b, c}) {
+      for (std::size_t axis = 0; axis < 3; ++axis) {
+        accum[v + axis] += n[axis];
+      }
+    }
+  }
+  for (std::size_t v = 0; v < accum.size(); v += 3) {
+    const double len = std::hypot(accum[v], accum[v + 1], accum[v + 2]);
+    if (len > 1e-12) {
+      for (std::size_t axis = 0; axis < 3; ++axis) {
+        band.normals[v + axis] = accum[v + axis] / len;
+      }
+    }
+  }
+}
+
 JunctionFloorSplit build_junction_floor_split(const RoadNetwork& network,
                                               const Junction& junction,
                                               const SamplingOptions& sampling,
@@ -1150,6 +1184,7 @@ JunctionFloorSplit build_junction_floor_split(const RoadNetwork& network,
   const auto corner_height = [&](std::size_t k, double x, double y) {
     return corner_curb_height(corner_caps[k], x, y);
   };
+  std::vector<int> band_submesh_index(built.bands.size(), -1);
   for (std::size_t k = 0; k < built.bands.size(); ++k) {
     SubMesh band = emit_floor_region(floor,
                                      assignment,
@@ -1163,40 +1198,11 @@ JunctionFloorSplit build_junction_floor_split(const RoadNetwork& network,
           band.positions[i + 2] += corner_height(k, band.positions[i], band.positions[i + 1]);
         }
         if (corner_caps[k][0].active || corner_caps[k][1].active) {
-          // Recompute geometric vertex normals only on sloping corner bands.
-          // Reusing the unmodified road-floor normals incorrectly lights the
-          // 3 m transition as a flat surface.
-          std::vector<double> accum(band.normals.size(), 0.0);
-          for (std::size_t t = 0; t < band.indices.size(); t += 3) {
-            const auto a = static_cast<std::size_t>(band.indices[t]) * 3;
-            const auto b = static_cast<std::size_t>(band.indices[t + 1]) * 3;
-            const auto c = static_cast<std::size_t>(band.indices[t + 2]) * 3;
-            const double abx = band.positions[b] - band.positions[a];
-            const double aby = band.positions[b + 1] - band.positions[a + 1];
-            const double abz = band.positions[b + 2] - band.positions[a + 2];
-            const double acx = band.positions[c] - band.positions[a];
-            const double acy = band.positions[c + 1] - band.positions[a + 1];
-            const double acz = band.positions[c + 2] - band.positions[a + 2];
-            const std::array<double, 3> n{
-                (aby * acz) - (abz * acy),
-                (abz * acx) - (abx * acz),
-                (abx * acy) - (aby * acx)};
-            for (const std::size_t v : {a, b, c}) {
-              for (std::size_t axis = 0; axis < 3; ++axis) {
-                accum[v + axis] += n[axis];
-              }
-            }
-          }
-          for (std::size_t v = 0; v < accum.size(); v += 3) {
-            const double len = std::hypot(accum[v], accum[v + 1], accum[v + 2]);
-            if (len > 1e-12) {
-              for (std::size_t axis = 0; axis < 3; ++axis) {
-                band.normals[v + axis] = accum[v + axis] / len;
-              }
-            }
-          }
+          // A height ramp must not keep the original flat-floor lighting.
+          refresh_sidewalk_normals(band);
         }
       }
+      band_submesh_index[k] = static_cast<int>(result.sidewalk_bands.size());
       result.sidewalk_bands.push_back(std::move(band));
     }
   }
@@ -1221,7 +1227,149 @@ JunctionFloorSplit build_junction_floor_split(const RoadNetwork& network,
             EdgeSide{assignment[t], {a, b, tri[(e + 2) % 3]}});
       }
     }
+    // Collect the seam's inward vectors from its constrained Driving/Sidewalk
+    // edges. Offset ONLY those vertices of the sidewalk top, not the road.
+    // The space left in the top mesh is occupied exactly by the chamfer
+    // surface, so no coplanar overlap or z-fighting is introduced.
+    struct InsetPoint {
+      std::array<double, 3> top{};
+      double factor = 0.0; // 0 at the arm mouth, 1 through the middle of the corner
+    };
+    std::vector<std::map<std::uint32_t, std::array<double, 2>>> inner_vectors(
+        built.bands.size());
+    for (const auto& [key, sides] : edges) {
+      (void)key;
+      if (sides.size() != 2) {
+        continue;
+      }
+      const EdgeSide* pavement = nullptr;
+      if (sides[0].region >= 0 && sides[1].region == -1) {
+        pavement = &sides[0];
+      } else if (sides[1].region >= 0 && sides[0].region == -1) {
+        pavement = &sides[1];
+      }
+      if (pavement == nullptr) {
+        continue;
+      }
+      const std::size_t region = static_cast<std::size_t>(pavement->region);
+      const std::uint32_t a = pavement->vertices[0];
+      const std::uint32_t b = pavement->vertices[1];
+      const double dx = floor.positions[3 * b] - floor.positions[3 * a];
+      const double dy = floor.positions[3 * b + 1] - floor.positions[3 * a + 1];
+      const double len = std::hypot(dx, dy);
+      if (len <= tol::kLength) {
+        continue;
+      }
+      const double ix = floor.positions[3 * pavement->vertices[2]] -
+                        floor.positions[3 * a];
+      const double iy = floor.positions[3 * pavement->vertices[2] + 1] -
+                        floor.positions[3 * a + 1];
+      const double orient = ((dx * iy) - (dy * ix)) < 0.0 ? -1.0 : 1.0;
+      const std::array<double, 2> inward{-orient * dy / len, orient * dx / len};
+      for (const std::uint32_t v : {a, b}) {
+        auto& sum = inner_vectors[region][v];
+        sum[0] += inward[0];
+        sum[1] += inward[1];
+      }
+    }
+
+    std::vector<std::map<std::uint32_t, InsetPoint>> inset(built.bands.size());
+    constexpr double kBevelWidth = 0.05;
+    constexpr double kMouthBlendRun = 1.0;
+    for (std::size_t k = 0; k < built.bands.size(); ++k) {
+      if (band_submesh_index[k] < 0 || inner_vectors[k].empty()) {
+        continue;
+      }
+      SubMesh& top = result.sidewalk_bands[static_cast<std::size_t>(band_submesh_index[k])];
+      std::map<std::pair<double, double>, std::size_t> vertex_lookup;
+      for (std::size_t v = 0; v < top.positions.size() / 3; ++v) {
+        vertex_lookup[{top.positions[3 * v], top.positions[3 * v + 1]}] = v;
+      }
+      std::vector<std::array<double, 2>> displacement(top.positions.size() / 3);
+      for (const auto& [v, sum] : inner_vectors[k]) {
+        const double x = floor.positions[3 * v];
+        const double y = floor.positions[3 * v + 1];
+        const auto found = vertex_lookup.find({x, y});
+        if (found == vertex_lookup.end()) {
+          continue;
+        }
+        const double height = corner_height(k, x, y);
+        double factor = 1.0;
+        const JunctionSidewalkBand& source = built.bands[k].source;
+        if (source.inner.size() >= 2) {
+          // Road kerbs already taper their chamfer to zero in the final
+          // metre. The corner follows the same rule at BOTH arm mouths.
+          factor = std::min({1.0,
+              std::hypot(x - source.inner.front()[0], y - source.inner.front()[1]) /
+                  kMouthBlendRun,
+              std::hypot(x - source.inner.back()[0], y - source.inner.back()[1]) /
+                  kMouthBlendRun});
+        }
+        const double n = std::hypot(sum[0], sum[1]);
+        if (n <= 1e-12 || height <= tol::kLength) {
+          factor = 0.0;
+        }
+        const double width = kBevelWidth * (height / defaults::kCurbHeight) * factor;
+        if (factor > 0.0) {
+          displacement[found->second] = {width * sum[0] / n, width * sum[1] / n};
+        }
+        inset[k][v] = InsetPoint{{x, y, top.positions[3 * found->second + 2]}, factor};
+      }
+
+      // A 5 cm inset normally fits easily inside a 2 m walk, but very tight
+      // T/Y corners can contain short CDT triangles. Scale the complete
+      // inset until no top triangle changes winding or collapses.
+      double scale = 1.0;
+      const auto safe = [&](double amount) {
+        for (std::size_t t = 0; t < top.indices.size(); t += 3) {
+          const auto a = static_cast<std::size_t>(top.indices[t]);
+          const auto b = static_cast<std::size_t>(top.indices[t + 1]);
+          const auto c = static_cast<std::size_t>(top.indices[t + 2]);
+          const auto signed_area = [&](double f) {
+            const auto x = [&](std::size_t i) {
+              return top.positions[3 * i] + (f * displacement[i][0]);
+            };
+            const auto y = [&](std::size_t i) {
+              return top.positions[3 * i + 1] + (f * displacement[i][1]);
+            };
+            return ((x(b) - x(a)) * (y(c) - y(a))) -
+                   ((y(b) - y(a)) * (x(c) - x(a)));
+          };
+          const double before = signed_area(0.0);
+          const double after = signed_area(amount);
+          if (std::abs(before) > 1e-11 &&
+              (before * after <= 0.0 || std::abs(after) < 0.2 * std::abs(before))) {
+            return false;
+          }
+        }
+        return true;
+      };
+      for (int attempts = 0; attempts < 9 && !safe(scale); ++attempts) {
+        scale *= 0.5;
+      }
+      if (!safe(scale)) {
+        scale = 0.0; // preserve a valid top instead of creating a folded strip
+      }
+      for (std::size_t v = 0; v < displacement.size(); ++v) {
+        top.positions[3 * v] += displacement[v][0] * scale;
+        top.positions[3 * v + 1] += displacement[v][1] * scale;
+      }
+      for (auto& [v, point] : inset[k]) {
+        const auto local = vertex_lookup.find({point.top[0], point.top[1]});
+        if (local != vertex_lookup.end()) {
+          const auto i = local->second;
+          point.top = {top.positions[3 * i], top.positions[3 * i + 1],
+                       top.positions[3 * i + 2]};
+          point.factor *= scale;
+        }
+      }
+      if (scale > 0.0) {
+        refresh_sidewalk_normals(top);
+      }
+    }
+
     std::vector<SubMesh> curbs(built.bands.size());
+    std::vector<SubMesh> bevels(built.bands.size());
     for (const auto& [key, sides] : edges) {
       (void)key;
       if (sides.size() != 2) {
@@ -1263,23 +1411,88 @@ JunctionFloorSplit build_junction_floor_split(const RoadNetwork& network,
       if (height_a <= tol::kLength && height_b <= tol::kLength) {
         continue; // no zero-area wall where the pedestrian crossing is flush
       }
+      const auto ia = inset[region].find(a);
+      const auto ib = inset[region].find(b);
+      if (ia == inset[region].end() || ib == inset[region].end()) {
+        continue; // never open an unstitched bevel where top lookup failed
+      }
+      const double wall_height_a = height_a * (1.0 - 0.20 * ia->second.factor);
+      const double wall_height_b = height_b * (1.0 - 0.20 * ib->second.factor);
       const std::array<double, 3> normal{uy / length, -ux / length, 0.0};
       const std::uint32_t first = static_cast<std::uint32_t>(wall.positions.size() / 3);
       for (const auto [v, lift] : {std::pair{a, 0.0}, std::pair{b, 0.0},
-                                   std::pair{b, height_b}, std::pair{a, height_a}}) {
+                                   std::pair{b, wall_height_b},
+                                   std::pair{a, wall_height_a}}) {
         wall.positions.insert(wall.positions.end(),
                               {floor.positions[3 * v], floor.positions[(3 * v) + 1],
                                floor.positions[(3 * v) + 2] + lift});
         wall.normals.insert(wall.normals.end(), normal.begin(), normal.end());
       }
       wall.uvs.insert(wall.uvs.end(),
-                      {0.0, 0.0, length, 0.0, length, height_b, 0.0, height_a});
-      if (height_b > tol::kLength) {
+                      {0.0, 0.0, length, 0.0, length, wall_height_b, 0.0, wall_height_a});
+      if (wall_height_b > tol::kLength) {
         wall.indices.insert(wall.indices.end(), {first, first + 1, first + 2});
       }
-      if (height_a > tol::kLength) {
+      if (wall_height_a > tol::kLength) {
         wall.indices.insert(wall.indices.end(), {first, first + 2, first + 3});
       }
+
+      // Chamfer is an independent real 3-D surface. Its lower edge is the
+      // exact upper edge of the vertical wall; its upper edge is the
+      // displaced boundary vertex of the sidewalk's CDT mesh. Do not overlay
+      // a bevel on an unmodified top: that causes z-fighting.
+      const auto wall_point = [&](std::uint32_t v, double lift) {
+        return std::array<double, 3>{floor.positions[3 * v],
+                                      floor.positions[3 * v + 1],
+                                      floor.positions[3 * v + 2] + lift};
+      };
+      const std::array<std::array<double, 3>, 4> corners{
+          wall_point(a, wall_height_a), wall_point(b, wall_height_b),
+          ib->second.top, ia->second.top};
+      const std::array<std::array<double, 2>, 4> texcoords{
+          std::array<double, 2>{0.0, 0.0},
+          std::array<double, 2>{length, 0.0},
+          std::array<double, 2>{length, std::hypot(
+              ib->second.top[0] - corners[1][0],
+              ib->second.top[1] - corners[1][1],
+              ib->second.top[2] - corners[1][2])},
+          std::array<double, 2>{0.0, std::hypot(
+              ia->second.top[0] - corners[0][0],
+              ia->second.top[1] - corners[0][1],
+              ia->second.top[2] - corners[0][2])}};
+      SubMesh& bevel = bevels[region];
+      const auto emit_bevel_triangle = [&](int i, int j, int k) {
+        const auto& p0 = corners[static_cast<std::size_t>(i)];
+        const auto& p1 = corners[static_cast<std::size_t>(j)];
+        const auto& p2 = corners[static_cast<std::size_t>(k)];
+        const double ax = p1[0] - p0[0];
+        const double ay = p1[1] - p0[1];
+        const double az = p1[2] - p0[2];
+        const double bx = p2[0] - p0[0];
+        const double by = p2[1] - p0[1];
+        const double bz = p2[2] - p0[2];
+        const std::array<double, 3> cross{
+            (ay * bz) - (az * by),
+            (az * bx) - (ax * bz),
+            (ax * by) - (ay * bx)};
+        const double n = std::hypot(cross[0], cross[1], cross[2]);
+        if (n <= 1e-9) {
+          return; // crossing-level or mouth: the chamfer disappears here
+        }
+        const std::uint32_t start =
+            static_cast<std::uint32_t>(bevel.positions.size() / 3);
+        for (const int v : {i, j, k}) {
+          const auto& p = corners[static_cast<std::size_t>(v)];
+          const auto& uv = texcoords[static_cast<std::size_t>(v)];
+          bevel.positions.insert(bevel.positions.end(), p.begin(), p.end());
+          bevel.normals.insert(bevel.normals.end(),
+                               {cross[0] / n, cross[1] / n, cross[2] / n});
+          bevel.uvs.insert(bevel.uvs.end(), uv.begin(), uv.end());
+        }
+        bevel.indices.insert(bevel.indices.end(), {start, start + 1, start + 2});
+      };
+      emit_bevel_triangle(0, 1, 2);
+      emit_bevel_triangle(0, 2, 3);
     }
     for (std::size_t k = 0; k < curbs.size(); ++k) {
       if (!curbs[k].indices.empty()) {
@@ -1287,6 +1500,12 @@ JunctionFloorSplit build_junction_floor_split(const RoadNetwork& network,
         curbs[k].surface = "concrete";
         curbs[k].name = fmt::format("junction {} corner curb {}", junction.odr_id, k);
         result.curb_faces.push_back(std::move(curbs[k]));
+      }
+      if (!bevels[k].indices.empty()) {
+        bevels[k].material = LaneType::Curb;
+        bevels[k].surface = "concrete";
+        bevels[k].name = fmt::format("junction {} corner bevel {}", junction.odr_id, k);
+        result.curb_faces.push_back(std::move(bevels[k]));
       }
     }
   }

@@ -481,7 +481,8 @@ TEST_P(SidewalkBandMatrix, RaisedCornerHasElevatedTopAndTrueCurbWall) {
     } else if (detail.material == LaneType::Curb) {
       ++curbs;
       ASSERT_FALSE(detail.indices.empty());
-      ASSERT_EQ(detail.indices.size() % 6, 0U);
+      const bool bevel = detail.name.find("bevel") != std::string::npos;
+      EXPECT_EQ(detail.indices.size() % (bevel ? 3U : 6U), 0U);
       ASSERT_EQ(detail.positions.size(), detail.normals.size());
       ASSERT_EQ(detail.uvs.size() * 3, detail.positions.size() * 2);
       double min_height = 1e9;
@@ -489,10 +490,16 @@ TEST_P(SidewalkBandMatrix, RaisedCornerHasElevatedTopAndTrueCurbWall) {
       for (std::size_t v = 0; v + 2 < detail.positions.size(); v += 3) {
         min_height = std::min(min_height, detail.positions[v + 2]);
         max_height = std::max(max_height, detail.positions[v + 2]);
-        EXPECT_NEAR(detail.normals[v + 2], 0.0, 1e-8); // vertical face
+        if (bevel) {
+          EXPECT_GT(detail.normals[v + 2], 0.0); // chamfer faces up and out
+        } else {
+          EXPECT_NEAR(detail.normals[v + 2], 0.0, 1e-8); // vertical face
+        }
       }
-      EXPECT_NEAR(min_height, 0.0, 1e-6);
-      EXPECT_NEAR(max_height, roadmaker::defaults::kCurbHeight, 1e-6);
+      if (!bevel) {
+        EXPECT_NEAR(min_height, 0.0, 1e-6);
+        EXPECT_LE(max_height, roadmaker::defaults::kCurbHeight + 1e-6);
+      }
       EXPECT_EQ(detail.surface, "concrete");
     }
   }
@@ -559,6 +566,125 @@ TEST_P(SidewalkBandMatrix, RaisedCornerHasElevatedTopAndTrueCurbWall) {
   EXPECT_GT(mouths_checked, 0U);
 }
 
+// S2.2c: the bevel has its own triangles, but must share the true 3-D
+// vertices of the shortened vertical wall and inset sidewalk top. A painted
+// strip on an unchanged top would overlap the original triangles (z-fighting).
+TEST_P(SidewalkBandMatrix, CornerChamferHasNoCracksOverlapsOrInvertedTopTriangles) {
+  const Built baseline = build(GetParam());
+  roadmaker::MeshOptions options;
+  options.raised_sidewalks = true;
+  const auto raised = roadmaker::build_network_mesh(baseline.network, options);
+  ASSERT_FALSE(raised.junction_floors.empty());
+  ASSERT_FALSE(baseline.mesh.junction_floors.empty());
+  const auto& flat = baseline.mesh.junction_floors.front();
+  const auto& corner = raised.junction_floors.front();
+  std::vector<const SubMesh*> flat_tops, raised_tops, bevels, walls;
+  for (const auto& part : flat.details) {
+    if (part.material == LaneType::Sidewalk) {
+      flat_tops.push_back(&part);
+    }
+  }
+  for (const auto& part : corner.details) {
+    if (part.material == LaneType::Sidewalk) {
+      raised_tops.push_back(&part);
+    } else if (part.material == LaneType::Curb) {
+      if (part.name.find("bevel") != std::string::npos) {
+        bevels.push_back(&part);
+      } else {
+        walls.push_back(&part);
+      }
+    }
+  }
+  ASSERT_EQ(flat_tops.size(), raised_tops.size());
+  ASSERT_FALSE(raised_tops.empty());
+  ASSERT_FALSE(walls.empty());
+  ASSERT_FALSE(bevels.empty());
+
+  for (std::size_t i = 0; i < flat_tops.size(); ++i) {
+    const SubMesh& a = *flat_tops[i];
+    const SubMesh& b = *raised_tops[i];
+    ASSERT_EQ(a.indices, b.indices);
+    ASSERT_EQ(a.positions.size(), b.positions.size());
+    for (std::size_t p = 0; p < a.positions.size(); p += 3) {
+      const double shift = std::hypot(b.positions[p] - a.positions[p],
+                                      b.positions[p + 1] - a.positions[p + 1]);
+      EXPECT_LE(shift, 0.05001); // maximum 5 cm physical inset
+    }
+    const auto area = [&](const SubMesh& mesh, std::size_t t) {
+      const auto a0 = static_cast<std::size_t>(mesh.indices[t]);
+      const auto b0 = static_cast<std::size_t>(mesh.indices[t + 1]);
+      const auto c0 = static_cast<std::size_t>(mesh.indices[t + 2]);
+      const auto dx = [&](std::size_t from, std::size_t to, int axis) {
+        return mesh.positions[3 * to + axis] - mesh.positions[3 * from + axis];
+      };
+      return (dx(a0, b0, 0) * dx(a0, c0, 1)) -
+             (dx(a0, b0, 1) * dx(a0, c0, 0));
+    };
+    for (std::size_t t = 0; t < a.indices.size(); t += 3) {
+      const double old_area = area(a, t);
+      const double new_area = area(b, t);
+      if (std::abs(old_area) > 1e-11) {
+        EXPECT_GT(old_area * new_area, 0.0) << "top triangle flipped";
+        EXPECT_GE(std::abs(new_area), 0.19 * std::abs(old_area))
+            << "top triangle compressed below safe fraction";
+      }
+    }
+  }
+
+  const auto matches_any = [](const std::array<double, 3>& p,
+                              const std::vector<const SubMesh*>& meshes) {
+    for (const SubMesh* mesh : meshes) {
+      for (std::size_t v = 0; v + 2 < mesh->positions.size(); v += 3) {
+        if (std::hypot(p[0] - mesh->positions[v],
+                       p[1] - mesh->positions[v + 1],
+                       p[2] - mesh->positions[v + 2]) < 1e-6) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+  std::size_t upper = 0, lower = 0;
+  for (const SubMesh* bevel : bevels) {
+    ASSERT_EQ(bevel->positions.size(), bevel->normals.size());
+    ASSERT_EQ(bevel->positions.size() * 2, bevel->uvs.size() * 3);
+    for (std::size_t t = 0; t < bevel->indices.size(); t += 3) {
+      const auto v0 = static_cast<std::size_t>(bevel->indices[t]);
+      const auto v1 = static_cast<std::size_t>(bevel->indices[t + 1]);
+      const auto v2 = static_cast<std::size_t>(bevel->indices[t + 2]);
+      const auto p = [&](std::size_t v, int axis) {
+        return bevel->positions[3 * v + axis];
+      };
+      const double ax = p(v1, 0) - p(v0, 0);
+      const double ay = p(v1, 1) - p(v0, 1);
+      const double az = p(v1, 2) - p(v0, 2);
+      const double bx = p(v2, 0) - p(v0, 0);
+      const double by = p(v2, 1) - p(v0, 1);
+      const double bz = p(v2, 2) - p(v0, 2);
+      const auto nx = (ay * bz) - (az * by);
+      const auto ny = (az * bx) - (ax * bz);
+      const auto nz = (ax * by) - (ay * bx);
+      EXPECT_GT(std::hypot(nx, ny, nz), 1e-9);
+      EXPECT_GT(nz, 0.0);
+    }
+    for (std::size_t v = 0; v + 2 < bevel->positions.size(); v += 3) {
+      const std::array<double, 3> point{
+          bevel->positions[v], bevel->positions[v + 1], bevel->positions[v + 2]};
+      if (bevel->uvs[(2 * (v / 3)) + 1] > 1e-8) {
+        ++upper;
+        EXPECT_TRUE(matches_any(point, raised_tops))
+            << "chamfer upper edge does not meet the inset sidewalk";
+      } else {
+        ++lower;
+        EXPECT_TRUE(matches_any(point, walls))
+            << "chamfer lower edge does not meet its vertical wall";
+      }
+    }
+  }
+  EXPECT_GT(upper, 0U);
+  EXPECT_GT(lower, 0U);
+}
+
 // S2.2b: a zebra placed 1 m before a junction used to be ignored because
 // the road-only ramp could not climb back to 15 cm before the arm face. The
 // junction band must now take over the ascent without an open vertical seam.
@@ -615,6 +741,18 @@ TEST(JunctionSidewalkBands, NearJunctionCrosswalksJoinCornerRampsAndRemeshTogeth
   EXPECT_GT(top_count, 0U);
   EXPECT_LE(min_top, 0.015); // junction arm face is now at crossing level
   EXPECT_GE(max_top, 0.10);  // rises towards the middle of the corner
+  std::size_t bevel_vertices = 0;
+  for (const auto& detail : corner.details) {
+    if (detail.name.find("bevel") == std::string::npos) {
+      continue;
+    }
+    for (std::size_t v = 2; v < detail.normals.size(); v += 3) {
+      ++bevel_vertices;
+      EXPECT_GT(detail.normals[v], 0.0);
+    }
+  }
+  EXPECT_GT(bevel_vertices, 0U)
+      << "crosswalk ramp removed the corner chamfer away from the flush arm face";
 
   // Exact matching XY vertices at a street/junction seam must have the same
   // Z on both independently emitted sidewalk surfaces (no vertical cracks).

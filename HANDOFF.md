@@ -2,7 +2,7 @@
 
 > **Jedyny aktualizowany dziennik przekazania między rozmowami.**
 > Kolejny agent ma czytać ten plik **przed edycją kodu**.
-> Stan dokumentu: 2026-11-13, po S2.2b; odblokowano Windows Qt/GTest (1284 PASS, 1 SKIPPED). Następny etap: S2.2c.
+> Stan dokumentu: 2026-11-13, S2.2c zaimplementowane i przetestowane automatycznie; odbiór wizualny S2.2c NADAL OTWARTY. Następny etap: kontrola GUI/glTF i narożników T/Y z bliska.
 > Poniższe SHA to punkt kontrolny, nie zamiennik aktualnego `git status`.
 
 ## Gotowe polecenie do nowej rozmowy
@@ -195,7 +195,11 @@ Dawnych prób diagnostycznych nie utrzymywano w kodzie.
 Osobny Quality Gate jądra: 2059 testów C++ i 6 agenta PASS.
 **Nie mylić testów Qt z odbiorem estetyki renderingu.**
 
-**Następny krok S2.2c:** dokończyć 5 cm fazę krawężnika
+**S2.2c — etap kodu i testów (13.11.2026):** odzyskano istniejące lokalne zmiany bez ich nadpisania i dokończono kontrolę automatyczną. `junction_surface.cpp` wytwarza odsuniętą krawędź górnego chodnika i oddzielną rzeczywistą fazę krawężnika szerokości nominalnej 5 cm, zmniejszaną na końcach wlotów i przy zjazdach. Dla ciasnych trójkątów CDT przesunięcie jest ograniczane testem orientacji, aby nie odwrócić siatki. Górna krawędź fazy korzysta z pozycji siatki chodnika, dolna z krawędzi ściany. Dodane testy T/Y, nieodwracania trójkątów, wspólnych krawędzi i eksportu GLB. `gltf_exporter.cpp` zapisuje `TEXCOORD_0` dla dowolnej podsiatki z kompletnymi UV — poprzednio exporter je pomijał, mimo że miały je fazy.
+
+**Potwierdzone 13.11:** `BUILD_PASS: tests`, `BUILD_PASS: editor`; C++ **2068 PASS, 10 DISABLED**, Python agent **6 PASS**, `QUALITY_GATE_PASS`; Qt edytora **1284 PASS, 1 SKIPPED, 0 FAIL** (1285 przypadków, exit 0). W czasie pracy żadne okno `roadmaker-editor` nie było otwarte, nie zmieniano zapisanych scen użytkownika. **BRAK odbioru wizualnego S2.2c z kamery kierowcy i zbliżeń T/Y, brak potwierdzonego oglądu GLB w zewnętrznym viewerze i profilowania czasu remesh** — nie deklarować pełnego ukończenia etapu wizualnego. Najbliższa praca: osobna kopia sceny testowej, inspekcja krawężników w GUI pod małym kątem (ciasne T/Y, przejścia, nachylenia), sprawdzenie glTF w viewerze i kosztu remesh_objects; dopiero po tym ocena geometrii jako gotowej do PBR.
+
+**Historyczny plan S2.2c:** dokończyć 5 cm fazę krawężnika
 przez cały łuk narożnika (obecna ściana narożnika jest
 pionowa, a faza drogi zwęża się przed wlotem), zszyć
 górną krawędź i sprawdzić profile z nachyleniem oraz
@@ -207,7 +211,7 @@ Nie uznawać obecnych materiałów za realistycznie odebrane.
 
 1. Uruchomić `scripts/prawko-resume.ps1` i sprawdzić oba repozytoria oraz otwarte sceny. Nie przeładowywać niezapisanych dokumentów.
 2. **Testy Qt Windows już odblokowane:** przed zmianami GUI sprawdzić `roadmaker_editor_tests` i `qoffscreen.dll` w `build/dev-windows/editor/platforms/`; CMake kopiuje plugin automatycznie. Ostatnia pełna sesja: 1284 PASS, 1 SKIPPED, 0 FAIL; wyniki oraz konfiguracja w akapicie S2.2b powyżej. Nie zmieniać `qt_gtest_main.cpp` bez odtwarzalnej regresji.
-3. **S2.2c:** zrealizować ciągłą 5-centymetrową fazę na łuku narożnika, wykorzystując constrained edges i wspólne wierzchołki. Chronić kompatybilny tryb `raised_sidewalks=false`.
+3. **S2.2c:** kod i testy automatyczne wykonane (2068 C++, 1284 Qt PASS); obowiązkowo skontrolować wizualnie ciągłą fazę 5 cm przy wlotach i ciasnych łukach. Nie uznawać jeszcze pełnego odbioru.
 4. Dopisać testy ciasnych T/Y, nachylonych ulic i przejść, brak z-fightingu, eksport glTF/UV, pełny Undo/Redo i widok kamery kierowcy. Sprawdzić koszt przebudowy `remesh_objects` w trybie 3D.
 5. Dopiero po poprawnej geometrii i odbiorze GUI przejść do PBR, skali UV, oświetlenia i proceduralnych detali.
 
