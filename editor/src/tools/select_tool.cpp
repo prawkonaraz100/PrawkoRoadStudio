@@ -29,6 +29,7 @@
 #include "document/actor_placement.hpp"
 #include "document/document.hpp"
 #include "document/prop_placement.hpp"
+#include "document/signal_placement.hpp"
 #include "document/selection_model.hpp"
 #include "document/transform_gates.hpp"
 #include "viewport/picking.hpp"
@@ -63,6 +64,7 @@ void SelectTool::deactivate() {
   abort_drag();
   abort_move();
   abort_object_move();
+  abort_signal_move();
   hover_cursor_ = Qt::ArrowCursor;
   if (press_.has_value() || band_current_.has_value()) {
     press_.reset();
@@ -121,9 +123,9 @@ bool SelectTool::mouse_press(const ToolEvent& event) {
   // road, so it never starts a body move (it only selects on release).
   const bool on_object =
       !actor.has_value() && event.pick.has_value() && event.pick->object.is_valid();
-  // A signal pick carries its owning road, but a signal is a leaf like a prop —
-  // a press on it must not start a body-move of the road under it. It only
-  // selects on release (signal drag-move is the gizmo's job, not the body drag).
+  // A signal pick carries its owning road, but is a leaf like a prop:
+  // an LMB drag moves only the signal, never the underlying whole road.
+  // The transform gizmo ring remains available for snapped rotation.
   const bool on_signal =
       !actor.has_value() && event.pick.has_value() && event.pick->signal.is_valid();
   const bool on_road = !actor.has_value() && event.pick.has_value() &&
@@ -134,6 +136,8 @@ bool SelectTool::mouse_press(const ToolEvent& event) {
                  .road = on_road ? std::optional<RoadId>(event.pick->road) : std::nullopt,
                  .object = on_object ? std::optional<ObjectId>(event.pick->object) : std::nullopt,
                  .object_road = on_object ? event.pick->road : RoadId{},
+                 .signal = on_signal ? std::optional<SignalId>(event.pick->signal) : std::nullopt,
+                 .signal_road = on_signal ? event.pick->road : RoadId{},
                  .actor = actor.value_or(std::string{})};
   return true;
 }
@@ -158,6 +162,11 @@ bool SelectTool::mouse_move(const ToolEvent& event) {
     emit preview_changed();
     return true;
   }
+  if (signal_move_.has_value()) {
+    update_signal_move(cursor);
+    emit preview_changed();
+    return true;
+  }
 
   if (press_.has_value()) {
     const bool beyond_tolerance = std::abs(cursor.x - press_->world.x) > click_tolerance_ ||
@@ -170,6 +179,16 @@ bool SelectTool::mouse_move(const ToolEvent& event) {
         begin_object_move(*press_->object, press_->object_road);
         if (object_move_.has_value()) {
           update_object_move(cursor);
+          emit preview_changed();
+        }
+      }
+      return true;
+    }
+    if (press_->signal.has_value()) {
+      if (beyond_tolerance) {
+        begin_signal_move(*press_->signal, press_->signal_road);
+        if (signal_move_.has_value()) {
+          update_signal_move(cursor);
           emit preview_changed();
         }
       }
@@ -203,7 +222,8 @@ bool SelectTool::mouse_move(const ToolEvent& event) {
   // Plain hover (no gesture): in move mode show the 4-arrow over a movable
   // entity. Return false so the viewport's hover readout still runs.
   update_move_cursor(event.pick.has_value() &&
-                     (event.pick->object.is_valid() || event.pick->road.is_valid()));
+                     (event.pick->object.is_valid() || event.pick->signal.is_valid() ||
+                      event.pick->road.is_valid()));
   return false;
 }
 
@@ -238,6 +258,18 @@ bool SelectTool::mouse_release(const ToolEvent& event) {
     hover_cursor_ = Qt::ArrowCursor;
     emit cursor_changed(Qt::ArrowCursor);
     emit status_message(tr("Prop moved — Ctrl+Z to undo"));
+    emit preview_changed();
+    return true;
+  }
+
+  if (signal_move_.has_value()) {
+    const bool changed = document_.preview_active();
+    document_.commit_preview();
+    signal_move_.reset();
+    hover_cursor_ = Qt::ArrowCursor;
+    emit cursor_changed(Qt::ArrowCursor);
+    emit status_message(changed ? tr("Sign or traffic light moved — Ctrl+Z to undo")
+                                : tr("Sign position unchanged"));
     emit preview_changed();
     return true;
   }
@@ -326,6 +358,10 @@ bool SelectTool::key_press(int key, Qt::KeyboardModifiers modifiers) {
   }
   if (object_move_.has_value()) {
     abort_object_move();
+    return true;
+  }
+  if (signal_move_.has_value()) {
+    abort_signal_move();
     return true;
   }
   if (press_.has_value()) {
@@ -582,14 +618,39 @@ void SelectTool::abort_move() {
 }
 
 void SelectTool::begin_object_move(ObjectId object, RoadId road) {
-  object_move_ = ObjectMoveState{.object = object, .road = road};
-  // Auto-select the grabbed prop (its owning road comes along, matching a click
-  // on the prop) so the properties panel and gizmo track it.
-  selection_.select({.road = road, .lane = LaneId{}, .object = object, .junction = JunctionId{}},
-                    SelectMode::Replace);
+  ObjectMoveState state{.object = object, .road = road};
+  const Object* anchor = document_.network().object(object);
+  if (anchor == nullptr) return;
+  state.anchor_s = anchor->s;
+  state.anchor_t = anchor->t;
+  const auto selected = selection_.selected_objects();
+  // A dropped prefab arrives as a multi-object selection. Preserve it when
+  // the grabbed part belongs to that selection and every member shares the
+  // same owning road (OpenDRIVE objects cannot float independently).
+  if (selected.size() > 1 &&
+      std::ranges::find(selected, object) != selected.end()) {
+    bool one_road = true;
+    for (const ObjectId id : selected) {
+      const Object* part = document_.network().object(id);
+      if (part == nullptr || part->road != road) {
+        one_road = false;
+        break;
+      }
+      state.group.push_back(ObjectMoveState::Member{.id = id, .s = part->s, .t = part->t});
+    }
+    if (!one_road) state.group.clear();
+  }
+  const bool group = state.group.size() > 1;
+  object_move_ = std::move(state);
+  if (!group) {
+    // Single prop: select just the grabbed one; grouped prefabs retain every
+    // selected member to make their collective state visible in Properties.
+    selection_.select({.road = road, .object = object}, SelectMode::Replace);
+  }
   press_.reset();
   emit cursor_changed(Qt::SizeAllCursor);
-  emit status_message(tr("Moving prop — release to place, Esc cancels"));
+  emit status_message(group ? tr("Moving selected prefab — release to place, Esc cancels")
+                            : tr("Moving prop — release to place, Esc cancels"));
 }
 
 void SelectTool::update_object_move(const Waypoint& cursor) {
@@ -624,6 +685,42 @@ void SelectTool::update_object_move(const Waypoint& cursor) {
   const ObjectId object = object_move_->object;
   const double s = st->s;
   const double t = st->t;
+  if (object_move_->group.size() > 1) {
+    const double ds = s - object_move_->anchor_s;
+    const double dt = t - object_move_->anchor_t;
+    const auto& group = object_move_->group;
+    // Atomic placement: never strand one portion of the prefab past the
+    // owning road's s range or far away from it.
+    if (std::ranges::any_of(group, [&](const ObjectMoveState::Member& member) {
+          return member.s + ds < 0.0 ||
+                 member.s + ds > road->plan_view.length() ||
+                 std::abs(member.t + dt) > kObjectSnapThreshold;
+        })) {
+      if (!object_move_->off_road) {
+        object_move_->off_road = true;
+        emit status_message(tr("Whole prefab must fit beside this road — Esc cancels"));
+      }
+      return;
+    }
+    const auto factory = [group, ds, dt](const RoadNetwork&) {
+      std::vector<edit::CommandBuilder> builders;
+      builders.reserve(group.size());
+      for (const auto& member : group) {
+        const ObjectId id = member.id;
+        const double new_s = member.s + ds;
+        const double new_t = member.t + dt;
+        builders.push_back([id, new_s, new_t](RoadNetwork& base) {
+          return edit::move_object(base, id, new_s, new_t);
+        });
+      }
+      return edit::composite("Move selected prefab", {}, std::move(builders));
+    };
+    const Expected<void> moved =
+        document_.preview_active() ? document_.update_preview(factory)
+                                   : document_.begin_preview(factory(document_.network()));
+    if (!moved.has_value()) emit status_message(tr("Unable to move complete prefab"));
+    return;
+  }
   const Expected<void> moved =
       document_.preview_active()
           ? document_.update_preview([object, s, t](const RoadNetwork& base) {
@@ -642,6 +739,72 @@ void SelectTool::abort_object_move() {
   hover_cursor_ = Qt::ArrowCursor;
   emit cursor_changed(Qt::ArrowCursor);
   emit status_message(tr("Move cancelled"));
+  emit preview_changed();
+}
+
+void SelectTool::begin_signal_move(SignalId signal, RoadId road) {
+  if (document_.network().signal(signal) == nullptr ||
+      document_.network().road(road) == nullptr) {
+    return;
+  }
+  signal_move_ = SignalMoveState{.signal = signal, .road = road};
+  // A sign pick contains the owning RoadId, but remains a leaf selection:
+  // dragging it must not activate road movement or select a road lane.
+  selection_.select({.road = road, .signal = signal}, SelectMode::Replace);
+  press_.reset();
+  emit cursor_changed(Qt::SizeAllCursor);
+  emit status_message(tr("Moving sign or traffic light — release to place, Esc cancels"));
+}
+
+void SelectTool::update_signal_move(const Waypoint& cursor) {
+  if (!signal_move_.has_value()) {
+    return;
+  }
+  const Road* road = document_.network().road(signal_move_->road);
+  if (road == nullptr || road->plan_view.empty()) {
+    return;
+  }
+  // Reuse the signal placement threshold, but preserve the OWNing road.
+  // Snapping to an unrelated nearby road would silently change OpenDRIVE
+  // validity and dependencies; moving between roads requires an explicit op.
+  const auto station = station_within(road->plan_view, cursor.x, cursor.y,
+                                      kSignalSnapThreshold);
+  if (!station) {
+    if (!signal_move_->off_road) {
+      signal_move_->off_road = true;
+      emit status_message(tr("Sign stays beside its road — move closer or press Esc"));
+    }
+    return;
+  }
+  if (signal_move_->off_road) {
+    signal_move_->off_road = false;
+    emit status_message(tr("Moving sign or traffic light — release to place, Esc cancels"));
+  }
+  const SignalId id = signal_move_->signal;
+  const double s = station->s;
+  const double t = station->t;
+  // Null heading override: moving a sign must retain both @hOffset (author's
+  // visual rotation) and @orientation (traffic direction of applicability).
+  const Expected<void> moved =
+      document_.preview_active()
+          ? document_.update_preview([id, s, t](const RoadNetwork& base) {
+              return edit::move_signal(base, id, s, t);
+            })
+          : document_.begin_preview(edit::move_signal(document_.network(), id, s, t));
+  if (!moved.has_value()) {
+    emit status_message(tr("Cannot move sign here — Esc cancels"));
+  }
+}
+
+void SelectTool::abort_signal_move() {
+  if (!signal_move_.has_value()) {
+    return;
+  }
+  document_.cancel_preview();
+  signal_move_.reset();
+  hover_cursor_ = Qt::ArrowCursor;
+  emit cursor_changed(Qt::ArrowCursor);
+  emit status_message(tr("Sign move cancelled"));
   emit preview_changed();
 }
 
@@ -708,7 +871,7 @@ QString SelectTool::instruction() const {
   // One tool, two modes — the instruction follows the mode, as the old
   // activate() message did.
   if (move_mode_) {
-    return tr("Drag a road or prop to move it · click to select it and use the transform gizmo · "
+    return tr("Drag a road, prop or sign to move it · click to select it and use the transform gizmo · "
               "Esc cancels");
   }
   return tr("Click to select · ⇧ adds, Ctrl toggles · drag a road body to move it, a node handle "

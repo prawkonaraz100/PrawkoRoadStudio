@@ -60,6 +60,7 @@ public:
   [[nodiscard]] bool moving() const { return move_.has_value(); }
 
   [[nodiscard]] bool moving_object() const { return object_move_.has_value(); }
+  [[nodiscard]] bool moving_signal() const { return signal_move_.has_value(); }
 
   /// "Move mode" — the dedicated, discoverable Move tool (issue #176). Hovering
   /// a movable entity shows the 4-arrow cursor and a body drag always moves
@@ -105,6 +106,8 @@ private:
     std::optional<RoadId> road;     // the road under the press, for auto-select
     std::optional<ObjectId> object; // the prop under the press, for a prop move
     RoadId object_road;             // owning road of that prop (project target)
+    std::optional<SignalId> signal; // sign/light under press, for an intuitive drag
+    RoadId signal_road;             // owning road: signs must stay road-relative
 
     /// The scenario actor under the press (#246), by `<ScenarioObject @name>`.
     /// Non-empty suppresses every other arm: an actor is a leaf like a signal,
@@ -129,9 +132,27 @@ private:
     ObjectId object;
     RoadId road;
 
+    struct Member {
+      ObjectId id;
+      double s;
+      double t;
+    };
+    // If the grabbed prop belongs to an already-selected same-road prefab,
+    // move all selected members by the same road-relative delta. One composite
+    // preview/undo entry, never collapse selection to the grabbed part.
+    std::vector<Member> group;
+    double anchor_s = 0.0;
+    double anchor_t = 0.0;
+
     /// The last frame's cursor had left the road, so the prop holds its last
     /// good station. Tracked so the hint is emitted on the transition rather
     /// than on every mouse-move.
+    bool off_road = false;
+  };
+
+  struct SignalMoveState {
+    SignalId signal;
+    RoadId road;
     bool off_road = false;
   };
 
@@ -172,6 +193,12 @@ private:
   /// Ends the prop move reverting any live preview (Esc / deactivate path).
   void abort_object_move();
 
+  /// Sign/light direct body drag: road-relative s/t, preview, single undo step.
+  /// The gizmo's ring remains the explicit rotate gesture; orientation is never changed.
+  void begin_signal_move(SignalId signal, RoadId road);
+  void update_signal_move(const Waypoint& cursor);
+  void abort_signal_move();
+
   /// In move mode, sets the hover cursor to the 4-arrow when `over_movable`,
   /// else the arrow — deduped so plain hovers stay cheap. No-op off move mode.
   void update_move_cursor(bool over_movable);
@@ -189,6 +216,7 @@ private:
   std::optional<NodeDragState> drag_;
   std::optional<MoveDragState> move_;
   std::optional<ObjectMoveState> object_move_;
+  std::optional<SignalMoveState> signal_move_;
   std::optional<PressState> press_;
   std::optional<Waypoint> band_current_;
   bool move_mode_ = false;

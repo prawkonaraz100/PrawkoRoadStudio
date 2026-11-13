@@ -164,6 +164,28 @@ roadmaker::ObjectId place_prop(Document& document, RoadId road, double s, double
   return id;
 }
 
+
+roadmaker::SignalId place_sign(Document& document, RoadId road, double s, double t,
+                               bool traffic_light = false) {
+  roadmaker::Signal sign;
+  sign.odr_id = traffic_light ? "2" : "1";
+  sign.type = traffic_light ? "1000001" : "R1-1";
+  sign.country = traffic_light ? "OpenDRIVE" : "US";
+  sign.dynamic = traffic_light;
+  sign.orientation = roadmaker::ObjectOrientation::Plus;
+  sign.h_offset = 0.27;
+  sign.s = s;
+  sign.t = t;
+  if (!document.push_command(roadmaker::edit::add_signal(document.network(), road, sign))) {
+    throw std::runtime_error("place_sign: add_signal failed");
+  }
+  roadmaker::SignalId id;
+  document.network().for_each_signal([&](roadmaker::SignalId sid, const roadmaker::Signal&) {
+    id = sid;
+  });
+  return id;
+}
+
 } // namespace
 
 // --- selection: clicks -----------------------------------------------------
@@ -562,6 +584,182 @@ TEST(SelectTool, EscapeCancelsAMoveLeavingTheNetworkPristine) {
 }
 
 // --- Move tool (#176): move mode + prop-move-by-drag -----------------------
+
+
+TEST(SelectTool, SignAndTrafficLightBodyDragMovesOnlySignalAndKeepsTrafficSemantics) {
+  for (const bool light : {false, true}) {
+    Scene scene;
+    const auto sign_id = place_sign(scene.document, scene.dragged, 24.0, -4.0, light);
+    const int undo_base = scene.document.undo_stack()->count();
+    const std::string before = xodr(scene.document);
+    const auto* original = scene.document.network().signal(sign_id);
+    ASSERT_NE(original, nullptr);
+    const auto orientation = original->orientation;
+    const double heading = original->h_offset;
+
+    SelectTool tool(scene.document, scene.selection);
+    tool.set_move_mode(true);
+    PickHit hit = scene.hit(scene.dragged);
+    hit.signal = sign_id;
+    ASSERT_TRUE(tool.mouse_press(at(24.0, -4.0, Qt::LeftButton, Qt::NoModifier, hit)));
+    ASSERT_TRUE(tool.mouse_move(at(75.0, -2.0, Qt::LeftButton, Qt::NoModifier, hit)));
+    ASSERT_TRUE(tool.moving_signal());
+    EXPECT_EQ(scene.selection.primary().signal, sign_id);
+    EXPECT_TRUE(scene.selection.selected_roads().empty()); // Never move the owning road.
+    ASSERT_TRUE(tool.mouse_release(at(75.0, -2.0, Qt::NoButton, Qt::NoModifier, hit)));
+    const auto* moved = scene.document.network().signal(sign_id);
+    ASSERT_NE(moved, nullptr);
+    EXPECT_GT(moved->s, 55.0);
+    EXPECT_EQ(moved->orientation, orientation);
+    EXPECT_DOUBLE_EQ(moved->h_offset, heading);
+    EXPECT_EQ(scene.document.undo_stack()->count(), undo_base + 1);
+    EXPECT_NE(xodr(scene.document), before);
+    scene.document.undo_stack()->undo();
+    EXPECT_EQ(xodr(scene.document), before);
+    scene.document.undo_stack()->redo();
+    EXPECT_GT(scene.document.network().signal(sign_id)->s, 55.0);
+  }
+}
+
+TEST(SelectTool, ReleasingSignFarOutsideItsRoadDoesNotCreateUndo) {
+  Scene scene;
+  const auto sign = place_sign(scene.document, scene.dragged, 20.0, -3.0);
+  const std::string before = xodr(scene.document);
+  const int undo_base = scene.document.undo_stack()->count();
+  SelectTool tool(scene.document, scene.selection);
+  PickHit hit = scene.hit(scene.dragged);
+  hit.signal = sign;
+  ASSERT_TRUE(tool.mouse_press(at(20.0, -3.0, Qt::LeftButton, Qt::NoModifier, hit)));
+  ASSERT_TRUE(tool.mouse_move(at(45.0, 400.0, Qt::LeftButton, Qt::NoModifier, hit)));
+  EXPECT_TRUE(tool.moving_signal());
+  EXPECT_FALSE(scene.document.preview_active());
+  ASSERT_TRUE(tool.mouse_release(at(45.0, 400.0, Qt::NoButton, Qt::NoModifier, hit)));
+  EXPECT_FALSE(tool.moving_signal());
+  EXPECT_EQ(scene.document.undo_stack()->count(), undo_base);
+  EXPECT_EQ(xodr(scene.document), before);
+}
+
+TEST(SelectTool, SignDragOffRoadHoldsLastGoodFrameAndResumes) {
+  Scene scene;
+  const auto signal = place_sign(scene.document, scene.dragged, 20.0, -3.0);
+  SelectTool tool(scene.document, scene.selection);
+  PickHit hit = scene.hit(scene.dragged);
+  hit.signal = signal;
+  ASSERT_TRUE(tool.mouse_press(at(20.0, -3.0, Qt::LeftButton, Qt::NoModifier, hit)));
+  ASSERT_TRUE(tool.mouse_move(at(50.0, -8.0, Qt::LeftButton, Qt::NoModifier, hit)));
+  const double good_s = scene.document.network().signal(signal)->s;
+  const double good_t = scene.document.network().signal(signal)->t;
+  ASSERT_TRUE(tool.mouse_move(at(55.0, 400.0, Qt::LeftButton, Qt::NoModifier, hit)));
+  EXPECT_DOUBLE_EQ(scene.document.network().signal(signal)->s, good_s);
+  EXPECT_DOUBLE_EQ(scene.document.network().signal(signal)->t, good_t);
+  ASSERT_TRUE(tool.mouse_move(at(83.0, -3.0, Qt::LeftButton, Qt::NoModifier, hit)));
+  ASSERT_TRUE(tool.mouse_release(at(83.0, -3.0, Qt::NoButton, Qt::NoModifier, hit)));
+  EXPECT_GT(scene.document.network().signal(signal)->s, good_s + 15.0);
+}
+
+TEST(SelectTool, EscapeCancelsSignDragAndSimpleClickDoesNotCreateUndo) {
+  Scene scene;
+  const auto signal = place_sign(scene.document, scene.dragged, 30.0, -3.0);
+  const std::string original = xodr(scene.document);
+  const int baseline = scene.document.undo_stack()->count();
+  SelectTool tool(scene.document, scene.selection);
+  PickHit hit = scene.hit(scene.dragged);
+  hit.signal = signal;
+  ASSERT_TRUE(tool.mouse_press(at(30.0, -3.0, Qt::LeftButton, Qt::NoModifier, hit)));
+  ASSERT_TRUE(tool.mouse_release(at(30.0, -3.0, Qt::NoButton, Qt::NoModifier, hit)));
+  EXPECT_EQ(scene.selection.primary().signal, signal);
+  EXPECT_EQ(scene.document.undo_stack()->count(), baseline);
+  ASSERT_TRUE(tool.mouse_press(at(30.0, -3.0, Qt::LeftButton, Qt::NoModifier, hit)));
+  ASSERT_TRUE(tool.mouse_move(at(62.0, -5.0, Qt::LeftButton, Qt::NoModifier, hit)));
+  EXPECT_TRUE(tool.moving_signal());
+  ASSERT_TRUE(tool.key_press(Qt::Key_Escape, Qt::NoModifier));
+  EXPECT_FALSE(tool.moving_signal());
+  EXPECT_EQ(scene.document.undo_stack()->count(), baseline);
+  EXPECT_EQ(xodr(scene.document), original);
+}
+
+
+TEST(SelectTool, DraggingOneSelectedPrefabPartMovesEveryPartInOneUndo) {
+  Scene scene;
+  const auto first = place_prop(scene.document, scene.dragged, 25.0, 1.0);
+  roadmaker::Object second;
+  second.odr_id = "tree2";
+  second.name = "tree_pine";
+  second.type = roadmaker::ObjectType::Tree;
+  second.s = 32.0;
+  second.t = 3.0;
+  ASSERT_TRUE(scene.document.push_command(
+      roadmaker::edit::add_object(scene.document.network(), scene.dragged, second)).has_value());
+  roadmaker::ObjectId other;
+  scene.document.network().for_each_object([&](roadmaker::ObjectId id, const roadmaker::Object&) {
+    if (id != first) other = id;
+  });
+  ASSERT_TRUE(other.is_valid());
+  const std::array<SelectionEntry, 2> group{
+      SelectionEntry{.road = scene.dragged, .object = first},
+      SelectionEntry{.road = scene.dragged, .object = other}};
+  scene.selection.select_many(group);
+  const int before_count = scene.document.undo_stack()->count();
+  const auto before = xodr(scene.document);
+  const double s1 = scene.document.network().object(first)->s;
+  const double s2 = scene.document.network().object(other)->s;
+  const double t1 = scene.document.network().object(first)->t;
+  const double t2 = scene.document.network().object(other)->t;
+
+  SelectTool tool(scene.document, scene.selection);
+  tool.set_move_mode(true);
+  PickHit hit = scene.hit(scene.dragged);
+  hit.object = first;
+  ASSERT_TRUE(tool.mouse_press(at(25.0, 1.0, Qt::LeftButton, Qt::NoModifier, hit)));
+  ASSERT_TRUE(tool.mouse_move(at(49.0, 3.0, Qt::LeftButton, Qt::NoModifier, hit)));
+  EXPECT_TRUE(tool.moving_object());
+  EXPECT_EQ(scene.selection.selected_objects().size(), 2U);
+  ASSERT_TRUE(tool.mouse_release(at(49.0, 3.0, Qt::NoButton, Qt::NoModifier, hit)));
+  const auto* moved1 = scene.document.network().object(first);
+  const auto* moved2 = scene.document.network().object(other);
+  ASSERT_NE(moved1, nullptr);
+  ASSERT_NE(moved2, nullptr);
+  EXPECT_GT(moved1->s, s1 + 10.0);
+  EXPECT_NEAR(moved1->s - s1, moved2->s - s2, 1e-6);
+  EXPECT_NEAR(moved1->t - t1, moved2->t - t2, 1e-6);
+  EXPECT_EQ(scene.document.undo_stack()->count(), before_count + 1);
+  scene.document.undo_stack()->undo();
+  EXPECT_EQ(xodr(scene.document), before);
+  scene.document.undo_stack()->redo();
+  EXPECT_NE(xodr(scene.document), before);
+}
+
+TEST(SelectTool, PrefabDragOutsideAnyMembersStationRangeRejectsWholeGroup) {
+  Scene scene;
+  const auto first = place_prop(scene.document, scene.dragged, 24.0, 1.0);
+  roadmaker::Object second;
+  second.odr_id = "tree2";
+  second.type = roadmaker::ObjectType::Tree;
+  second.name = "tree_pine";
+  second.s = 96.0;
+  second.t = 2.0;
+  ASSERT_TRUE(scene.document.push_command(
+      roadmaker::edit::add_object(scene.document.network(), scene.dragged, second)).has_value());
+  roadmaker::ObjectId other;
+  scene.document.network().for_each_object([&](roadmaker::ObjectId id, const roadmaker::Object&) {
+    if (id != first) other = id;
+  });
+  const std::array<SelectionEntry,2> group{
+      SelectionEntry{.road = scene.dragged, .object = first},
+      SelectionEntry{.road = scene.dragged, .object = other}};
+  scene.selection.select_many(group);
+  const int undo_base = scene.document.undo_stack()->count();
+  const std::string before = xodr(scene.document);
+  SelectTool tool(scene.document, scene.selection);
+  PickHit hit = scene.hit(scene.dragged);
+  hit.object = first;
+  ASSERT_TRUE(tool.mouse_press(at(24.0, 1.0, Qt::LeftButton, Qt::NoModifier, hit)));
+  ASSERT_TRUE(tool.mouse_move(at(55.0, 2.0, Qt::LeftButton, Qt::NoModifier, hit)));
+  ASSERT_TRUE(tool.mouse_release(at(55.0, 2.0, Qt::NoButton, Qt::NoModifier, hit)));
+  EXPECT_EQ(xodr(scene.document), before);
+  EXPECT_EQ(scene.document.undo_stack()->count(), undo_base);
+  EXPECT_EQ(scene.selection.selected_objects().size(), 2U);
+}
 
 TEST(SelectTool, MoveToolDragMovesAPropAlongItsRoadOneUndo) {
   Scene scene;

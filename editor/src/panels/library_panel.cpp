@@ -290,11 +290,13 @@ void LibraryPanel::handle_current_changed(const QModelIndex& index) {
     drag_instructions_->setText(tr("Upuść przy wlocie skrzyżowania. Po wstawieniu edytuj przejście w Properties."));
     break;
   case LibraryItem::Kind::Signal:
-    drag_instructions_->setText(tr("Upuść znak lub sygnalizator przy drodze. Po wstawieniu edytuj pozycję i kierunek w Properties."));
+    drag_instructions_->setText(tr("Upuść przy drodze; przeciągnij słupek, aby przesunąć. Move → pierścień obraca. Esc anuluje."));
     break;
   case LibraryItem::Kind::Tree:
+    drag_instructions_->setText(tr("Upuść przy drodze; przeciągnij obiekt, by przesunąć. Obrót i rozmiar: Properties / Move."));
+    break;
   case LibraryItem::Kind::PropAssembly:
-    drag_instructions_->setText(tr("Upuść przy drodze. Potem przesuń obiekt myszą lub edytuj jego rozmiar i obrót w Properties."));
+    drag_instructions_->setText(tr("Upuść przy drodze. Zaznaczona grupa przesuwa się razem; Ctrl+Z cofa. Obrót elementów: Move."));
     break;
   case LibraryItem::Kind::Stencil:
     drag_instructions_->setText(tr("Upuść na pas. Po umieszczeniu możesz zmienić materiał oznaczenia w Properties."));
