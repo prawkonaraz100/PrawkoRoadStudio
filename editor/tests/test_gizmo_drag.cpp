@@ -263,6 +263,63 @@ TEST(GizmoTargetResolution, EntitiesWithNoTransformAndStaleIdsResolveToNothing) 
 
 // --- rotation: absolute detents ----------------------------------------------
 
+TEST(GizmoDrag, RotatingSignalMastAssemblyMovesAllFourPartsInOneUndo) {
+  Scene scene;
+  ASSERT_TRUE(scene.document.push_command(edit::place_assembly(
+      scene.document.network(), scene.road, 40.0, -4.0, 0.0, "signal_mast")).has_value());
+
+  std::vector<SelectionEntry> entries;
+  scene.document.network().for_each_object([&](ObjectId id, const Object& object) {
+    if (object.assembly.has_value()) {
+      entries.push_back({.road = scene.road, .object = id});
+    }
+  });
+  ASSERT_EQ(entries.size(), 4U);
+  scene.selection.select_many(entries);
+
+  std::vector<Object> originals;
+  for (const auto& entry : entries) {
+    const Object* part = scene.document.network().object(entry.object);
+    ASSERT_NE(part, nullptr);
+    originals.push_back(*part);
+  }
+  const std::string before = xodr(scene.document);
+  const int undo_before = scene.document.undo_stack()->count();
+  const auto target = gizmo_target(scene.document.network(), scene.selection.primary());
+  ASSERT_TRUE(target.has_value());
+  ASSERT_TRUE(target->object.is_valid());
+  EXPECT_FALSE(target->road.is_valid());
+
+  GizmoDragSession session(scene.document);
+  ring_drag(session, *target, std::numbers::pi / 2.0);
+  const std::string after = xodr(scene.document);
+  EXPECT_NE(after, before);
+  EXPECT_EQ(scene.document.undo_stack()->count(), undo_before + 1);
+  EXPECT_EQ(scene.selection.selected_objects().size(), 4U);
+
+  for (std::size_t i = 0; i < entries.size(); ++i) {
+    const Object* part = scene.document.network().object(entries[i].object);
+    ASSERT_NE(part, nullptr);
+    EXPECT_TRUE(part->assembly.has_value());
+    const double delta_hdg = std::remainder(part->hdg - originals[i].hdg,
+                                            2.0 * std::numbers::pi);
+    EXPECT_NEAR(delta_hdg, std::numbers::pi / 2.0, 1e-8);
+    for (std::size_t j = i + 1; j < entries.size(); ++j) {
+      const Object* peer = scene.document.network().object(entries[j].object);
+      ASSERT_NE(peer, nullptr);
+      const double before_distance =
+          std::hypot(originals[i].s - originals[j].s, originals[i].t - originals[j].t);
+      EXPECT_NEAR(std::hypot(part->s - peer->s, part->t - peer->t),
+                  before_distance, 1e-8);
+    }
+  }
+
+  scene.document.undo_stack()->undo();
+  EXPECT_EQ(xodr(scene.document), before);
+  scene.document.undo_stack()->redo();
+  EXPECT_EQ(xodr(scene.document), after);
+}
+
 // Absolute, not delta. A prop already at an odd angle lands on an exact
 // multiple of the registry increment relative to the road, so a bench ends up
 // genuinely perpendicular rather than perpendicular-plus-its-old-offset.
