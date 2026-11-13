@@ -118,26 +118,32 @@ bool SelectTool::mouse_press(const ToolEvent& event) {
   const std::optional<std::string> actor =
       actor_at(document_.scenario(), document_.network(), cursor.x, cursor.y);
 
-  // A prop hit also carries its owning road; record it as a prop press so a
-  // drag moves the PROP, not the road under it. A junction-floor pick carries no
-  // road, so it never starts a body move (it only selects on release).
-  const bool on_object =
-      !actor.has_value() && event.pick.has_value() && event.pick->object.is_valid();
-  // A signal pick carries its owning road, but is a leaf like a prop:
-  // an LMB drag moves only the signal, never the underlying whole road.
-  // The transform gizmo ring remains available for snapped rotation.
-  const bool on_signal =
-      !actor.has_value() && event.pick.has_value() && event.pick->signal.is_valid();
-  const bool on_road = !actor.has_value() && event.pick.has_value() &&
-                       event.pick->road.is_valid() && !on_object && !on_signal;
+  // Thin parts of a selected complex prefab (pole/arm) can be only 1-2
+  // physical pixels wide. If the exact ray misses their triangles, a road may
+  // be behind them: a drag must not accidentally move that whole road. Apply
+  // a small SCREEN-pixel tolerance against the actual projected model EDGES,
+  // restricted to already-selected props; it never captures unrelated assets.
+  const std::vector<ObjectId> selected_objects = selection_.selected_objects();
+  std::optional<PickHit> selected_edge;
+  if (!actor && event.screen && selected_objects.size() > 1 &&
+      (!event.pick || (!event.pick->object.is_valid() && !event.pick->signal.is_valid()))) {
+    selected_edge = pick_selected_prop_screen_edges(
+        document_.mesh(), *event.screen, selected_objects);
+  }
+  const PickHit* hit = selected_edge ? &*selected_edge
+                                    : (event.pick ? &*event.pick : nullptr);
+  // An object/signal pick includes its owning road, but is never a road drag.
+  const bool on_object = !actor && hit && hit->object.is_valid();
+  const bool on_signal = !actor && hit && hit->signal.is_valid();
+  const bool on_road = !actor && hit && hit->road.is_valid() && !on_object && !on_signal;
   press_ =
       PressState{.world = cursor,
                  .on_geometry = on_road,
-                 .road = on_road ? std::optional<RoadId>(event.pick->road) : std::nullopt,
-                 .object = on_object ? std::optional<ObjectId>(event.pick->object) : std::nullopt,
-                 .object_road = on_object ? event.pick->road : RoadId{},
-                 .signal = on_signal ? std::optional<SignalId>(event.pick->signal) : std::nullopt,
-                 .signal_road = on_signal ? event.pick->road : RoadId{},
+                 .road = on_road ? std::optional<RoadId>(hit->road) : std::nullopt,
+                 .object = on_object ? std::optional<ObjectId>(hit->object) : std::nullopt,
+                 .object_road = on_object ? hit->road : RoadId{},
+                 .signal = on_signal ? std::optional<SignalId>(hit->signal) : std::nullopt,
+                 .signal_road = on_signal ? hit->road : RoadId{},
                  .actor = actor.value_or(std::string{})};
   return true;
 }
@@ -252,12 +258,18 @@ bool SelectTool::mouse_release(const ToolEvent& event) {
   }
 
   if (object_move_.has_value()) {
-    // A prop drag that never crossed the tolerance commits nothing (no-op).
+    // Rejected/out-of-road drags must not claim success or create Undo entries.
+    const bool changed = document_.preview_active();
+    const bool assembly = document_.network().object(object_move_->object) != nullptr &&
+                          document_.network().object(object_move_->object)->assembly.has_value();
+    const bool group = object_move_->group.size() > 1;
     document_.commit_preview();
     object_move_.reset();
     hover_cursor_ = Qt::ArrowCursor;
     emit cursor_changed(Qt::ArrowCursor);
-    emit status_message(tr("Prop moved — Ctrl+Z to undo"));
+    emit status_message(!changed ? tr("Prop position unchanged")
+                                : assembly || group ? tr("Prefab moved — Ctrl+Z to undo")
+                                                    : tr("Prop moved — Ctrl+Z to undo"));
     emit preview_changed();
     return true;
   }
@@ -286,6 +298,12 @@ bool SelectTool::mouse_release(const ToolEvent& event) {
         // "selecting an actor does not select the road beneath it" structural
         // rather than a rule someone has to remember (GW-6 step 4).
         selection_.select({.actor = press_->actor}, mode);
+      } else if (press_->object.has_value()) {
+        // Honor the original press (including screen-edge tolerance): the
+        // release may ray-pick the road under a thin pole by a few pixels.
+        selection_.select({.road = press_->object_road, .object = *press_->object}, mode);
+      } else if (press_->signal.has_value()) {
+        selection_.select({.road = press_->signal_road, .signal = *press_->signal}, mode);
       } else if (event.pick.has_value()) {
         selection_.select({.road = event.pick->road,
                            .lane = event.pick->lane,
@@ -685,6 +703,25 @@ void SelectTool::update_object_move(const Waypoint& cursor) {
   const ObjectId object = object_move_->object;
   const double s = st->s;
   const double t = st->t;
+  // The OpenDRIVE assembly model is a RIGID GROUP: the kernel deliberately
+  // refuses edit::move_object on its individual parts. Use the existing
+  // assembly-aware command funnel so a grabbed mast/head moves its WHOLE
+  // assembly atomically, preserving per-part offsets, headings and userData.
+  // The command interprets s/t as THIS grabbed part's target (not anchor s/t).
+  if (const Object* grabbed = document_.network().object(object);
+      grabbed != nullptr && grabbed->assembly.has_value()) {
+    const Expected<void> moved =
+        document_.preview_active()
+            ? document_.update_preview([object, s, t](const RoadNetwork& base) {
+                return move_object_command(base, object, s, t);
+              })
+            : document_.begin_preview(move_object_command(document_.network(), object, s, t));
+    if (!moved.has_value()) {
+      emit status_message(tr("Whole prefab cannot be placed here — Esc cancels"));
+    }
+    return;
+  }
+  // Multi-selection of standalone (non-assembly) props remains a composite.
   if (object_move_->group.size() > 1) {
     const double ds = s - object_move_->anchor_s;
     const double dt = t - object_move_->anchor_t;

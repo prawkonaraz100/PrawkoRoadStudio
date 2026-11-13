@@ -136,6 +136,16 @@ struct RoadAabb {
 [[nodiscard]] std::optional<PickHit>
 pick(const NetworkMesh& mesh, std::span<const RoadAabb> road_aabbs, const Ray& ray);
 
+/// Press-only, selection-scoped hit slop for very thin prefab pieces
+/// (signal poles/arms). Uses projected ACTUAL model edges, not a large
+/// bounding sphere: a near miss within logical pixels may grab an already
+/// selected object; unrelated objects and the road remain untouched.
+[[nodiscard]] std::optional<PickHit>
+pick_selected_prop_screen_edges(const NetworkMesh& mesh,
+                                const ScreenContext& screen,
+                                std::span<const ObjectId> selected,
+                                double max_pixel_distance = 7.0);
+
 /// Road-relative coordinates per ASAM OpenDRIVE §8.3 (v1.9.0): s along the
 /// reference line measured in the x/y plane, t perpendicular and POSITIVE TO
 /// THE LEFT of the direction of travel.

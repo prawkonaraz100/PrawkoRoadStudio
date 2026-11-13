@@ -679,6 +679,61 @@ TEST(SelectTool, EscapeCancelsSignDragAndSimpleClickDoesNotCreateUndo) {
 }
 
 
+TEST(SelectTool, RealFourPartSignalMastMovesAsOneRigidAssemblyOnMouseDrag) {
+  Scene scene;
+  ASSERT_TRUE(scene.document.push_command(
+      roadmaker::edit::place_assembly(scene.document.network(), scene.dragged,
+                                      30.0, -4.0, 0.0, "signal_mast")).has_value());
+  std::vector<SelectionEntry> entries;
+  scene.document.network().for_each_object(
+      [&](roadmaker::ObjectId id, const roadmaker::Object& object) {
+        if (object.assembly.has_value()) {
+          entries.push_back({.road = scene.dragged, .object = id});
+        }
+      });
+  ASSERT_EQ(entries.size(), 4U);
+  scene.selection.select_many(entries);
+  const auto picked_id = entries.back().object; // a signal head away from the pole
+  const auto* grabbed = scene.document.network().object(picked_id);
+  ASSERT_NE(grabbed, nullptr);
+  const auto* road = scene.document.network().road(scene.dragged);
+  ASSERT_NE(road, nullptr);
+  const auto start = roadmaker::editor::station_to_world(
+      road->plan_view, grabbed->s, grabbed->t);
+  const auto target = roadmaker::editor::station_to_world(
+      road->plan_view, grabbed->s + 14.0, grabbed->t + 0.5);
+  std::vector<std::pair<double, double>> originals;
+  for (const auto& entry : entries) {
+    const auto* part = scene.document.network().object(entry.object);
+    ASSERT_NE(part, nullptr);
+    originals.emplace_back(part->s, part->t);
+  }
+  const std::string before = xodr(scene.document);
+  const int undo_before = scene.document.undo_stack()->count();
+  SelectTool tool(scene.document, scene.selection);
+  PickHit hit = scene.hit(scene.dragged);
+  hit.object = picked_id;
+  ASSERT_TRUE(tool.mouse_press(at(start[0], start[1], Qt::LeftButton, Qt::NoModifier, hit)));
+  ASSERT_TRUE(tool.mouse_move(at(target[0], target[1], Qt::LeftButton, Qt::NoModifier, hit)));
+  ASSERT_TRUE(tool.moving_object());
+  ASSERT_TRUE(scene.document.preview_active()) << "Assembly must use move_assembly_by_part, not move_object";
+  ASSERT_TRUE(tool.mouse_release(at(target[0], target[1], Qt::NoButton, Qt::NoModifier, hit)));
+  EXPECT_EQ(scene.document.undo_stack()->count(), undo_before + 1);
+  EXPECT_NE(xodr(scene.document), before);
+  EXPECT_EQ(scene.selection.selected_objects().size(), 4U);
+  for (std::size_t i = 0; i < entries.size(); ++i) {
+    const auto* part = scene.document.network().object(entries[i].object);
+    ASSERT_NE(part, nullptr);
+    EXPECT_NEAR(part->s - originals[i].first, 14.0, 2e-3);
+    EXPECT_NEAR(part->t - originals[i].second, 0.5, 2e-3);
+    EXPECT_TRUE(part->assembly.has_value());
+  }
+  scene.document.undo_stack()->undo();
+  EXPECT_EQ(xodr(scene.document), before);
+  scene.document.undo_stack()->redo();
+  EXPECT_NE(xodr(scene.document), before);
+}
+
 TEST(SelectTool, DraggingOneSelectedPrefabPartMovesEveryPartInOneUndo) {
   Scene scene;
   const auto first = place_prop(scene.document, scene.dragged, 25.0, 1.0);

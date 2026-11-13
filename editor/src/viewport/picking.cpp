@@ -424,6 +424,56 @@ pick(const NetworkMesh& mesh, std::span<const RoadAabb> road_aabbs, const Ray& r
   return best;
 }
 
+std::optional<PickHit>
+pick_selected_prop_screen_edges(const NetworkMesh& mesh,
+                                const ScreenContext& screen,
+                                std::span<const ObjectId> selected,
+                                double max_pixel_distance) {
+  if (selected.empty() || screen.width <= 0.0 || screen.height <= 0.0 ||
+      !(max_pixel_distance > 0.0)) {
+    return std::nullopt;
+  }
+  std::optional<PickHit> closest;
+  double best_pixels = max_pixel_distance;
+  for (const ObjectInstance& instance : mesh.objects) {
+    if (std::find(selected.begin(), selected.end(), instance.object) == selected.end()) {
+      continue;
+    }
+    const props::PropModel* model = props::model(instance.model_id);
+    if (model == nullptr || !(instance.scale > 0.0)) {
+      continue;
+    }
+    const double cs = std::cos(instance.heading);
+    const double sn = std::sin(instance.heading);
+    const auto world_point = [&](const Vec3& point) -> std::array<double, 3> {
+      const double x = point.x() * instance.scale;
+      const double y = point.y() * instance.scale;
+      return {instance.position[0] + (cs * x) - (sn * y),
+              instance.position[1] + (sn * x) + (cs * y),
+              instance.position[2] + point.z() * instance.scale};
+    };
+    for (const props::PropPart& part : model->parts) {
+      for (std::size_t i = 0; i + 2 < part.indices.size(); i += 3) {
+        const auto first = world_point(vertex(part.positions, part.indices[i]));
+        const std::array<std::array<double, 3>, 4> outline{
+            first,
+            world_point(vertex(part.positions, part.indices[i + 1])),
+            world_point(vertex(part.positions, part.indices[i + 2])),
+            first};
+        const auto edge = screen_distance_to_polyline(screen, outline);
+        if (!edge || edge->distance > best_pixels) {
+          continue;
+        }
+        best_pixels = edge->distance;
+        closest = PickHit{.road = instance.road,
+                          .object = instance.object,
+                          .position = instance.position};
+      }
+    }
+  }
+  return closest;
+}
+
 std::optional<WaypointHit> pick_waypoint(
     const RoadNetwork& network, std::span<const RoadId> roads, double x, double y, double radius) {
   std::optional<WaypointHit> best;

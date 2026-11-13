@@ -193,6 +193,47 @@ TEST(PickRay, DirectionIsNormalized) {
   EXPECT_NEAR((d[0] * d[0]) + (d[1] * d[1]) + (d[2] * d[2]), 1.0, 1e-12);
 }
 
+TEST(PickScreen, ThinSelectedPrefabPoleHasLimitedPixelGrabWithoutStealingRoadClicks) {
+  RoadNetwork network;
+  NetworkMesh mesh;
+  mesh.roads.push_back(make_quad_road(network, "1", 0.0, 50.0));
+  const ObjectId selected{.index = 7, .gen = 0};
+  const ObjectId unrelated{.index = 8, .gen = 0};
+  mesh.objects.push_back(ObjectInstance{.object = selected,
+                                        .road = mesh.roads[0].road,
+                                        .model_id = "pole_signal",
+                                        .position = {25.0, 25.0, 0.0},
+                                        .heading = 0.0});
+  mesh.objects.push_back(ObjectInstance{.object = unrelated,
+                                        .road = mesh.roads[0].road,
+                                        .model_id = "pole_signal",
+                                        .position = {35.0, 25.0, 0.0},
+                                        .heading = 0.0});
+
+  OrbitCamera camera;
+  camera.frame({25.0F, 25.0F, 3.0F}, 12.0F);
+  const CameraMatrices matrices = camera.matrices(4.0F / 3.0F);
+  const auto pole_vertex =
+      project_to_screen(matrices, 25.14, 25.0, 6.47, 800.0, 600.0);
+  ASSERT_TRUE(pole_vertex.has_value());
+  ScreenContext screen{.camera = matrices,
+                       .px = (*pole_vertex)[0] + 3.0,
+                       .py = (*pole_vertex)[1] + 1.0,
+                       .width = 800.0,
+                       .height = 600.0};
+  const std::array<ObjectId, 1> selected_only{selected};
+  const auto near = pick_selected_prop_screen_edges(mesh, screen, selected_only);
+  ASSERT_TRUE(near.has_value()) << "Thin pole needs a small usable hit target";
+  EXPECT_EQ(near->object, selected);
+  EXPECT_EQ(near->road, mesh.roads[0].road);
+
+  screen.px += 120.0;
+  screen.py += 170.0;
+  EXPECT_FALSE(pick_selected_prop_screen_edges(mesh, screen, selected_only).has_value())
+      << "Normal road clicks must remain available far from the selected prefab";
+  EXPECT_FALSE(pick_selected_prop_screen_edges(mesh, screen, {}).has_value());
+}
+
 TEST(Pick, HitInsideQuadReturnsLaneAndPoint) {
   RoadNetwork network;
   NetworkMesh mesh;
