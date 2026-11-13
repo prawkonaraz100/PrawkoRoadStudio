@@ -297,3 +297,33 @@ nie spełniają jeszcze docelowego standardu realizmu.
   Zapisano lokalnie zestaw renderów przed/po i zrzut działającego GUI.
   **PBR, światło i fotorealizm nadal nie są odebrane.**
 - Wyniki testów i dokładny następny etap zapisano w `HANDOFF.md`.
+
+## Implementacja S2.2e — GLB PBR i wydajność siatki (13.11.2026)
+
+- GLB w trybie 3D ma osadzone i współdzielone (per rodzina materiałów)
+  zestawy trzech istniejących map CC0 Poly Haven: albedo JPEG, normal
+  OpenGL PNG, roughness JPEG dla asfaltu i betonu. Tekstury korzystają z
+  REPEAT i UV w metrach przeskalowanego do 4 m na powtórzenie.
+  Brak źródłowych map w lokalnej instalacji oznacza awaryjny eksport
+  bazowych kolorów; ich pakowanie dla wersji instalacyjnej nadal otwarte.
+  GLB z obecnego repo jest samowystarczalny.
+- core/src/io/export_preview.cpp i testy ExportPreview raportują i
+  sprawdzają rzeczywiste obrazy oraz referencje UV. Starsze testy
+  test_gltf.cpp odczytują obrazy strukturalnie (bez dekodera w
+  tinygltf), podczas gdy prawdziwe dekodowanie wykonano w Blenderze.
+  Zweryfikowano w Blender 5.3 sceny X/T/Y i ich trzy obrazy PBR na
+  materiałach jezdni oraz chodników/krawężników; lokalny plik
+  archive/visual-regression/s2.2e-pbr-x-eevee.png.
+- Test PrawkoRemeshBudget powtarza 41 razy remesh_objects na X/T/Y
+  z przejściami i wyniesionymi chodnikami oraz porównuje z pełnym
+  meshem. Pierwszy pomiar lokalny: X p50=9,03 ms / p95=9,60 ms,
+  T 4,94 / 5,42 ms, Y 5,41 / 5,96 ms. Nie obejmuje czasu GPU,
+  rysowania i obsługi okna.
+- W renderach widać **powtarzalność spękań asfaltu**, a naroża
+  mają nadal segmentowy obrys (X ~9 odcinków fazy). Nie
+  zagęszczano globalnie siatki ze względu na naruszenie budżetu
+  sliverów i goldenów w poprzednim etapie.
+- Potwierdzone BUILD_PASS: all, QUALITY_GATE_PASS (2071 C++ i 7
+  Python), Qt 1284 PASS / 1 SKIPPED. **Nie ogłaszać końcowego
+  fotorealizmu ani bezpieczeństwa globalnej zmiany gęstości łuków.**
+  Kolejne działania i szczegóły: HANDOFF.md.

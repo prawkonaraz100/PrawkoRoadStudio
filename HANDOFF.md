@@ -2,7 +2,7 @@
 
 > **Jedyny aktualizowany dziennik przekazania między rozmowami.**
 > Kolejny agent ma czytać ten plik **przed edycją kodu**.
-> Stan dokumentu: 2026-11-13, S2.2d: poprawione normalne faz krawężników i neutralna charakterystyka betonu, import GLB w Blenderze X/T/Y PASS, pełne testy C++/Qt/agent PASS. Próba zagęszczenia obrysu została wycofana z powodu regresji jakości triangulacji. Docelowy realizm PBR, sylwetka łuków i profilowanie remesh pozostają OTWARTE.
+> Stan dokumentu: 2026-11-13, S2.2e: pomiar `remesh_objects` X/T/Y z przejściami PASS; GLB z osadzonymi mapami CC0 albedo/normal/roughness i UV 4 m/tiling zweryfikowany w Blenderze 5.3 X/T/Y; Quality Gate 2071 C++ i 7 agent PASS, Qt 1284 PASS + 1 SKIPPED. **Odbiór wizualny nadal OTWARTY:** segmentacja sylwetki, powtarzalność tekstur, materiały/światło w GUI oraz wydajność kompletnej interakcji, nie tylko CPU remesh.
 > Poniższe SHA to punkt kontrolny, nie zamiennik aktualnego `git status`.
 
 ## Gotowe polecenie do nowej rozmowy
@@ -303,6 +303,86 @@ Qt 1284 PASS / 1 SKIPPED / 0 FAIL, 7 testów agenta PASS;
 `remesh_objects` ani zatwierdzenia realizmu z kamery kierowcy
 w samym edytorze. **PBR i finalny realizm — OTWARTE.**
 
+**S2.2e — remesh i rzeczywiste tekstury w GLB (13.11.2026):**
+
+**Wydajność geometrii:** dodano trwały, replikowalny test w
+`core/tests/test_prawko_remesh_budget.cpp`. Buduje X (4 ramiona, 4
+przejścia), T (3, 3) i Y (3, 3) z `raised_sidewalks=true`,
+porównuje `remesh_objects` do pełnej siatki (pozycje, indeksy pasów,
+narożników) i mierzy 41 iteracji. Pierwszy pomiar na tym PC:
+X p50=9,026 ms, p95=9,598 ms;
+T p50=4,941 ms, p95=5,417 ms;
+Y p50=5,410 ms, p95=5,959 ms. W końcowym Quality Gate po PBR:
+X 9,180/9,976 ms, T 5,329/5,622 ms, Y 5,899/6,159 ms.
+Pomiar ma typową zmienność zależną od obciążenia komputera.
+Wszystkie trzy testy PASS. **To tylko wywołanie C++** bez uploadu GPU
+i prezentacji klatki. Nie nazywać tego FPS ani SLA 16 ms GUI.
+Pierwszy osobny commit: `f33cc89`.
+
+**GLB/PBR:** `core/src/io/gltf_exporter.cpp` zapisuje teraz
+osadzone (w BIN) obrazy CC0 Poly Haven JPEG albedo, PNG normal OpenGL
+oraz JPEG roughness dla `Driving` (asphalt) i
+`Sidewalk/Border/Curb` (brushed concrete); źródła już były w
+`assets/textures/`, z wpisami w `ASSETS_LICENSES.md`. Deduplicacja
+trzech obrazów na rodzinę materiału, REPEAT sampler, metrystyczne UV
+`0.25 powtórzenia/metr` = płytka 4 m. Dla pasów drogowych używa
+`road.uvs`, dla submeshy zachowuje UV, a dla CDT bez UV stosuje
+planarną projekcję XY. Normal i roughness texture są podpięte
+do materiału, `metallicFactor=0`. JPEG roughness ma identyczne
+kanały RGB (1024 próbki na każdą z obu map bez różnic), więc jego G
+jest prawidłowy. `export_preview.cpp` raportuje liczbę obrazów
+i textured flags zgodne z faktycznym GLB; testy `ExportPreview` i
+`GltfExport` obejmują osadzone mapy, UV, współistnienie z sygnalizacją
+i strukturalny reload mimo braku dekodera obrazów w binarce testowej.
+**Instalowany edytor poza tym drzewem:** źródłowa ścieżka zasobów jest
+zdefiniowana przez CMake; gdy plików brakuje, GLB może użyć bazowych
+kolorów. Dostarczanie tekstur z pakietem dystrybucyjnym pozostaje
+odrębnym zadaniem; wyeksportowany GLB jest samowystarczalny.
+
+**Blender 5.3 / X/T/Y:** `archive/visual-regression/s2.2e-pbr-x.glb`
+(1 380 340 B), `s2.2e-pbr-t.glb` (1 314 116 B),
+`s2.2e-pbr-y.glb` (1 289 912 B); wszystkie trzy ponownie
+zaimportowane i faktycznie zdekodowane: X 49 meshy, po 4 bevel/wall,
+T 14 meshy, Y 13 meshy, po 3 bevel/wall, poprawne UV,
+niezdegenerowane powierzchnie, 3 image texture nodes w materiałach
+`lane_0`, `lane_4`, `lane_9`. Wynik
+`PBR_GLTF_IMPORT_PASS` X/T/Y. EEVEE render produkcyjnego GLB:
+`archive/visual-regression/s2.2e-pbr-x-eevee.png`. To pliki
+**lokalne ignorowane przez Git**; nie traktować jako backupu poza F:.
+Na renderze wyraźnie widać powtarzalny wzór spękań asfaltu i
+ciemne, monotonne bloki betonu — **realizm NIE odebrany**.
+Utrzymujemy bazową kompatybilność OpenDRIVE i siatkę narożników.
+
+**Łuki / analiza i decyzja:** X ma 18 trójkątów na fazę
+narożnika (~9 odcinków), więc widoczna jest segmentacja zarysu.
+W S2.2d zagęszczanie globalne naruszało dozwolony budżet
+`sliver <=2` na ciasnych T (osiągało 4–6) i złoty wzorzec
+prostopadłych wlotów. **W S2.2e nie zmieniono obrysów** ani
+współrzędnych nawierzchni. Rozwiązanie wymaga odseparowanego
+LOD tylko renderowania albo lokalnej retriangulacji naroża
+z nowymi testami i nienaruszonym goldenem; w tym etapie
+nie ma potwierdzonej bezpiecznej poprawki sylwetki.
+
+**Weryfikacja:** `BUILD_PASS: all`,
+`AGENT_BINDING_SYNC_PASS`, pełny Quality Gate
+`2071/2071 C++ PASS` (10 testów DISABLED), agent
+`7/7 PASS`, edytor Qt `1284 PASS + 1 SKIPPED`,
+`QUALITY_GATE_PASS`. Logi:
+`archive/visual-regression/s2.2e-final-gate.log`,
+`s2.2e-pbr-qt.log`, `s2.2e-pbr-build-all.log`,
+`s2.2e-blender-x.log`, `s2.2e-blender-t.log`,
+`s2.2e-blender-y.log`.
+**Otwarte:** zagęszczenie sylwetki bez psucia CDT,
+ograniczenie tilingu/odcienia, realne światło oraz pełna ocena
+z kamery kierowcy w GUI (nie tylko Blender). Pomiar i odbiór
+GPU upload+FPS również nadal otwarte. **Potwierdzenie aplikacji Qt:**
+aktualny `roadmaker-editor.exe` otworzył odrębną scenę X bez awarii,
+zrzut: `archive/visual-regression/s2.2e-current-editor-gui.png`.
+To był widok ogólny; nadal nie jest odbiorem z wysokości kierowcy.
+Okno testowe zamknięte bez zapisu. **GUI nie korzysta jeszcze ze
+wszystkich map PBR tak samo jak eksport GLB**, czego dowodzą
+różnice w renderze Blendera i neutralnym obrazie GUI.
+
 **Historyczny plan S2.2c:** dokończyć 5 cm fazę krawężnika
 przez cały łuk narożnika (obecna ściana narożnika jest
 pionowa, a faza drogi zwęża się przed wlotem), zszyć
@@ -316,8 +396,8 @@ Nie uznawać obecnych materiałów za realistycznie odebrane.
 1. Uruchomić `scripts/prawko-resume.ps1` i sprawdzić oba repozytoria oraz otwarte sceny. Nie przeładowywać niezapisanych dokumentów.
 2. **Testy Qt Windows już odblokowane:** przed zmianami GUI sprawdzić `roadmaker_editor_tests` i `qoffscreen.dll` w `build/dev-windows/editor/platforms/`; CMake kopiuje plugin automatycznie. Ostatnia pełna sesja: 1284 PASS, 1 SKIPPED, 0 FAIL; wyniki oraz konfiguracja w akapicie S2.2b powyżej. Nie zmieniać `qt_gtest_main.cpp` bez odtwarzalnej regresji.
 3. **S2.2c — odbiór bazowej geometrii X/T/Y i niezależnego GLB wykonany.** Zrzut bieżącego GUI, kamera kierowcy i izolat narożnika w Blenderze oraz import GLB są w lokalnym `archive/visual-regression/`. Testy i dowody wyżej. Zwróć uwagę na segmentację łuku — nie mylić z ostatecznym wyglądem.
-4. **NASTĘPNE:** zweryfikować wydajność `remesh_objects` w scenach X/T/Y z przejściami; sprawdzić większe pochylenia, brak z-fightingu i zbliżenia z kamery kierowcy w GUI. Sylwetka łuków pozostaje segmentowa: opracować i przetestować osobną bezpieczną metodę zwiększenia detalu (np. LOD renderowania) **bez zmian goldenów prostych wlotów i bez przekroczenia budżetu sliverów**. Nie wprowadzać globalnie prób z S2.2d.
-5. **PBR NADAL OTWARTE:** przeanalizować wykorzystanie istniejących legalnie dołączonych map concrete/asphalt (albedo, normal, roughness) w GUI i glTF z rzeczywistą skalą UV, bez sztucznych jaskrawych materiałów. Potem dopracować światło i detale oraz przeprowadzić odbiór realistycznego wyglądu. Obecny rendering nie jest fotorealistyczny.
+4. **NASTĘPNE — sylwetka łuków:** dla X/T/Y zaprojektować izolowany LOD renderowania lub lokalne bezpieczne dosiatkowanie tylko wizualizacji krawężnika, nie globalny `kFilletArcSagitta`. Wymaga nowego testu zbliżeń, braku sliverów (budżet <=2), zachowania goldenów prostych T oraz zgodności wprowadzonej geometrii w GLB. Nie wolno przemilczeć reguł z S2.2d. Dodatkowo zmierzyć czas uploadu GPU i renderowania klatki na tym PC, sprawdzić niwelety i z-fighting w GUI z perspektywy kursanta. Test CPU `remesh_objects` X/T/Y jest już zrobiony.
+5. **NASTĘPNE — materiały i oświetlenie:** usunąć wyraźne powtarzanie spękań 4-metrowej tekstury, urealnić tint i rozkład roughness, sprawdzić przejścia asfalt/beton oraz oświetlenie na niskim ujęciu i w samym edytorze. Export GLB zawiera już CC0 albedo/normal/roughness (Blender X/T/Y PASS), ale realizm, instalacja materiałów i pełna zgodność wyglądu GUI vs Blender **nie** są odebrane.
 
 **Kryterium ukończenia:** kod + testy + rzeczywista ocena GUI; potem commity, push i aktualizacja TEGO pliku. Bez zgadywania stanu na podstawie dawnych raportów.
 
