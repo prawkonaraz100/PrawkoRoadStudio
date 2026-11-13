@@ -55,9 +55,30 @@ TEST(SurfaceTextures, BundledJpegsDecodeFromQrc) {
                            ":/textures/concrete_rough.jpg"}) {
     const QImage image{QString::fromLatin1(path)};
     ASSERT_FALSE(image.isNull()) << path;
-    EXPECT_EQ(image.width(), 512);
-    EXPECT_EQ(image.height(), 512);
+    const bool worn = QString::fromLatin1(path).contains("asphalt_worn");
+    EXPECT_EQ(image.width(), worn ? 512 : 2048);
+    EXPECT_EQ(image.height(), worn ? 512 : 2048);
   }
+}
+
+TEST(SurfaceTextures, PrawkoAtlasKeepsFourMeterDetailButVariesOverSixteenMeters) {
+  const MaterialCatalog catalog;
+  for (const char* name : {"asphalt", "concrete"}) {
+    const MaterialDef* material = catalog.find_material(name);
+    ASSERT_NE(material, nullptr);
+    EXPECT_FLOAT_EQ(material->uv_scale, 0.0625F); // 16 m atlas = 4x4 original tiles
+    EXPECT_FALSE(material->albedo.empty());
+    EXPECT_FALSE(material->normal.empty());
+    EXPECT_FALSE(material->roughness.empty());
+    const QImage image(QString::fromStdString(material->albedo));
+    ASSERT_EQ(image.size(), QSize(2048, 2048));
+    // A 4-metre repetition would duplicate the exact central 512-px tile;
+    // baked staggered offsets should visibly differ.
+    EXPECT_NE(image.pixelColor(128, 128), image.pixelColor(640, 128));
+  }
+  const MaterialDef* worn = catalog.find_material("asphalt_worn");
+  ASSERT_NE(worn, nullptr);
+  EXPECT_FLOAT_EQ(worn->uv_scale, 0.25F); // unchanged legacy/project variant
 }
 
 TEST(LaneColor, DistinguishesCoreMaterials) {

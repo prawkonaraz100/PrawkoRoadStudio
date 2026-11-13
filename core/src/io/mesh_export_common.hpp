@@ -126,19 +126,19 @@ inline constexpr double kLaneRoughness = 0.95;
     const std::string& family, int channel) {
   const auto root = pbr_texture_root();
   if (family == "concrete") {
-    const auto dir = root / "concrete";
+    const auto dir = root / "prawko_atlas";
     switch (channel) {
-    case 0: return dir / "brushed_concrete_diff_512.jpg";
-    case 1: return dir / "brushed_concrete_nor_gl_512.png";
-    case 2: return dir / "brushed_concrete_rough_512.jpg";
+    case 0: return dir / "concrete_diff_2048.jpg";
+    case 1: return dir / "concrete_nor_gl_2048.png";
+    case 2: return dir / "concrete_rough_2048.jpg";
     }
   }
   if (family == "asphalt") {
-    const auto dir = root / "asphalt";
+    const auto dir = root / "prawko_atlas";
     switch (channel) {
-    case 0: return dir / "asphalt_02_diff_512.jpg";
-    case 1: return dir / "asphalt_02_nor_gl_512.png";
-    case 2: return dir / "asphalt_02_rough_512.jpg";
+    case 0: return dir / "asphalt_diff_2048.jpg";
+    case 1: return dir / "asphalt_nor_gl_2048.png";
+    case 2: return dir / "asphalt_rough_2048.jpg";
     }
   }
   return {};

@@ -334,7 +334,7 @@ private:
   }
 
   // Existing road and curb UVs are in world metres. Match the editor's
-  // material_catalog UV scale (0.25 repeats per metre = one 4-metre tile).
+  // baked 16 m PBR atlas scale (0.0625 repeats per metre).
   int add_scaled_uv(const std::vector<double>& source, double scale) {
     std::vector<float> uvs;
     uvs.reserve(source.size());
@@ -352,7 +352,7 @@ private:
       const int positions = add_vec3_accessor(to_gltf_frame(road.positions), true);
       const int normals = add_vec3_accessor(to_gltf_frame(road.normals), false);
       const bool have_uvs = road.uvs.size() == (road.positions.size() / 3) * 2;
-      const int uv = have_uvs ? add_scaled_uv(road.uvs, 0.25) : -1;
+      const int uv = have_uvs ? add_scaled_uv(road.uvs, 0.0625) : -1;
       for (const RoadMesh::LanePatch& patch : road.lanes) {
         tinygltf::Primitive primitive;
         primitive.mode = TINYGLTF_MODE_TRIANGLES;
@@ -386,7 +386,7 @@ private:
             .pbrMetallicRoughness.baseColorTexture.index >= 0;
     if (sub.uvs.size() == (sub.positions.size() / 3) * 2 &&
         !sub.uvs.empty()) {
-      primitive.attributes["TEXCOORD_0"] = add_scaled_uv(sub.uvs, textured ? 0.25 : 1.0);
+      primitive.attributes["TEXCOORD_0"] = add_scaled_uv(sub.uvs, textured ? 0.0625 : 1.0);
     } else if (textured) {
       // The junction-floor CDT has no independent UV grid. Derive planar
       // metric UVs from the exact world vertices without changing topology.
@@ -396,7 +396,7 @@ private:
         planar.push_back(sub.positions[i]);
         planar.push_back(sub.positions[i + 1]);
       }
-      primitive.attributes["TEXCOORD_0"] = add_scaled_uv(planar, 0.25);
+      primitive.attributes["TEXCOORD_0"] = add_scaled_uv(planar, 0.0625);
     }
     primitive.indices = add_index_accessor(sub.indices);
     primitive.material = material;
