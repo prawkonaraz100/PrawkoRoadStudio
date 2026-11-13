@@ -2,7 +2,7 @@
 
 > **Jedyny aktualizowany dziennik przekazania między rozmowami.**
 > Kolejny agent ma czytać ten plik **przed edycją kodu**.
-> Stan dokumentu: 2026-11-13, **S2.2g**: wykonano sprzętowy pomiar GPU OpenGL 3.3 (GTX 1050 Ti) i ilościową ocenę 15 par widoków X/T/Y w 1280×720: GPU draw ok. 0,24–0,43 ms, synchronizowany reupload siatki ok. 1,4–2,7 ms (mediana), wpływ LOD na czas rysowania znikomy. Qt GUI uruchomione, 2072 C++ PASS, 7 agent PASS, Qt 1284 PASS + 1 SKIPPED, BUILD PASS. **FPS z kompozytorem, przesyłanie klatki do ekranu, dynamiczny z-fighting i fotorealizm nadal NIEODEBRANE.**
+> Stan dokumentu: 2026-11-13, **S2.2h**: pomiar rzeczywistego widocznego QOpenGLWidget/`frameSwapped` i symulowanego obrotu Alt+LMB na GTX 1050 Ti, X/T/Y ~60 FPS przy 1600×900, p95 17,29–17,35 ms i 0 klatek >33 ms. Naprawiono UV skrzyżowań i betonowych pasów w GUI (parytet planarnych UV z GLB), dodano ograniczone rozproszone doświetlenie pionowych ścian betonu. Po korekcie testu historycznego: 2072 C++ PASS, 7 agent PASS, Qt 1286 PASS + 1 SKIPPED, BUILD PASS. **Pełna fotorealistyka, powtarzalność spękań, MSAA i jank przy aktywnej przebudowie geometrii nadal OTWARTE.**
 > Poniższe SHA to punkt kontrolny, nie zamiennik aktualnego `git status`.
 
 ## Gotowe polecenie do nowej rozmowy
@@ -512,14 +512,17 @@ różnice w renderze Blendera i neutralnym obrazie GUI.
   `s2.2g-current-editor-gui.png`. Nie modyfikowano
   scen użytkownika ani geometrii, agent repo bez zmian.
 
-**Pierwsze następne zadanie:** realny end-to-end pomiar
-`QOpenGLWidget` frame/present, frametime (z HUD i swap) oraz
-p95 przy interaktywnym przeciąganiu i renderowaniu z kamery
-kursanta. Odrębnie poprawić cieniowanie ciemnych ścian i
-kontrast materiałów, powtarzalność spękań asfaltu i
-jednolitą, nieotexturowaną powierzchnię junction,
-z testem porównawczym z renderem GLB Blender.
-Nie ruszać globalnego CDT ani goldenów bez wyraźnej potrzeby.
+**S2.2h — widoczna aplikacja Qt, spójne UV i oświetlenie betonu (13.11.2026):**
+
+- Dodano opcjonalny `prawko_qt_fps_probe` (`editor/tests/prawko_qt_fps_probe.cpp`, `EXCLUDE_FROM_ALL`). Tworzy prawdziwe widoczne `MainWindow` z teksturami, HUD, rzeczywistym `QOpenGLWidget` i `frameSwapped` (bez zapisu scen, `Settings::set_read_only(true)`). Symuluje `Alt+LMB` orbit przez normalne zdarzenia myszy Qt. 1600x900, GTX 1050 Ti, zegar Qt 16 ms, po 30 rozgrzewkowych i 180 mierzonych odstępów między `frameSwapped`; Windows Qt, nie `QT_QPA_PLATFORM=offscreen`.
+- **Powtórka już po przebudowie materiałów** `archive/visual-regression/s2.2h-final-fps-{x,t,y}.json`: spoczynek X/T/Y odpowiednio **60,00 / 59,99 / 60,00 FPS**; obrót **59,97 / 60,01 / 60,00 FPS**. P95 obrotu odpowiednio **17,35 / 17,30 / 17,29 ms**, P99 **17,52 / 17,54 / 17,61 ms**, **0 próbek >33,33 ms** na scenę. To pomiar częstotliwości sygnału `frameSwapped` (Windows+Qt) przy sztucznym odświeżaniu co 16 ms; nie jest niezależnym pomiarem maksymalnej przepustowości GPU ani fizycznego momentu pojawienia się fotonu na ekranie. `viewport->format().samples()` zgłasza **0**, choć aplikacja prosi o 4x MSAA — nadal do weryfikacji. **Jank przy edycji węzłów i przebudowie siatki NIE sprawdzony.**
+- **Naprawa ciemnego, jednolitego asfaltu w skrzyżowaniach:** `editor/src/render/scene_builder.cpp` generuje metryczne world-XY UV z dokładnie tych samych wierzchołków co eksporter `gltf_exporter.cpp` dla CDT floors i ich betonowych narożników. Szanuje jawne UV; materializowany asfalt/beton w `SurfaceMesh` ma UV, natomiast trawa pozostaje bez UV. Geometria, topologia, OpenDRIVE i model C++ niezmienione. Dodano testy Qt `BuildScene.JunctionAndCornerPavementUseWorldPlanarTextureCoordinates` oraz `BuildScene.MaterializedGroundSurfaceGetsPlanarUvButGrassDoesNot`.
+- **Doświetlenie krawężników:** `Material.vertical_fill` domyślnie **0.0**, `ViewportWidget::material_for` przypisuje **0.38** tylko `SurfaceKind::Concrete` w trybie Textured, a GLSL dodaje rozproszone niebieskoszare odbicie nieba wyłącznie przy niemal pionowej normalnej geometrycznej. Bez globalnego podbijania asfaltu, trawy, malowania czy trybu Sober. Przy pionowych ścianach world-XY UV bywają singularne — ochrona wyznacznika ramki normal mapy w `GLRenderer` zachowuje wtedy normalną geometryczną (bez NaN i smug). Zaktualizowano ręczny `prawko_gpu_probe` do nowego parametru `vertical_fill`.
+- **Kontrola wizualna:** 30 nowo wygenerowanych kadrów GLRenderer X/T/Y `archive/visual-regression/s2.2h-material-after/` (5 kamer × base/LOD na scenę) i rzeczywisty screenshot uruchomionego `roadmaker-editor.exe --screenshot --textured`: `s2.2h-gui-x-orbit.png`. Wszystkie X/T/Y pomiary wykonane z RC 0. Widać fakturę asfaltu i spękania przez całą powierzchnię skrzyżowania zamiast jednolitej szarej łaty, oraz bardziej czytelną, nie całkiem czarną ścianę krawężnika. Nadal widoczne **powtarzanie spękań co 4 m**, ostre przejścia niektórych fragmentów betonu i brak szczegółów/światła cieniowania — nie oznaczać pełnego fotorealizmu jako ukończonego. Nie zmieniano żadnej sceny użytkownika.
+- **Testy:** `BUILD_PASS: all` + `AGENT_BINDING_SYNC_PASS`; `QUALITY_GATE_PASS` — C++ **2072/2072 PASS**, agent **7/7 PASS**; finalny Qt **1286 PASS, 1 SKIPPED, 0 FAIL** (1287 uruchomionych). Pierwsze uruchomienie Qt ujawniło jeden stary test wymagający `junction UV==empty`; w tym samym etapie poprawiono jego oczekiwania, zachowano guard zabezpieczający, ponowny test `QT_FINAL_RC=0`. Dowody: `archive/visual-regression/s2.2h-full-build.log`, `s2.2h-final-gate.log`, `s2.2h-qt-pass.log`, `s2.2h-final-fps-{x,t,y}.json`. Nie potwierdzaj niezweryfikowanych funkcji.
+
+**Pierwsze następne zadanie:** poprawić **powtarzalność/skalę spękań i przejścia** asfalt–beton (teraz UV spójne, ale widoczne regularne pęknięcia), dobrać bardziej naturalny tint, roughness, cienie i fizycznie prawdopodobny materiał czoła krawężnika. Porównać nowe kadry z Blenderem GLB. Zmierzyć frametime/p95 **podczas faktycznej edycji geometrii** (mysz, remesh, GPU upload) oraz wyjaśnić wykryte `MSAA samples=0`, bo `frameSwapped` po timerze 16 ms nie dowodzi stabilności podczas obciążenia. Nie naruszać globalnych parametrów CDT, goldenów ani formatu OpenDRIVE.
+
 
 
 **Historyczny plan S2.2c:** dokończyć 5 cm fazę krawężnika
@@ -535,7 +538,7 @@ Nie uznawać obecnych materiałów za realistycznie odebrane.
 1. Uruchomić `scripts/prawko-resume.ps1` i sprawdzić oba repozytoria oraz otwarte sceny. Nie przeładowywać niezapisanych dokumentów.
 2. **Testy Qt Windows już odblokowane:** przed zmianami GUI sprawdzić `roadmaker_editor_tests` i `qoffscreen.dll` w `build/dev-windows/editor/platforms/`; CMake kopiuje plugin automatycznie. Ostatnia pełna sesja: 1284 PASS, 1 SKIPPED, 0 FAIL; wyniki oraz konfiguracja w akapicie S2.2b powyżej. Nie zmieniać `qt_gtest_main.cpp` bez odtwarzalnej regresji.
 3. **S2.2c — odbiór bazowej geometrii X/T/Y i niezależnego GLB wykonany.** Zrzut bieżącego GUI, kamera kierowcy i izolat narożnika w Blenderze oraz import GLB są w lokalnym `archive/visual-regression/`. Testy i dowody wyżej. Zwróć uwagę na segmentację łuku — nie mylić z ostatecznym wyglądem.
-4. **S2.2g pomiar GPU i obrazów WYKONANY; następny — rzeczywisty frame/present Qt:** sprzętowy OpenGL 3.3 `GL_TIME_ELAPSED` X/T/Y, pięć kątów i synchronizowany upload siatki, wyniki w sekcji S2.2g. Dalsza praca: zarejestrować dokładny frame-time rzeczywistego `QOpenGLWidget` z nakładkami i prezentacją obrazu (także zrzuty z pozycji kierowcy w GUI, nie tylko renderera offscreen), p95 i jank podczas edycji; ocenić dynamiczny z-fighting i normy faz. Wpływ LOD na GPU minimalny; nie ma dowodu na finalny realizm. Nie ruszać domyślnych parametrów CDT, OpenDRIVE ani goldenów.
+4. **S2.2h pomiar widocznego Qt wykonany; następny — frametime pod obciążeniem edycji:** sprzętowy GPU z S2.2g oraz rzeczywisty `QOpenGLWidget::frameSwapped` z orbitowaniem myszy w S2.2h, 60 FPS (p95 ~17,3 ms) dla X/T/Y i 0 jank >33 ms. To nie jest jeszcze test remesh podczas przeciągania węzłów, ani pełny pomiar monitora; sprawdzić też nieoczekiwane `MSAA=0` i ewentualny dynamiczny z-fighting. Nie zmieniać parametrów globalnego CDT, OpenDRIVE ani goldenów.
 5. **NASTĘPNE — materiały i oświetlenie:** usunąć wyraźne powtarzanie spękań 4-metrowej tekstury, urealnić tint i rozkład roughness, sprawdzić przejścia asfalt/beton oraz oświetlenie na niskim ujęciu i w samym edytorze. Export GLB zawiera już CC0 albedo/normal/roughness (Blender X/T/Y PASS), ale realizm, instalacja materiałów i pełna zgodność wyglądu GUI vs Blender **nie** są odebrane.
 
 **Kryterium ukończenia:** kod + testy + rzeczywista ocena GUI; potem commity, push i aktualizacja TEGO pliku. Bez zgadywania stanu na podstawie dawnych raportów.

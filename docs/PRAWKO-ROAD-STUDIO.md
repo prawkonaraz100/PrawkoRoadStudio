@@ -380,3 +380,29 @@ nie spełniają jeszcze docelowego standardu realizmu.
   `archive/visual-regression/s2.2g-v2/`; procedura i następny
   krok zapisane w HANDOFF.md. QUALITY_GATE_PASS (2072 C++
   i 7 Python), Qt 1284 PASS + 1 SKIPPED, BUILD_PASS all.
+
+## S2.2h — pomiar FPS i spójność nawierzchni (13.11.2026)
+
+- Osobny, manualny `prawko_qt_fps_probe` (`EXCLUDE_FROM_ALL`) testuje
+  realne widoczne Qt/Windows z `QOpenGLWidget::frameSwapped`, na GTX 1050 Ti,
+  1600×900, po 180 klatek po rozgrzewce. Z symulowanym `Alt+LMB` orbitem:
+  X 59,97 FPS / p95 17,35 ms, T 60,01 / 17,30 ms,
+  Y 60,00 / 17,29 ms; zero klatek >33,33 ms.
+  To nie jest fizyczny pomiar wyświetlacza ani jank przebudowy siatki;
+  raportowane `viewport->format().samples() == 0` wymaga sprawdzenia MSAA.
+- Qt `build_scene` nadaje teraz metryczne UV world-XY siatkom skrzyżowań,
+  betonowym nakładkom i utwardzonym `SurfaceMesh` bez własnych UV.
+  Odpowiada to istniejącemu fallbackowi GLB; źródłowa siatka i OpenDRIVE
+  pozostają bez zmian, trawa nie otrzymuje zbędnych UV.
+- Pionowe powierzchnie betonowe w trybie Textured otrzymują ograniczone
+  oświetlenie rozproszone (`Material.vertical_fill=0.38`), z zachowaniem
+  domyślnej wartości 0 w innych materiałach. Singularne XY UV na pionowych
+  powierzchniach chroni shaderowy warunek wyznacznika normal mappingu.
+- W nowym renderze rzeczywistego GUI powierzchnia X ma wzór asfaltu
+  również w środku skrzyżowania; zbliżenia GPU X/T/Y pokazują bardziej
+  czytelne krawężniki. Nadal widoczne są regularne spękania powtarzanej
+  tekstury i ograniczenia materiałowego realizmu; nie uznawać tych
+  fragmentów za fotorealistycznie ukończone.
+- BUILD_PASS all, Quality Gate C++ 2072 PASS i agent 7 PASS;
+  Qt 1286 PASS + 1 SKIPPED. Lokalizacje logów i pierwszy kolejny krok
+  w `HANDOFF.md` (S2.2h).
