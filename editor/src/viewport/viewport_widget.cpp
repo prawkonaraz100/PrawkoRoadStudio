@@ -35,6 +35,8 @@
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QOpenGLContext>
+#include <QOpenGLFramebufferObject>
+#include <QOpenGLFunctions>
 #include <QPainter>
 #include <QPen>
 #include <QPolygonF>
@@ -485,6 +487,35 @@ QImage ViewportWidget::capture_clean_frame() {
   return frame;
 }
 
+QImage ViewportWidget::capture_simulation_frame(const QSize& size,
+                                                const OrbitCamera& camera,
+                                                const QVector<SimulationActorPose>& poses) {
+  if (!gl_ready_ || !isValid() || size.isEmpty()) {
+    return {};
+  }
+  makeCurrent();
+  if (QOpenGLContext::currentContext() != context()) {
+    return {};
+  }
+  QImage image;
+  {
+    QOpenGLFramebufferObjectFormat format;
+    format.setAttachment(QOpenGLFramebufferObject::Depth);
+    format.setSamples(context()->format().samples());
+    QOpenGLFramebufferObject target(size, format);
+    if (target.isValid() && target.bind()) {
+      const QScopedValueRollback clean(clean_capture_, true);
+      const QScopedValueRollback preview(simulation_transforms_,
+                                        std::optional{actor_transforms(poses)});
+      render_frame(camera, size);
+      image = target.toImage();
+    }
+  }
+  context()->functions()->glBindFramebuffer(GL_FRAMEBUFFER, defaultFramebufferObject());
+  doneCurrent();
+  return image;
+}
+
 HighlightState ViewportWidget::item_state(const UploadedItem& item) const {
   // A road-style drag highlights its target road through the Hover state; it and
   // a live mouse hover are mutually exclusive (Qt suppresses hover during a drag).
@@ -600,11 +631,15 @@ void ViewportWidget::rebuild_reference_layers() {
 
 void ViewportWidget::set_simulation_frame(const QVector<SimulationActorPose>& poses) {
   if (!simulation_transforms_) {
-    simulation_transforms_.emplace();
     unsetCursor();
   }
-  auto& transforms = *simulation_transforms_;
-  transforms.clear();
+  simulation_transforms_ = actor_transforms(poses);
+  update();
+}
+
+std::vector<InstanceData>
+ViewportWidget::actor_transforms(const QVector<SimulationActorPose>& poses) const {
+  std::vector<InstanceData> transforms;
   transforms.reserve(static_cast<std::size_t>(poses.size()));
   const auto& objects = document_.scenario().entities.scenario_objects;
   for (const auto& pose : poses) {
@@ -617,7 +652,7 @@ void ViewportWidget::set_simulation_frame(const QVector<SimulationActorPose>& po
       }
     }
   }
-  update();
+  return transforms;
 }
 
 void ViewportWidget::clear_simulation_frame() {
@@ -627,7 +662,7 @@ void ViewportWidget::clear_simulation_frame() {
   }
 }
 
-void ViewportWidget::paintGL() {
+void ViewportWidget::render_frame(const OrbitCamera& camera, const QSize& size) {
   if (scene_dirty_) {
     rebuild_scene();
   } else if (!pending_roads_.empty()) {
@@ -781,23 +816,27 @@ void ViewportWidget::paintGL() {
     }
   }
 
-  // Framebuffer pixels, not widget units (HiDPI rule).
-  const auto fb_width = static_cast<int>(std::lround(width() * devicePixelRatioF()));
-  const auto fb_height = static_cast<int>(std::lround(height() * devicePixelRatioF()));
-  const float aspect =
-      fb_height > 0 ? static_cast<float>(fb_width) / static_cast<float>(fb_height) : 1.0F;
+  const float aspect = size.height() > 0
+                           ? static_cast<float>(size.width()) / static_cast<float>(size.height())
+                           : 1.0F;
   if (clean_capture_) {
     BackdropColors backdrop = theme::current().backdrop();
     backdrop.grid_major[3] = 0.0F;
     backdrop.grid_minor[3] = 0.0F;
     renderer_->set_backdrop(backdrop);
   }
-  renderer_->render(draw_items, camera_.matrices(aspect), fb_width, fb_height);
+  renderer_->render(draw_items, camera.matrices(aspect), size.width(), size.height());
   if (clean_capture_) {
     apply_render_mode();
-    return;
   }
-  if (!show_editing) {
+}
+
+void ViewportWidget::paintGL() {
+  // Framebuffer pixels, not widget units (HiDPI rule).
+  const QSize size{static_cast<int>(std::lround(width() * devicePixelRatioF())),
+                   static_cast<int>(std::lround(height() * devicePixelRatioF()))};
+  render_frame(camera_, size);
+  if (clean_capture_ || simulation_transforms_) {
     return;
   }
 

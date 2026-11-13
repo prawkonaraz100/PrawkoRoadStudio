@@ -122,6 +122,7 @@ add_executable(roadmaker_editor_tests
   test_preview_session.cpp
   test_phase_panel.cpp
   test_esmini_preview.cpp
+  test_scenario_video_export.cpp
   test_storyboard_panel.cpp
   test_profile_panel.cpp
   test_project.cpp

@@ -229,6 +229,13 @@ public:
 
   /// Captures the scene without editor highlights, guides, or tool overlays.
   [[nodiscard]] QImage capture_clean_frame();
+  [[nodiscard]] OrbitCamera camera() const { return camera_; }
+
+  /// Renders a simulation frame at the requested output size without changing
+  /// the visible camera or playhead.
+  [[nodiscard]] QImage capture_simulation_frame(const QSize& size,
+                                                const OrbitCamera& camera,
+                                                const QVector<SimulationActorPose>& poses);
 
 signals:
   void simulation_preview_exit_requested();
@@ -335,6 +342,9 @@ private:
   [[nodiscard]] TextureHandle texture_for(const std::string& resource) const;
 
   void rebuild_scene();
+  void render_frame(const OrbitCamera& camera, const QSize& size);
+  [[nodiscard]] std::vector<InstanceData>
+  actor_transforms(const QVector<SimulationActorPose>& poses) const;
 
   /// Pushes the current render mode to the renderer: the Environment (textured
   /// vs sober lighting) and a grid-dimmed backdrop in textured mode.

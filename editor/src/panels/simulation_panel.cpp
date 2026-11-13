@@ -111,12 +111,14 @@ SimulationPanel::SimulationPanel(Document& document, Settings& settings, QWidget
       cancel_(new QPushButton(tr("Cancel"), this)), play_(new QPushButton(tr("&Play"), this)),
       restart_(new QPushButton(tr("From Start"), this)),
       edit_(new QPushButton(tr("Return to Editing"), this)),
+      export_video_(new QPushButton(tr("Export MP4…"), this)),
       timeline_(new TimelineSlider(this)), time_label_(new QLabel(this)),
       events_(new QComboBox(this)) {
   auto* buttons = new QHBoxLayout;
   buttons->addWidget(run_);
   buttons->addWidget(cancel_);
   buttons->addStretch();
+  buttons->addWidget(export_video_);
   auto* layout = new QVBoxLayout(this);
   layout->addLayout(buttons);
   auto* transport = new QHBoxLayout;
@@ -139,6 +141,8 @@ SimulationPanel::SimulationPanel(Document& document, Settings& settings, QWidget
   play_->setObjectName(QStringLiteral("simulation_play"));
   restart_->setObjectName(QStringLiteral("simulation_restart"));
   edit_->setObjectName(QStringLiteral("simulation_edit"));
+  export_video_->setObjectName(QStringLiteral("simulation_export_video"));
+  export_video_->setEnabled(false);
   timeline_->setObjectName(QStringLiteral("simulation_timeline"));
   timeline_->setAccessibleName(tr("Simulation time"));
   timeline_->setSingleStep(50);
@@ -157,6 +161,7 @@ SimulationPanel::SimulationPanel(Document& document, Settings& settings, QWidget
   connect(play_, &QPushButton::clicked, this, &SimulationPanel::toggle_playback);
   connect(restart_, &QPushButton::clicked, this, [this] { seek(0); });
   connect(edit_, &QPushButton::clicked, this, &SimulationPanel::leave_preview);
+  connect(export_video_, &QPushButton::clicked, this, &SimulationPanel::video_export_requested);
   connect(timeline_, &QSlider::valueChanged, this, &SimulationPanel::seek);
   connect(timeline_, &QSlider::sliderPressed, this, [this] { seek(timeline_->value()); });
   connect(events_, &QComboBox::activated, this, [this](int index) {
@@ -233,6 +238,11 @@ void SimulationPanel::update_controls() {
   edit_->setEnabled(preview_active_);
   timeline_->setEnabled(available && timeline_->maximum() > 0);
   events_->setEnabled(available && events_->count() > 1);
+  const bool video_available = available && timeline_->maximum() > 0;
+  if (export_video_->isEnabledTo(this) != video_available) {
+    export_video_->setEnabled(video_available);
+    emit video_availability_changed(video_available);
+  }
 }
 
 void SimulationPanel::mark_scene_changed() {

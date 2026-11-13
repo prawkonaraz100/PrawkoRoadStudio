@@ -38,19 +38,26 @@
 #include <QComboBox>
 #include <QDateTime>
 #include <QDesktopServices>
+#include <QDialogButtonBox>
 #include <QDockWidget>
 #include <QDoubleSpinBox>
 #include <QDragEnterEvent>
 #include <QDropEvent>
+#include <QEventLoop>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QFormLayout>
+#include <QHBoxLayout>
 #include <QInputDialog>
+#include <QLabel>
+#include <QLineEdit>
 #include <QLocale>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QMimeData>
+#include <QProgressBar>
 #include <QPushButton>
 #include <QSaveFile>
 #include <QShowEvent>
@@ -63,6 +70,8 @@
 #include <QUuid>
 #include <QVBoxLayout>
 #include <algorithm>
+#include <cmath>
+#include <limits>
 #include <memory>
 
 #include "app/context_menu.hpp"
@@ -77,6 +86,7 @@
 #include "document/esmini_preview.hpp"
 #include "document/library_drop.hpp"
 #include "document/library_manifest.hpp"
+#include "document/scenario_video_export.hpp"
 #include "document/signal_phase_overlay.hpp"
 #include "document/signal_placement.hpp"
 #include "document/units.hpp"
@@ -1250,6 +1260,8 @@ void MainWindow::build_docks() {
   simulation_dock_ = new QDockWidget(tr("Simulation"), this);
   simulation_dock_->setObjectName(QStringLiteral("dock.simulation"));
   simulation_panel_ = new SimulationPanel(document_, settings_, simulation_dock_);
+  connect(simulation_panel_, &SimulationPanel::video_export_requested,
+          this, &MainWindow::export_scenario_video);
   connect(simulation_panel_, &SimulationPanel::preview_frame,
           viewport_, &ViewportWidget::set_simulation_frame);
   connect(simulation_panel_, &SimulationPanel::preview_closed,
@@ -1293,6 +1305,12 @@ void MainWindow::build_menus() {
     export_image->setEnabled(true);
   });
   connect(export_image, &QAction::triggered, this, &MainWindow::export_scene_image);
+  auto* export_video = file_menu->addAction(tr("Export Scenario &Video…"));
+  export_video->setObjectName(QStringLiteral("export_scenario_video"));
+  export_video->setEnabled(false);
+  connect(simulation_panel_, &SimulationPanel::video_availability_changed,
+          export_video, &QAction::setEnabled);
+  connect(export_video, &QAction::triggered, this, &MainWindow::export_scenario_video);
 #ifdef RM_HAVE_USD
   file_menu->addAction(actions_->export_usd);
 #endif
@@ -2902,6 +2920,163 @@ void MainWindow::export_scene_image() {
     return;
   }
   statusBar()->showMessage(tr("Exported scene image to %1").arg(path), 5000);
+}
+
+void MainWindow::export_scenario_video() {
+  const auto* playback = simulation_panel_->playback();
+  if (playback == nullptr || playback->duration() <= 0.0) {
+    return;
+  }
+  simulation_panel_->pause();
+  const double duration = std::min(playback->duration(),
+                                   std::numeric_limits<int>::max() / 1000.0);
+  QDialog options(this);
+  options.setWindowTitle(tr("Export Scenario Video"));
+  auto* form = new QFormLayout(&options);
+  auto* start = new QDoubleSpinBox(&options);
+  auto* end = new QDoubleSpinBox(&options);
+  start->setObjectName(QStringLiteral("video_start"));
+  end->setObjectName(QStringLiteral("video_end"));
+  for (auto* field : {start, end}) {
+    field->setDecimals(3);
+    field->setRange(0.0, duration);
+    field->setSingleStep(0.1);
+    field->setSuffix(tr(" s"));
+  }
+  end->setValue(duration);
+  form->addRow(tr("&Start time"), start);
+  form->addRow(tr("&End time"), end);
+  auto* size = new QComboBox(&options);
+  size->setObjectName(QStringLiteral("video_size"));
+  size->addItem(QStringLiteral("1280 × 720"), QSize{1280, 720});
+  size->addItem(QStringLiteral("1920 × 1080"), QSize{1920, 1080});
+  size->setCurrentIndex(1);
+  form->addRow(tr("&Resolution"), size);
+  auto* fps = new QComboBox(&options);
+  fps->setObjectName(QStringLiteral("video_fps"));
+  for (const int value : {24, 25, 30, 60}) {
+    fps->addItem(tr("%1 fps").arg(value), value);
+  }
+  fps->setCurrentIndex(2);
+  form->addRow(tr("&Frame rate"), fps);
+  auto* encoder = new QLineEdit(ScenarioVideoExport::find_encoder(settings_.ffmpeg_path()), &options);
+  encoder->setObjectName(QStringLiteral("video_encoder"));
+  encoder->setReadOnly(true);
+  encoder->setPlaceholderText(tr("Choose FFmpeg with libx264 support"));
+  auto* browse = new QPushButton(tr("&Browse…"), &options);
+  auto* encoder_row = new QHBoxLayout;
+  encoder_row->addWidget(encoder, 1);
+  encoder_row->addWidget(browse);
+  form->addRow(tr("FFmpeg"), encoder_row);
+  auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &options);
+  auto* next = buttons->button(QDialogButtonBox::Ok);
+  next->setText(tr("&Choose File…"));
+  form->addRow(buttons);
+  const auto update_options = [=] {
+    next->setEnabled(end->value() > start->value() && !encoder->text().isEmpty());
+  };
+  connect(start, &QDoubleSpinBox::valueChanged, &options, update_options);
+  connect(end, &QDoubleSpinBox::valueChanged, &options, update_options);
+  connect(browse, &QPushButton::clicked, &options, [&] {
+    const QString selected =
+        QFileDialog::getOpenFileName(&options, tr("Locate FFmpeg"), encoder->text());
+    if (QFileInfo(selected).isExecutable()) {
+      encoder->setText(selected);
+      update_options();
+    }
+  });
+  connect(buttons, &QDialogButtonBox::accepted, &options, &QDialog::accept);
+  connect(buttons, &QDialogButtonBox::rejected, &options, &QDialog::reject);
+  update_options();
+  if (options.exec() != QDialog::Accepted) {
+    return;
+  }
+  const ScenarioVideoSettings video{
+      .start_ms = static_cast<int>(std::lround(start->value() * 1000.0)),
+      .end_ms = static_cast<int>(std::lround(end->value() * 1000.0)),
+      .fps = fps->currentData().toInt(),
+      .size = size->currentData().toSize(),
+  };
+  const QFileInfo scene(document_.file_path());
+  const QString suggested = document_.has_file()
+                                ? scene.dir().filePath(scene.completeBaseName() +
+                                                       QStringLiteral(".mp4"))
+                                : QStringLiteral("scenario.mp4");
+  QFileDialog save(this, tr("Save Scenario Video"), suggested, tr("MP4 video (*.mp4)"));
+  save.setAcceptMode(QFileDialog::AcceptSave);
+  save.setDefaultSuffix(QStringLiteral("mp4"));
+  if (save.exec() != QDialog::Accepted) {
+    return;
+  }
+  const QString path = save.selectedFiles().constFirst();
+  if (simulation_panel_->playback() == nullptr) {
+    QMessageBox::warning(this, tr("Export Scenario Video"), tr("Run the updated scenario first."));
+    return;
+  }
+  const SimulationPlayback recording = *simulation_panel_->playback();
+  const OrbitCamera camera = viewport_->camera();
+  ScenarioVideoExport exporter;
+  const int frames = video.frame_count();
+  QDialog progress(this);
+  progress.setWindowTitle(tr("Export Scenario Video"));
+  progress.setWindowModality(Qt::WindowModal);
+  auto* progress_layout = new QVBoxLayout(&progress);
+  auto* progress_label = new QLabel(tr("Rendering simulation frames…"), &progress);
+  auto* progress_bar = new QProgressBar(&progress);
+  progress_bar->setRange(0, frames + 1);
+  progress_bar->setValue(0);
+  auto* progress_buttons = new QDialogButtonBox(QDialogButtonBox::Cancel, &progress);
+  progress_layout->addWidget(progress_label);
+  progress_layout->addWidget(progress_bar);
+  progress_layout->addWidget(progress_buttons);
+  QEventLoop loop;
+  bool completed = false;
+  bool cancelled = false;
+  QString error;
+  connect(&exporter, &ScenarioVideoExport::progress, &progress, [&](int done, int total) {
+    progress_bar->setValue(done);
+    if (done == total) {
+      progress_label->setText(tr("Finishing MP4…"));
+    }
+  });
+  connect(progress_buttons, &QDialogButtonBox::rejected, &progress, &QDialog::reject);
+  connect(&progress, &QDialog::rejected, &exporter, [&] {
+    cancelled = true;
+    exporter.cancel();
+  });
+  connect(simulation_panel_, &SimulationPanel::video_availability_changed,
+          &exporter, [&exporter](bool available) {
+            if (!available) {
+              exporter.cancel();
+            }
+          });
+  connect(&exporter, &ScenarioVideoExport::finished, &loop, [&](const QString& message) {
+    completed = true;
+    error = message;
+    loop.quit();
+  });
+  const QString encoder_path = encoder->text();
+  const QString start_error = exporter.start(encoder_path, path, video, [&](double time) {
+    return viewport_->capture_simulation_frame(video.size, camera, recording.poses_at(time));
+  });
+  if (!start_error.isEmpty()) {
+    error = start_error;
+  }
+  if (error.isEmpty() && !completed) {
+    progress.show();
+    loop.exec();
+    progress.hide();
+  }
+  if (cancelled) {
+    statusBar()->showMessage(tr("Video export cancelled."), 5000);
+    return;
+  }
+  if (!error.isEmpty()) {
+    QMessageBox::warning(this, tr("Export Scenario Video"), error);
+    return;
+  }
+  settings_.set_ffmpeg_path(encoder_path);
+  statusBar()->showMessage(tr("Exported scenario video to %1").arg(path), 7000);
 }
 
 bool MainWindow::confirm_discard() {

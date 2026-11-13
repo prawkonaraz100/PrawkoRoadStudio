@@ -331,10 +331,13 @@ TEST(SimulationPanel, PlaysAndSeeksRealTelemetryThenInvalidatesAfterAMapEdit) {
   auto* events = panel.findChild<QComboBox*>(QStringLiteral("simulation_events"));
   auto* play = panel.findChild<QPushButton*>(QStringLiteral("simulation_play"));
   auto* restart = panel.findChild<QPushButton*>(QStringLiteral("simulation_restart"));
+  auto* video = panel.findChild<QPushButton*>(QStringLiteral("simulation_export_video"));
   ASSERT_NE(timeline, nullptr);
   ASSERT_NE(events, nullptr);
   ASSERT_NE(play, nullptr);
   ASSERT_NE(restart, nullptr);
+  ASSERT_NE(video, nullptr);
+  EXPECT_TRUE(video->isEnabled());
   ASSERT_GE(events->count(), 3);
 
   // Activate a marker as the widget would, then compare that frame to CSV.
@@ -375,6 +378,7 @@ TEST(SimulationPanel, PlaysAndSeeksRealTelemetryThenInvalidatesAfterAMapEdit) {
   EXPECT_FALSE(timeline->isEnabled());
   EXPECT_FALSE(play->isEnabled());
   EXPECT_FALSE(events->isEnabled());
+  EXPECT_FALSE(video->isEnabled());
   EXPECT_TRUE(panel.result());
   document.cancel_preview();
 }

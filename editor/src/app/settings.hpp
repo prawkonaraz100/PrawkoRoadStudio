@@ -114,6 +114,8 @@ public:
   /// the user installed and nothing more.
   [[nodiscard]] QString esmini_path() const;
   void set_esmini_path(const QString& path);
+  [[nodiscard]] QString ffmpeg_path() const;
+  void set_ffmpeg_path(const QString& path);
 
   /// Whether the first-run guided tour has already been shown (or skipped).
   /// Persisted so the tour never re-appears; no telemetry.

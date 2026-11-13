@@ -237,6 +237,7 @@ private:
   bool confirm_discard();
   void export_file_dialog();
   void export_scene_image();
+  void export_scenario_video();
 #ifdef RM_HAVE_USD
   void export_usd_dialog();
 #endif

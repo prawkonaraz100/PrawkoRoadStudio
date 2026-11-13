@@ -28,19 +28,24 @@ public:
   void run();
   void cancel();
   void leave_preview();
+  void pause();
 
   [[nodiscard]] const std::optional<SimulationRun>& result() const { return simulation_.result(); }
+  [[nodiscard]] const SimulationPlayback* playback() const {
+    return playback_ ? &*playback_ : nullptr;
+  }
 
 signals:
   void preview_frame(const QVector<SimulationActorPose>& poses);
   void preview_closed();
+  void video_availability_changed(bool available);
+  void video_export_requested();
 
 private:
   void update_controls();
   void mark_scene_changed();
   void show_result(const QString& error);
   void toggle_playback();
-  void pause();
   void seek(int milliseconds);
   void present_frame();
   void reset_playback();
@@ -55,6 +60,7 @@ private:
   QPushButton* play_;
   QPushButton* restart_;
   QPushButton* edit_;
+  QPushButton* export_video_;
   QSlider* timeline_;
   QLabel* time_label_;
   QComboBox* events_;

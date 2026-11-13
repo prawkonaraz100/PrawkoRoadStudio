@@ -8,12 +8,13 @@ Instruktor tworzy i edytuje sytuację drogową, odtwarza ją, wybiera kamerę i 
 
 ## Stan bieżący
 
-- **Punkt wyjścia etapu.** Edytor `feature/realistic-road-surfaces` na `5bd64dada0aa1c2b7efc4535d5913030c1d8f085`, agent `main` na `35c48c11cdb7efca8e08d1be731463657bbe7a32`. `prawko-resume.ps1 -Verify` potwierdził czyste katalogi i zgodność obu z `origin` przed zmianami.
+- **Punkt wyjścia etapu.** Edytor `feature/realistic-road-surfaces` na `c26421ea81a95c241a149e89e6e52704310c1406`, agent `main` na `35c48c11cdb7efca8e08d1be731463657bbe7a32`. `prawko-resume.ps1 -Verify` potwierdził czyste katalogi i zgodność obu z `origin` przed zmianami.
 - **Wdrożono:** przycisk `Scenario` i `View → Scenario Mode`. Tryb wyświetla `Actor`, `Route` i otwiera `Storyboard`. W opcjach `Actor` jest wybór samochodu, ciężarówki, autobusu, motocykla, roweru lub pieszego, pobierany z katalogu C++. `File → Export Scene Image…` zapisuje PNG w rozdzielczości aktualnego widoku z bieżącej kamery. Eksport pomija siatkę, prowadnice, podświetlenia i narzędzia, zapis przez `QSaveFile`.
 - **Wdrożono przebieg w tle.** `Scenario → Run Simulation` uruchamia esmini bez okna, z możliwością anulowania i limitem 60 s czasu rzeczywistego. Edytor używa `dat2csv` z katalogu tej samej dystrybucji. Wynik w pamięci ma parę XODR/XOSC ze skrótem SHA-256, wersję silnika, krok 0,05 s, ziarno 123, próbki pełnej pozy aktorów, identyfikatory dróg/pasów, start i koniec zdarzeń oraz kolizje. Raport wskazuje zdarzenia nierozpoczęte, niedokończone lub o niejednoznacznych nazwach. Edycja lub otwarcie innej sceny oznacza raport jako pochodzący z poprzedniej wersji.
 - **Wdrożono odtwarzanie w widoku 3D.** Panel `Simulation` ma `Play/Pause`, `From Start`, suwak z kreskami zdarzeń, listę `Jump to event…` i `Return to Editing`. Podgląd pobiera pozycję i orientację każdego aktora z telemetrii, interpoluje między sąsiednimi próbkami, zachowuje rozmiar bryły aktora i aktualizuje tylko transformacje instancji. Kamera i eksport PNG korzystają z bieżącej klatki. Zmiana geometrii (także podczas przeciągania), scenariusza albo otwarcie innego dokumentu wygasza podgląd i pozostawia raport.
-- **Weryfikacja.** `BUILD_PASS: all`, `AGENT_BINDING_SYNC_PASS`, **2072 PASS C++** (10 wyłączonych), **7 PASS Python**, **1314 PASS Qt + 1 SKIPPED** z esmini 3.5.0, `QUALITY_GATE_PASS`. Test integracyjny porównał skok z listy zdarzeń z próbką esmini, sprawdził Play/Pause, powrót do początku, Undo i wygaszenie po edycji drogi. W oknie Windows sprawdzono odtwarzanie, pauzę, suwak na 1,95 i 3,90 s, eksport PNG oraz blokadę odtwarzania po otwarciu innej sceny. W klatkach 0,00 / 1,95 / 3,90 s na kopii `run-maneuver.xodr` zmierzone przesunięcia obu brył zgadzają się z telemetrią z dokładnością około 1 px. Kopie, klatki, telemetria i logi są w `archive/simulation-stage2-20261113/`. Skróty SHA-256 kopii i oryginalnej sceny miejskiej zgadzają się z wartościami sprzed testu.
-- **Otwarte.** MP4 jest kolejnym etapem. Wynik przebiegu żyje w sesji edytora. W Windows przechwycenie okna zwróciło timeout i narzędzie nie miało współrzędnych do klikania. Wybór zdarzenia zweryfikowano testem Qt, a odbiór dodania aktora i trasy rzeczywistą myszą czeka na dostęp do obrazu okna. Podgląd używa brył dla aktorów typu `Vehicle` i `Pedestrian`. Odtwarzanie stanów świateł i obsługa aktorów z katalogów pozostają do rozbudowy. Ścieżki do zewnętrznych katalogów i modeli w migawce mogą wymagać dopracowania przy importowanych scenach. Autosave pomija XOSC, a błąd zapisu XOSC może zostawić dokument oznaczony jako zapisany.
+- **Wdrożono eksport MP4.** Po aktualnej symulacji wybierz `Simulation → Export MP4…` lub `File → Export Scenario Video…`. Ustaw zakres czasu, 720p lub 1080p oraz 24, 25, 30 albo 60 kl./s. Film bez dźwięku korzysta z bieżącej kamery i czystego renderu widoku 3D. Aplikacja wykrywa FFmpeg obok edytora lub na `PATH`, pozwala też wskazać plik z obsługą `libx264` i zapamiętuje ścieżkę po sukcesie. Pokazuje postęp i umożliwia anulowanie. Dotychczasowy plik pozostaje na dysku aż do udanego zakończenia kodowania.
+- **Weryfikacja.** `BUILD_PASS: all`, `AGENT_BINDING_SYNC_PASS`, **2072 PASS C++** (10 wyłączonych), **7 PASS Python**, **1316 PASS Qt + 1 SKIPPED** z esmini 3.5.0 i FFmpeg 9.0.2, `QUALITY_GATE_PASS`. GUI Windows wyeksportowało z kopii `run-maneuver.xodr` zakres 1,95–4,95 s. `ffprobe` potwierdził H.264, 1920 × 1080, 30 kl./s, 90 klatek i 3,000 s. W klatkach 0 i 60 oba pojazdy przesuwają się zgodnie z telemetrią, a Target zmienia pas. Anulowanie ponownego eksportu zachowało SHA-256 filmu, otwarcie innej sceny wyłączyło eksport poprzedniego przebiegu. Test integracyjny potwierdził ochronę pliku także przy błędzie przechwycenia i błędzie procesu. Dowody i film są w `archive/simulation-stage3-20261113/`. Skróty kopii XODR/XOSC i oryginalnej sceny miejskiej pozostały identyczne.
+- **Otwarte.** FFmpeg jest osobnym wymaganiem środowiska i pozostaje poza dystrybucją edytora. W Windows przechwytywanie obrazu okna dwukrotnie zwróciło timeout, dlatego nadal czeka odbiór myszą dodania aktora i trasy. Podgląd używa brył dla `Vehicle` i `Pedestrian`. Odtwarzanie stanów świateł i obsługa aktorów z katalogów pozostają do rozbudowy. Ścieżki do zewnętrznych katalogów i modeli w migawce mogą wymagać dopracowania przy importowanych scenach. Autosave pomija XOSC, a błąd zapisu XOSC może zostawić dokument oznaczony jako zapisany.
 
 ## Aktywny plan
 
@@ -25,13 +26,13 @@ Punkt wejścia stanowią [panel symulacji](editor/src/panels/simulation_panel.cp
 
 Punkt wejścia stanowią [panel symulacji](editor/src/panels/simulation_panel.cpp), [odczyt klatek przebiegu](editor/src/document/simulation_trace.hpp) oraz `ViewportWidget::set_simulation_frame()`. Podgląd i przechodzenie po klatkach pozostawiają mapę, scenariusz i Undo w dotychczasowym stanie. Odbiór aktora i trasy myszą powtórz na kopii przy następnym działającym przechwytywaniu okna.
 
-### 3. Następne zadanie — pierwsze nagranie MP4
+### 3. Ukończono — pierwsze nagranie MP4
 
-Zacznij od aktualnego przebiegu panelu i `SimulationPlayback::poses_at()`. Wyeksportuj wybrany zakres z bieżącej kamery, korzystając z tej samej ścieżki renderowania co PNG. Edytor zarządza kodowaniem, postępem, przerwaniem i bezpiecznym zapisem wyniku. Sprawdź rozdzielczość, FPS i długość pliku, ruch aktora na co najmniej dwóch klatkach oraz zachowanie istniejącego eksportu przy anulowaniu lub błędzie. Odbierz działanie przez GUI na Windows.
+Punkty wejścia to `MainWindow::export_scenario_video()`, [proces eksportu](editor/src/document/scenario_video_export.cpp) i `ViewportWidget::capture_simulation_frame()`. MP4 i PNG korzystają ze wspólnego renderera. Próbkowanie filmu używa `SimulationPlayback::poses_at()` i czasu wyliczanego z numeru klatki.
 
-### 4. Scena wzorcowa, kamery i bezpieczny zapis
+### 4. Następne zadanie — scena wzorcowa, kamery i bezpieczny zapis
 
-Przygotuj **Widoczność przed przejściem dla pieszych** z trasą auta i pieszego, przesłoną oraz dwoma wariantami. Dodaj ujęcie z kamery kierowcy i z góry. Przed wydaniem instruktorom zweryfikuj spójny zapis, ponowne otwarcie i odzyskiwanie mapy, scenariusza i ustawień ujęcia. Awaria zapisu jednego pliku pozostawia poprzednią spójną wersję, a edytor sygnalizuje niezapisane zmiany.
+Zacznij od audytu `Document::save()`, `AutosaveManager` i ustawień kamery. Dokończ obsługę błędów zapisu i odzyskiwania XODR/XOSC oraz ustawień ujęcia, zanim przygotujesz **Widoczność przed przejściem dla pieszych** z trasą auta i pieszego, przesłoną oraz dwoma wariantami. Dodaj ujęcie z kamery kierowcy i użyj istniejącego widoku z góry. Awaria zapisu jednego pliku pozostawia poprzednią spójną wersję, a edytor sygnalizuje niezapisane zmiany. Odbierz ponowne otwarcie obu wariantów i eksport obu ujęć.
 
 ### 5. Dalsze funkcje wzorowane na VICOM
 
@@ -44,6 +45,10 @@ Rozwijaj gotowe szablony otoczenia, swobodne i wspomagane rozmieszczanie uczestn
 ## Historia prac
 
 Poniższe wpisy dokumentują wcześniejsze odbiory i wyniki. Bieżące zadanie znajdziesz w sekcji **Aktywny plan**.
+
+## 13.11.2026 — odtwarzanie w edytorze Windows
+
+- `c26421ea81a95c241a149e89e6e52704310c1406` dostarczył odtwarzanie w 3D, pauzę, suwak i znaczniki zdarzeń. W klatkach 0,00 / 1,95 / 3,90 s na kopii `run-maneuver.xodr` przesunięcia obu brył zgadzały się z telemetrią z dokładnością około 1 px. Test Qt porównał skok z listy zdarzeń z pozycją esmini i potwierdził wygaszenie po edycji drogi. Dowody są w `archive/simulation-stage2-20261113/`.
 
 ## 13.11.2026 — pierwszy przebieg esmini w tle
 

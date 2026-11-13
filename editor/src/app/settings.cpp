@@ -152,6 +152,16 @@ void Settings::set_esmini_path(const QString& path) {
   settings_.setValue(QStringLiteral("tools/esmini_path"), path);
 }
 
+QString Settings::ffmpeg_path() const {
+  return settings_.value(QStringLiteral("tools/ffmpeg_path")).toString();
+}
+
+void Settings::set_ffmpeg_path(const QString& path) {
+  if (!read_only()) {
+    settings_.setValue(QStringLiteral("tools/ffmpeg_path"), path);
+  }
+}
+
 bool Settings::autosave_enabled() const {
   return settings_.value(QStringLiteral("autosave/enabled"), true).toBool();
 }
