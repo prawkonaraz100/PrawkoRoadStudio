@@ -45,6 +45,7 @@
 #include <QTemporaryDir>
 #include <QTest>
 #include <QToolBar>
+#include <QToolButton>
 #include <QWidget>
 #include <QWidgetAction>
 #include <algorithm>
@@ -97,11 +98,11 @@ TEST_F(MainWindowLayoutTest, ToolbarsHoldNoVariableWidthLabels) {
   }
 }
 
-TEST_F(MainWindowLayoutTest, ScenarioModeShowsActorLibraryAndRouteTools) {
+TEST_F(MainWindowLayoutTest, ScenarioModeShowsRouteAndRunOnTheOnlyPrimaryToolbar) {
   auto* mode = window_.findChild<QAction*>(QStringLiteral("scenario_mode"));
   auto* main = window_.findChild<QToolBar*>(QStringLiteral("toolbar.main"));
   auto* run = window_.findChild<QAction*>(QStringLiteral("run_scenario_simulation"));
-  auto* tools = window_.findChild<QToolBar*>(QStringLiteral("toolbar.tools"));
+  auto* more = window_.findChild<QMenu*>(QStringLiteral("menu.advanced_tools"));
   auto* storyboard_dock = window_.findChild<QDockWidget*>(QStringLiteral("dock.editor2d"));
   auto* editor = window_.findChild<Editor2DHost*>();
   auto* actor_kind = window_.findChild<QComboBox*>(QStringLiteral("actor_kind"));
@@ -109,7 +110,7 @@ TEST_F(MainWindowLayoutTest, ScenarioModeShowsActorLibraryAndRouteTools) {
   ASSERT_NE(mode, nullptr);
   ASSERT_NE(main, nullptr);
   ASSERT_NE(run, nullptr);
-  ASSERT_NE(tools, nullptr);
+  ASSERT_NE(more, nullptr);
   ASSERT_NE(storyboard_dock, nullptr);
   ASSERT_NE(editor, nullptr);
   ASSERT_NE(actor_kind, nullptr);
@@ -117,7 +118,7 @@ TEST_F(MainWindowLayoutTest, ScenarioModeShowsActorLibraryAndRouteTools) {
   QWidgetAction* actor_kind_action = nullptr;
   for (QAction* action : options->actions()) {
     auto* widget_action = qobject_cast<QWidgetAction*>(action);
-    if (widget_action != nullptr && widget_action->defaultWidget() == actor_kind) {
+    if (widget_action && widget_action->defaultWidget() == actor_kind) {
       actor_kind_action = widget_action;
       break;
     }
@@ -125,58 +126,62 @@ TEST_F(MainWindowLayoutTest, ScenarioModeShowsActorLibraryAndRouteTools) {
   ASSERT_NE(actor_kind_action, nullptr);
   ASSERT_TRUE(main->actions().contains(mode));
   EXPECT_EQ(main->actions().indexOf(run), main->actions().indexOf(mode) + 1);
-  EXPECT_TRUE(run->isVisible());
   EXPECT_FALSE(run->isEnabled());
-  const auto menus = window_.menuBar()->actions();
-  EXPECT_TRUE(std::ranges::any_of(menus, [mode](QAction* entry) {
-    return entry->menu() != nullptr && entry->menu()->actions().contains(mode);
-  }));
 
-  const auto tool_named = [tools](const QString& name) -> QAction* {
-    const auto actions = tools->actions();
-    const auto found = std::ranges::find_if(
-        actions, [&name](QAction* action) { return action->iconText() == name; });
-    return found == actions.end() ? nullptr : *found;
-  };
-  auto* actor = tool_named(QStringLiteral("Actor"));
-  auto* route = tool_named(QStringLiteral("Trasa"));
-  auto* road = tool_named(QStringLiteral("Road"));
+  auto* actor = static_cast<QAction*>(nullptr);
+  for (QMenu* category : more->findChildren<QMenu*>()) {
+    for (QAction* action : category->actions()) {
+      if (action->iconText() == QStringLiteral("Actor"))
+        actor = action;
+    }
+  }
   ASSERT_NE(actor, nullptr);
-  ASSERT_NE(route, nullptr);
-  ASSERT_NE(road, nullptr);
+  // Do not depend on order of unrelated core controls.
+  QAction* road_action = nullptr;
+  QAction* route_action = nullptr;
+  for (QAction* action : main->actions()) {
+    if (action->iconText() == QStringLiteral("Droga"))
+      road_action = action;
+    if (action->iconText() == QStringLiteral("Trasa"))
+      route_action = action;
+  }
+  ASSERT_NE(road_action, nullptr);
+  ASSERT_NE(route_action, nullptr);
+  EXPECT_TRUE(road_action->isVisible());
+  EXPECT_FALSE(route_action->isVisible());
   EXPECT_FALSE(actor->isVisible());
-  EXPECT_FALSE(route->isVisible());
-  EXPECT_TRUE(road->isVisible());
 
   mode->trigger();
   EXPECT_TRUE(mode->isChecked());
+  EXPECT_FALSE(road_action->isVisible());
+  EXPECT_TRUE(route_action->isVisible());
+  EXPECT_TRUE(route_action->isEnabled());
   EXPECT_TRUE(actor->isVisible());
   EXPECT_TRUE(actor->isEnabled());
-  EXPECT_TRUE(route->isVisible());
-  EXPECT_TRUE(route->isEnabled());
-  EXPECT_FALSE(road->isVisible());
   auto* category = window_.findChild<QComboBox*>(QStringLiteral("library_category"));
   ASSERT_NE(category, nullptr);
   EXPECT_EQ(category->currentData().toString(), QStringLiteral("Uczestnicy ruchu"));
-  auto* storyboard = window_.menuBar()->findChild<QMenu*>(QStringLiteral("scenario_menu"));
-  ASSERT_NE(storyboard, nullptr);
-  const auto entries = storyboard->actions();
-  auto entry = std::ranges::find_if(
-      entries, [](QAction* action) { return action->text() == QStringLiteral("Storyboard…"); });
-  ASSERT_NE(entry, entries.end());
-  (*entry)->trigger();
+
+  auto* scenario_menu = window_.menuBar()->findChild<QMenu*>(QStringLiteral("scenario_menu"));
+  ASSERT_NE(scenario_menu, nullptr);
+  const auto scenario_actions = scenario_menu->actions();
+  const auto found = std::ranges::find_if(scenario_actions, [](const QAction* action) {
+    return action->text() == QStringLiteral("Storyboard…");
+  });
+  ASSERT_NE(found, scenario_actions.end());
+  (*found)->trigger();
   EXPECT_FALSE(storyboard_dock->isHidden());
   EXPECT_EQ(editor->current_title(), QStringLiteral("Storyboard"));
+
   actor->trigger();
   EXPECT_TRUE(actor_kind_action->isVisible());
   EXPECT_GE(actor_kind->count(), 2);
 
   mode->trigger();
   EXPECT_FALSE(mode->isChecked());
-  EXPECT_TRUE(road->isVisible());
-  EXPECT_TRUE(road->isEnabled());
+  EXPECT_TRUE(road_action->isVisible());
+  EXPECT_FALSE(route_action->isVisible());
   EXPECT_FALSE(actor->isVisible());
-  EXPECT_FALSE(route->isVisible());
   EXPECT_FALSE(actor_kind_action->isVisible());
 }
 
@@ -243,7 +248,7 @@ TEST_F(MainWindowLayoutTest, LibraryMimeDropAndViewportClicksWriteBothKindsOfRou
   finish->click();
   EXPECT_FALSE((*finish_action)->isVisible());
   QTest::mouseClick(viewport, Qt::LeftButton, Qt::NoModifier, pixel(43.0, -1.75));
-  auto* route_toolbar = window_.findChild<QToolBar*>(QStringLiteral("toolbar.tools"));
+  auto* route_toolbar = window_.findChild<QToolBar*>(QStringLiteral("toolbar.main"));
   ASSERT_NE(route_toolbar, nullptr);
   const auto tools = route_toolbar->actions();
   const auto route = std::ranges::find_if(
@@ -431,55 +436,78 @@ TEST_F(MainWindowLayoutTest, ImageExportIsEnabledWhenASceneOpens) {
   EXPECT_TRUE(image->isEnabled());
 }
 
-TEST_F(MainWindowLayoutTest, ToolbarIsTwoPlainGroupedRowsWithNoTabs) {
-  // #377: the category tabs are gone. The chrome is two plain top-level
-  // QToolBars in the top area — the core strip (`toolbar.main`: document ops)
-  // and ONE flat tool row (`toolbar.tools`: EVERY placement tool at once,
-  // separator-grouped). Both being plain top-level bars, they share one left
-  // origin and align by construction — no QTabBar, no page-swapping, no widget
-  // nested inside a toolbar.
-  auto* core = window_.findChild<QToolBar*>(QStringLiteral("toolbar.main"));
-  auto* tools = window_.findChild<QToolBar*>(QStringLiteral("toolbar.tools"));
-  ASSERT_NE(core, nullptr) << "the core strip is gone";
-  ASSERT_NE(tools, nullptr) << "the flat tool row is gone";
+TEST_F(MainWindowLayoutTest, SingleCompactToolbarPresentsOnlyThePrawkoWorkflow) {
+  auto* bar = window_.findChild<QToolBar*>(QStringLiteral("toolbar.main"));
+  auto* add = window_.findChild<QToolButton*>(QStringLiteral("toolbar.add"));
+  auto* more = window_.findChild<QToolButton*>(QStringLiteral("toolbar.more"));
+  auto* library = window_.findChild<QMenu*>(QStringLiteral("menu.prawko_library"));
+  auto* advanced = window_.findChild<QMenu*>(QStringLiteral("menu.advanced_tools"));
+  auto* options = window_.findChild<QToolBar*>(QStringLiteral("toolbar.options"));
+  ASSERT_NE(bar, nullptr);
+  ASSERT_NE(add, nullptr);
+  ASSERT_NE(more, nullptr);
+  ASSERT_NE(library, nullptr);
+  ASSERT_NE(advanced, nullptr);
+  ASSERT_NE(options, nullptr);
+  EXPECT_EQ(window_.findChild<QToolBar*>(QStringLiteral("toolbar.tools")), nullptr);
+  EXPECT_EQ(window_.findChild<QTabBar*>(QStringLiteral("toolbar_tabs")), nullptr);
+  EXPECT_EQ(window_.findChild<QToolBar*>(QStringLiteral("toolbar.tabs")), nullptr);
+  EXPECT_EQ(bar->iconSize(), QSize(24, 24));
+  EXPECT_LE(bar->actions().size(), 19) << "The whole legacy tool ribbon has returned";
+  EXPECT_TRUE(options->isHidden()) << "Idle tools should not consume an empty toolbar row";
 
-  // No tabs, and none of the old nested hosting, may come back.
-  EXPECT_EQ(window_.findChild<QTabBar*>(QStringLiteral("toolbar_tabs")), nullptr)
-      << "the category tab bar must be gone";
-  EXPECT_EQ(window_.findChild<QToolBar*>(QStringLiteral("toolbar.tabs")), nullptr)
-      << "the nested tab-host toolbar must be gone";
-  for (const QToolBar* bar : window_.findChildren<QToolBar*>()) {
-    EXPECT_FALSE(bar->objectName().startsWith(QStringLiteral("toolbar.tab.")))
-        << "a nested page toolbar '" << bar->objectName().toStdString() << "' still exists";
+  const QStringList main_labels = {QStringLiteral("Nowa"),
+                                   QStringLiteral("Otwórz"),
+                                   QStringLiteral("Zapisz"),
+                                   QStringLiteral("Zaznacz"),
+                                   QStringLiteral("Przesuń"),
+                                   QStringLiteral("Usuń"),
+                                   QStringLiteral("Cofnij"),
+                                   QStringLiteral("Droga"),
+                                   QStringLiteral("Trasa"),
+                                   QStringLiteral("Scenariusz"),
+                                   QStringLiteral("Symulacja")};
+  for (const QString& label : main_labels) {
+    EXPECT_TRUE(std::ranges::any_of(bar->actions(), [&label](const QAction* a) {
+      return !a->isSeparator() && a->iconText() == label;
+    })) << label.toStdString();
+  }
+  EXPECT_EQ(add->text(), QStringLiteral("Dodaj"));
+  EXPECT_EQ(more->text(), QStringLiteral("Więcej"));
+  ASSERT_EQ(library->actions().size(), 3);
+  EXPECT_EQ(library->actions()[0]->text(), QStringLiteral("Gotowe drogi"));
+  EXPECT_EQ(library->actions()[1]->text(), QStringLiteral("Krawężniki i chodniki"));
+  EXPECT_EQ(library->actions()[2]->text(), QStringLiteral("Uczestnicy ruchu"));
+  auto* category = window_.findChild<QComboBox*>(QStringLiteral("library_category"));
+  ASSERT_NE(category, nullptr);
+  for (int index = 0; index < 3; ++index) {
+    library->actions()[index]->trigger();
+    EXPECT_EQ(category->currentData().toString(),
+              QStringList({QStringLiteral("Prawko | Gotowe drogi"),
+                           QStringLiteral("Prawko | Krawężniki i chodniki"),
+                           QStringLiteral("Uczestnicy ruchu")})[index]);
   }
 
-  // The flat row must hold every placement tool from every (non-empty) tab at
-  // once — not just one tab's worth — with separators grouping them. Both counts
-  // come from the registry so the assertion tracks the taxonomy as pillars land.
-  int expected_tools = 0;
-  int largest_tab = 0;
-  for (const shortcuts::ToolbarTabInfo& info : shortcuts::toolbar_tabs()) {
-    int tab_tools = 0;
-    for (const shortcuts::ToolbarGroupLayout& group : shortcuts::toolbar_layout(info.tab)) {
-      tab_tools += static_cast<int>(group.ids.size());
+  // Every non-primary registry tool is present exactly once in a category.
+  int expected = 0;
+  for (const auto& tab : shortcuts::toolbar_tabs()) {
+    for (const auto& group : shortcuts::toolbar_layout(tab.tab)) {
+      for (const auto id : group.ids) {
+        if (id != shortcuts::Id::ToolCreateRoad && id != shortcuts::Id::ToolRoute) {
+          ++expected;
+        }
+      }
     }
-    expected_tools += tab_tools;
-    largest_tab = std::max(largest_tab, tab_tools);
   }
-
-  int placed = 0;
-  int separators = 0;
-  for (const QAction* action : tools->actions()) {
-    if (action->isSeparator()) {
-      ++separators;
-    } else {
-      ++placed;
+  int present = 0;
+  for (QMenu* submenu : advanced->findChildren<QMenu*>()) {
+    for (QAction* action : submenu->actions()) {
+      if (!action->isSeparator())
+        ++present;
     }
   }
-  EXPECT_EQ(placed, expected_tools) << "the flat row must render every tool across all tabs";
-  EXPECT_GT(expected_tools, largest_tab)
-      << "the row holds more than any single tab's tools — proof it is flat, not tabbed";
-  EXPECT_GT(separators, 0) << "the tool groups must be visually separated";
+  EXPECT_EQ(present, expected);
+  EXPECT_GE(advanced->findChildren<QMenu*>().size(), 5);
 }
 
 TEST_F(MainWindowLayoutTest, ToolOptionHintIsGone) {

@@ -533,6 +533,30 @@ i usuniętych z katalogu aktywnych projektów. Nowa praca rozpoczyna
 się od pustej sceny, a kolejne składniki powstaną jako własne
 modele PrawkoNaRaz.
 
+### Uproszczony pasek narzędzi Prawko — 14.11.2026
+
+Górny pasek zawiera **jedną, kompaktową linię poleceń** zgodną z
+rzeczywistym zakresem edytora. Kolejno: **Nowa, Otwórz, Zapisz**;
+**Zaznacz, Przesuń, Usuń, Cofnij**; **Dodaj**; **Droga** w trybie
+mapy lub **Trasa** w trybie scenariusza; **Scenariusz, Symulacja**;
+i **Więcej**. Zamiast dawnego długiego drugiego paska z narzędziami
+RoadMaker znajduje się menu grupujące zaawansowaną geometrię,
+oznaczenia, teren i narzędzia techniczne. Wszystkie odwołują się
+do istniejących akcji i skrótów, nie mają osobnej implementacji.
+
+**Dodaj** otwiera trzy pozycje: *Gotowe drogi*, *Krawężniki i
+chodniki*, *Uczestnicy ruchu*. Wybór odsłania panel Library i ustawia
+jego filtr; właściwe upuszczanie nadal odbywa się myszą na widok 3D.
+**Droga** służy do własnoręcznego wyznaczenia przebiegu; w Scenario
+w tym miejscu dostępna jest **Trasa**. Przycisk **Symulacja** nadal
+wymaga uczestników i poprawnego przebiegu do uruchomienia.
+
+Wąski pasek opcji (wybór szablonu, rodzaju aktora, Zakończ trasę,
+parametry pędzla) pojawia się **wyłącznie dla narzędzi, które
+rzeczywiście mają opcje**; w zwykłym trybie zaznaczania jest schowany.
+Samouczek w aplikacji opisuje już dodawanie naszych dróg i uczestników,
+zamiast nieobecnych starych skrzyżowań i drzew.
+
 Pierwszy zwykły start po aktualizacji jednorazowo aktywuje
 `Textured Rendering` (PBR) i pamięta wykonaną migrację;
 później świadoma zmiana przez użytkownika pozostaje zapisana.

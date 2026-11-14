@@ -1122,6 +1122,9 @@ MainWindow::MainWindow(QWidget* parent, bool restore_saved_layout)
     // The Library's internal splitter lives outside saveState() (p6-s7).
     library_panel_->restore_splitter_state(settings_.library_splitter_state());
   }
+  // Old QMainWindow layouts can restore visibility of the former options row.
+  // The active tool owns that decision, never stale toolbar geometry.
+  update_tool_options();
 
   update_window_title();
   update_status_entities();
@@ -1531,97 +1534,127 @@ void MainWindow::build_menus() {
 }
 
 void MainWindow::build_toolbar() {
-  // Two plain top-level QToolBars, both GENERATED from the action registry's
-  // taxonomy (p1-s5/#317, flattened in #377) rather than hand-placed: a CORE
-  // strip (File | Edit | Library & View) that never hides, and a single flat
-  // tool row holding every placement tool at once (no category tabs). A tool
-  // that lands without a toolbar_group fails shortcuts::toolbar_violations() in
-  // the tests, so the taxonomy cannot silently go stale as later pillars add
-  // tools.
-  //
-  // 28 px icons with the action's iconText under each (ui-design.md) — a new
-  // user can read what every button does.
-  const auto style_bar = [](QToolBar* bar, const QString& object_name) {
-    bar->setObjectName(object_name);
-    bar->setIconSize(QSize(28, 28));
-    bar->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
-    bar->setMovable(false);
-    // Give the overflow button a visible glyph. Qt's QToolBarExtension draws
-    // its arrow through the native style, which our QSS `QToolBar QToolButton`
-    // rule takes over — leaving a working but INVISIBLE button, so a narrow
-    // window silently hides the overflowed group. An explicit icon is what
-    // makes the overflow discoverable (verified at 920 px in the PR shots).
-    if (auto* extension = bar->findChild<QToolButton*>(QStringLiteral("qt_toolbar_ext_button"))) {
-      extension->setIcon(Icons::get(QStringLiteral("chevrons-right")));
-      extension->setToolTip(tr("More tools"));
-    }
-    return bar;
-  };
-
-  const auto fill = [this](QToolBar* bar, shortcuts::ToolbarTab tab) {
-    bool first_group = true;
-    for (const shortcuts::ToolbarGroupLayout& group : shortcuts::toolbar_layout(tab)) {
-      if (group.ids.empty()) {
-        continue; // a reserved group renders nothing until its first tool lands
-      }
-      if (!first_group) {
-        bar->addSeparator();
-      }
-      first_group = false;
-      for (const shortcuts::Id id : group.ids) {
-        QAction* action = actions_->action(id);
-        Q_ASSERT(action != nullptr); // ActionMappingCoversEveryId gates this
-        bar->addAction(action);
-      }
-    }
-  };
-
-  // The persistent CORE strip — File, the universal edit tools, and framing /
-  // Library. It never hides behind a tab. Keeps the historical object name so a
-  // saved layout still restores.
-  core_toolbar_ = style_bar(addToolBar(tr("Main")), QStringLiteral("toolbar.main"));
-  fill(core_toolbar_, shortcuts::ToolbarTab::kCore);
-  core_toolbar_->addSeparator();
-  core_toolbar_->addAction(actions_->scenario_mode);
-  core_toolbar_->addAction(run_simulation_action_);
-
+  // One curated row for daily Prawko authoring. Technical/legacy tools stay
+  // reachable in a structured menu and retain the registry mode/shortcut gates.
+  core_toolbar_ = addToolBar(tr("Prawko — edycja"));
+  core_toolbar_->setObjectName(QStringLiteral("toolbar.main"));
+  core_toolbar_->setIconSize(QSize(24, 24));
+  core_toolbar_->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+  core_toolbar_->setMovable(false);
   all_toolbars_.push_back(core_toolbar_);
 
-  // The SINGLE tool row — every placement / edit tool at once, grouped by
-  // category with a separator between groups (Roads · Lanes · Markings · Props
-  // · Signals …) and Qt's native overflow chevron when the window is narrow. It
-  // is a plain top-level QToolBar in the same top area as the core strip, so the
-  // two rows share one 8 px left origin and align by construction (#377). There
-  // are no category tabs: showing every tool flat is the standard QToolBar idiom,
-  // and the registry taxonomy still classifies each tool so toolbar_violations()
-  // keeps gating drift as later pillars add tools.
-  addToolBarBreak();
-  tool_toolbar_ = style_bar(addToolBar(tr("Tools")), QStringLiteral("toolbar.tools"));
-  bool first_tool_group = true;
+  const auto add = [this](QAction* action, const QString& short_label) {
+    action->setIconText(short_label);
+    core_toolbar_->addAction(action);
+  };
+  add(actions_->new_file, tr("Nowa"));
+  add(actions_->open, tr("Otwórz"));
+  add(actions_->save, tr("Zapisz"));
+  core_toolbar_->addSeparator();
+
+  add(actions_->tool_select, tr("Zaznacz"));
+  add(actions_->tool_move, tr("Przesuń"));
+  add(actions_->tool_delete, tr("Usuń"));
+  add(actions_->undo, tr("Cofnij"));
+  core_toolbar_->addSeparator();
+
+  // The Add menu opens only the three real Prawko library groups. Dropping
+  // items from that library still goes through the shared command layer.
+  auto* add_button = new QToolButton(core_toolbar_);
+  add_button->setObjectName(QStringLiteral("toolbar.add"));
+  add_button->setAccessibleName(tr("Dodaj element do sceny"));
+  add_button->setText(tr("Dodaj"));
+  add_button->setIcon(actions_->add_from_library->icon());
+  add_button->setToolTip(tr("Wybierz drogę, chodniki lub uczestnika ruchu z biblioteki"));
+  add_button->setPopupMode(QToolButton::InstantPopup);
+  add_button->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+  auto* library_menu = new QMenu(add_button);
+  library_menu->setObjectName(QStringLiteral("menu.prawko_library"));
+  const auto focus_group = [this, library_menu](const QString& title, const QString& group) {
+    QAction* entry = library_menu->addAction(title);
+    connect(entry, &QAction::triggered, this, [this, group] {
+      library_dock_->show();
+      library_dock_->raise();
+      library_panel_->focus_category(group);
+    });
+  };
+  focus_group(tr("Gotowe drogi"), QStringLiteral("Prawko | Gotowe drogi"));
+  focus_group(tr("Krawężniki i chodniki"), QStringLiteral("Prawko | Krawężniki i chodniki"));
+  focus_group(tr("Uczestnicy ruchu"), kScenarioActorCategory);
+  add_button->setMenu(library_menu);
+  core_toolbar_->addWidget(add_button);
+
+  // Map: draw a road; Scenario: edit a participant route, never both at once.
+  add(actions_->tool_create_road, tr("Droga"));
+  add(actions_->tool_route, tr("Trasa"));
+  core_toolbar_->addSeparator();
+  add(actions_->scenario_mode, tr("Scenariusz"));
+  add(run_simulation_action_, tr("Symulacja"));
+  core_toolbar_->addSeparator();
+
+  // Every other registered tool remains available in advanced menus, using
+  // its ORIGINAL QAction and keyboard binding, not a parallel implementation.
+  auto* more_button = new QToolButton(core_toolbar_);
+  more_button->setObjectName(QStringLiteral("toolbar.more"));
+  more_button->setAccessibleName(tr("Narzędzia zaawansowane"));
+  more_button->setText(tr("Więcej"));
+  more_button->setIcon(Icons::get(QStringLiteral("chevrons-right")));
+  more_button->setToolTip(tr("Narzędzia techniczne i rzadziej używane"));
+  more_button->setPopupMode(QToolButton::InstantPopup);
+  more_button->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+  auto* advanced = new QMenu(more_button);
+  advanced->setObjectName(QStringLiteral("menu.advanced_tools"));
   for (const shortcuts::ToolbarTabInfo& info : shortcuts::toolbar_tabs()) {
+    QString title;
+    switch (info.tab) {
+    case shortcuts::ToolbarTab::kRoadsLanes:
+      title = tr("Drogi i pasy — zaawansowane");
+      break;
+    case shortcuts::ToolbarTab::kMarkings:
+      title = tr("Oznakowanie — techniczne");
+      break;
+    case shortcuts::ToolbarTab::kProps:
+      title = tr("Obiekty 3D — techniczne");
+      break;
+    case shortcuts::ToolbarTab::kTerrain:
+      title = tr("Teren i nawierzchnie");
+      break;
+    case shortcuts::ToolbarTab::kSignals:
+      title = tr("Znaki i sygnalizacja — techniczne");
+      break;
+    case shortcuts::ToolbarTab::kScenario:
+      title = tr("Uczestnicy i trasy");
+      break;
+    case shortcuts::ToolbarTab::kCore:
+      continue;
+    }
+    QMenu* category = advanced->addMenu(title);
     for (const shortcuts::ToolbarGroupLayout& group : shortcuts::toolbar_layout(info.tab)) {
-      if (group.ids.empty()) {
-        continue; // a reserved group renders nothing until its first tool lands
-      }
-      if (!first_tool_group) {
-        tool_toolbar_->addSeparator();
-      }
-      first_tool_group = false;
+      bool started = false;
       for (const shortcuts::Id id : group.ids) {
+        if (id == shortcuts::Id::ToolCreateRoad || id == shortcuts::Id::ToolRoute) {
+          continue;
+        }
         QAction* action = actions_->action(id);
-        Q_ASSERT(action != nullptr); // ActionMappingCoversEveryId gates this
-        tool_toolbar_->addAction(action);
+        Q_ASSERT(action != nullptr);
+        if (!started && !category->actions().isEmpty()) {
+          category->addSeparator();
+        }
+        started = true;
+        category->addAction(action);
       }
     }
   }
-  all_toolbars_.push_back(tool_toolbar_);
+  more_button->setMenu(advanced);
+  core_toolbar_->addWidget(more_button);
 
-  // addAction churn can drop the extension button's icon; (re-)apply the chevron
-  // glyph so the overflow control stays visible when the row is too narrow.
+  // Existing mode-change code normalises the separators on tool_toolbar_.
+  // It now points at the sole, visible toolbar rather than a giant second row.
+  tool_toolbar_ = core_toolbar_;
   if (auto* extension =
-          tool_toolbar_->findChild<QToolButton*>(QStringLiteral("qt_toolbar_ext_button"))) {
+          core_toolbar_->findChild<QToolButton*>(QStringLiteral("qt_toolbar_ext_button"))) {
     extension->setIcon(Icons::get(QStringLiteral("chevrons-right")));
-    extension->setToolTip(tr("More tools"));
+    extension->setToolTip(tr("Pozostałe polecenia"));
   }
 }
 
@@ -1904,6 +1937,8 @@ void MainWindow::update_tool_options() {
   for (QAction* option : brush_option_actions_) {
     option->setVisible(terrain_brush);
   }
+  options_bar_->setVisible(create_road || active == actions_->tool_actor_place ||
+                           tool_manager_.active_id() == ToolId::Route || terrain_brush);
 }
 
 void MainWindow::build_status_bar() {
@@ -2943,6 +2978,16 @@ void MainWindow::start_tour() {
                   tour_overlay_->mapFromGlobal(widget->mapToGlobal(QPoint(0, 0)));
               return {top_left, widget->size()};
             }
+          }
+          // Popup widgets such as Dodaj are QWidgetActions, not normal
+          // registry actions. Match their actual visible button labels.
+          for (QToolButton* button :
+               bar->findChildren<QToolButton*>(QString(), Qt::FindDirectChildrenOnly)) {
+            if (button->text() != key || !button->isVisible()) {
+              continue;
+            }
+            return {tour_overlay_->mapFromGlobal(button->mapToGlobal(QPoint(0, 0))),
+                    button->size()};
           }
         }
         return {};

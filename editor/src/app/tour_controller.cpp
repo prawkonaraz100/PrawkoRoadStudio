@@ -63,26 +63,26 @@ void TourController::skip() {
 
 std::vector<TourStep> default_tour_steps() {
   return {
-      TourStep{QObject::tr("Draw a road"),
-               QObject::tr("Pick the Road tool, then click to drop waypoints and press Enter. "
-                           "Roads are smooth clothoids — the geometry stays drivable."),
-               QStringLiteral("Road")},
-      TourStep{QObject::tr("Drag in an intersection"),
-               QObject::tr("Open the Library and drag a T- or X-intersection onto the canvas to "
-                           "drop a ready-made junction."),
-               QStringLiteral("Library")},
-      TourStep{QObject::tr("Plant a tree"),
-               QObject::tr("Still in the Library, drag a tree from Props onto a road — it snaps "
-                           "alongside as an OpenDRIVE object."),
-               QStringLiteral("Library")},
-      TourStep{QObject::tr("Shape the elevation"),
-               QObject::tr("The Elevation tool opens the Profile dock: drag the height handles, "
-                           "or cross one road over another for an overpass."),
-               QStringLiteral("Elevation")},
-      TourStep{QObject::tr("Export for a simulator"),
-               QObject::tr("Export the scene as glTF (or USD) — road surfaces, junctions, and "
-                           "props travel with it. Save keeps the editable .xodr."),
-               QStringLiteral("Export")},
+      TourStep{QObject::tr("Narysuj drogę"),
+               QObject::tr("Wybierz Droga, wskaż punkty przebiegu na planszy i naciśnij Enter. "
+                           "Możesz też przeciągnąć gotową drogę z naszej biblioteki."),
+               QStringLiteral("Droga")},
+      TourStep{QObject::tr("Trzy kategorie Prawko"),
+               QObject::tr("Kliknij Dodaj: wybierz Gotowe drogi, Krawężniki i chodniki albo "
+                           "Uczestnicy ruchu. Przeciągnij komponent z biblioteki na planszę."),
+               QStringLiteral("Dodaj")},
+      TourStep{QObject::tr("Ustaw pozycję"),
+               QObject::tr("Zaznacz element kliknięciem, a następnie przesuń go myszą. "
+                           "Cofnij przywraca ostatnią zmianę."),
+               QStringLiteral("Przesuń")},
+      TourStep{QObject::tr("Zaplanuj ruch"),
+               QObject::tr("Użyj trybu Scenariusz i narzędzia Trasa, aby nadać pojazdowi "
+                           "lub pieszemu ruch na planszy."),
+               QStringLiteral("Scenariusz")},
+      TourStep{QObject::tr("Uruchom scenę"),
+               QObject::tr("Po dodaniu uczestników i ich tras kliknij Symulacja, "
+                           "aby obliczyć przebieg i odtworzyć ruch."),
+               QStringLiteral("Symulacja")},
   };
 }
 

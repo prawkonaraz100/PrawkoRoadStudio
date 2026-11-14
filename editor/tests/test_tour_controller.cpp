@@ -101,8 +101,8 @@ TEST(TourController, DefaultTourHasFiveStepsTargetingRealActions) {
     EXPECT_FALSE(step.body.isEmpty());
     EXPECT_FALSE(step.target.isEmpty());
   }
-  EXPECT_EQ(steps.front().target, "Road");
-  EXPECT_EQ(steps.back().target, "Export");
+  EXPECT_EQ(steps.front().target, "Droga");
+  EXPECT_EQ(steps.back().target, "Symulacja");
 }
 
 } // namespace
