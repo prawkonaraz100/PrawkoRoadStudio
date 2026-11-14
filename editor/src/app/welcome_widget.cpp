@@ -29,7 +29,6 @@
 #include <QPushButton>
 #include <QStandardPaths>
 #include <QVBoxLayout>
-#include <array>
 
 #include "app/icons.hpp"
 #include "app/settings.hpp"
@@ -158,8 +157,8 @@ WelcomeWidget::WelcomeWidget(Settings& settings, QWidget* parent)
   intro->addStretch(1);
   outer->addLayout(intro, 0);
 
-  // Right column: the active project (when one is open), recent projects,
-  // recent scenes, then samples.
+  // Right column: the active project, recent projects and recent scenes.
+  // Historical sample scenes are test-only; new projects start clean.
   auto* content = new QVBoxLayout;
   content->setSpacing(8);
 
@@ -209,22 +208,8 @@ WelcomeWidget::WelcomeWidget(Settings& settings, QWidget* parent)
   });
   content->addWidget(recent_section_, 3);
 
-  samples_section_ = new QWidget(this);
-  auto* samples_layout = new QVBoxLayout(samples_section_);
-  samples_layout->setContentsMargins(0, 0, 0, 0);
-  samples_layout->setSpacing(8);
-  samples_layout->addWidget(make_section_label(tr("Sample scenes"), samples_section_));
-  samples_list_ = make_scene_list(samples_section_);
-  samples_list_->setObjectName(QStringLiteral("welcomeSamplesList"));
-  samples_layout->addWidget(samples_list_);
-  connect(samples_list_, &QListWidget::itemClicked, this, [this](const QListWidgetItem* item) {
-    emit file_requested(item->data(Qt::UserRole).toString());
-  });
-  content->addWidget(samples_section_, 2);
-
   outer->addLayout(content, 1);
 
-  populate_samples();
   refresh();
 }
 
@@ -300,35 +285,6 @@ void WelcomeWidget::populate_active_project() {
   project_section_->setVisible(true);
 }
 
-void WelcomeWidget::populate_samples() {
-  samples_list_->clear();
-  const std::filesystem::path dir = find_samples_dir();
-  if (dir.empty()) {
-    samples_section_->setVisible(false);
-    return;
-  }
-  // Curated subset with human names — the folder also holds test-oriented
-  // fixtures that would read as noise here.
-  const std::array<std::pair<const char*, const char*>, 6> curated{{
-      {"prawko_crosswalk_clear", "Przejście dla pieszych — dobra widoczność"},
-      {"prawko_crosswalk_obstructed", "Przejście dla pieszych — zasłonięty pieszy"},
-      {"crossing", "4-arm crossing"},
-      {"t_junction", "T-junction"},
-      {"curved_road", "Curved road"},
-      {"overpass", "Overpass"},
-  }};
-  const QString dir_path = QString::fromStdString(dir.string());
-  for (const auto& [stem, name] : curated) {
-    const QString file = dir_path + QStringLiteral("/%1.xodr").arg(QLatin1String(stem));
-    if (!QFileInfo::exists(file)) {
-      continue;
-    }
-    const QString thumb = dir_path + QStringLiteral("/thumbnails/%1.png").arg(QLatin1String(stem));
-    samples_list_->addItem(make_scene_item(tr(name), file, thumb));
-  }
-  samples_section_->setVisible(samples_list_->count() > 0);
-}
-
 void WelcomeWidget::showEvent(QShowEvent* event) {
   refresh();
   QWidget::showEvent(event);
@@ -348,23 +304,6 @@ QString WelcomeWidget::thumbnail_path_for(const QString& file_path) {
     dir.mkpath(QStringLiteral("."));
   }
   return dir.filePath(key + QStringLiteral(".png"));
-}
-
-std::filesystem::path find_samples_dir() {
-  // Dev builds: the binary sits inside build/<preset>/editor(/*.app/…);
-  // walk up until the repo root's assets/samples appears. Bundles later
-  // relocate the samples next to the binary — the first hit wins either way.
-  QDir probe(QCoreApplication::applicationDirPath());
-  for (int depth = 0; depth < 8; ++depth) {
-    const QString candidate = probe.filePath(QStringLiteral("assets/samples"));
-    if (QFileInfo::exists(candidate)) {
-      return std::filesystem::path(candidate.toStdString());
-    }
-    if (!probe.cdUp()) {
-      break;
-    }
-  }
-  return {};
 }
 
 } // namespace roadmaker::editor

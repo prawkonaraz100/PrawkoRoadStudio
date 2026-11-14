@@ -177,7 +177,7 @@ TEST(LibraryPanel, KeepsTheCatalogueGridAndGainsTheFilesPane) {
 
   // The catalogue half is untouched: same grid, same search box, same combo.
   ASSERT_NE(panel.view()->model(), nullptr);
-  EXPECT_EQ(panel.view()->model()->rowCount(), 71);
+  EXPECT_EQ(panel.view()->model()->rowCount(), 18); // 12 Prawko items + 6 actors
   EXPECT_NE(panel.findChild<QLineEdit*>(QStringLiteral("library_search")), nullptr);
   EXPECT_NE(panel.category_combo(), nullptr);
 
@@ -247,16 +247,14 @@ TEST(LibraryPanel, TheCategoryComboLearnsCategoriesAnOverlayIntroduces) {
   ASSERT_TRUE(overlay.has_value());
   model.set_overlay(*overlay);
 
-  const int added = panel.category_combo()->findData(QStringLiteral("Project assets"));
-  ASSERT_GE(added, 0);
-  panel.category_combo()->setCurrentIndex(added);
-  EXPECT_EQ(panel.view()->model()->rowCount(), 1);
-
-  // A filter on a category that leaves with its project must not survive as a
-  // filter that hides everything.
+  // Project assets are retained in the underlying model for compatibility,
+  // but must never reappear in Prawko's curated category menu or grid.
+  EXPECT_NE(model.item_for_key(QStringLiteral("project.special")), nullptr);
+  EXPECT_EQ(panel.category_combo()->findData(QStringLiteral("Project assets")), -1);
+  EXPECT_EQ(panel.view()->model()->rowCount(), 6); // actors remain visible
   model.clear_overlay();
   EXPECT_EQ(panel.category_combo()->findData(QStringLiteral("Project assets")), -1);
-  EXPECT_EQ(panel.view()->model()->rowCount(), 1); // the built-in Pine, unfiltered
+  EXPECT_EQ(panel.view()->model()->rowCount(), 6); // base "Props" is hidden; actors remain
 }
 
 } // namespace

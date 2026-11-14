@@ -52,7 +52,7 @@ import math
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-OBJ_DIR = REPO_ROOT / "assets" / "library" / "props"
+OBJ_DIR = REPO_ROOT / "core" / "tests" / "fixtures" / "legacy_prop_sources"
 GEN_CPP = REPO_ROOT / "core" / "src" / "assets" / "prop_meshes.gen.cpp"
 
 Vec3 = tuple[float, float, float]

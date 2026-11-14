@@ -18,8 +18,8 @@
 
 #include <QComboBox>
 #include <QIcon>
-#include <QLineEdit>
 #include <QLabel>
+#include <QLineEdit>
 #include <QListView>
 #include <QSignalSpy>
 #include <QTest>
@@ -36,21 +36,20 @@ LibraryListModel& populated_model() {
   static LibraryListModel model;
   const auto manifest =
       LibraryManifest::load(std::filesystem::path(RM_ASSETS_DIR) / "library" / "manifest.json");
-  if (manifest.has_value()) {
+  if (manifest.has_value())
     model.set_manifest(*manifest);
-  }
   return model;
 }
 
-TEST(LibraryPanel, RoadStyleHasActionableHelpAndRealDoubleClick) {
+TEST(LibraryPanel, RoadStyleHasActionableHelpAndDoubleClick) {
   LibraryPanel panel(populated_model());
   panel.resize(420, 560);
   panel.show();
   panel.focus_category(QStringLiteral("Prawko | Krawężniki i chodniki"));
-  auto* message = panel.findChild<QLabel*>(QStringLiteral("library_drag_instructions"));
-  ASSERT_NE(message, nullptr);
-  EXPECT_TRUE(message->text().contains(QStringLiteral("2×")));
-  EXPECT_TRUE(message->text().contains(QStringLiteral("zaznaczoną drogę")));
+  auto* instructions = panel.findChild<QLabel*>(QStringLiteral("library_drag_instructions"));
+  ASSERT_NE(instructions, nullptr);
+  EXPECT_TRUE(instructions->text().contains(QStringLiteral("2×")));
+  EXPECT_TRUE(instructions->text().contains(QStringLiteral("zaznaczoną drogę")));
   const QModelIndex first = panel.view()->model()->index(0, 0);
   ASSERT_TRUE(first.isValid());
   QSignalSpy activated(&panel, &LibraryPanel::asset_activated);
@@ -58,7 +57,6 @@ TEST(LibraryPanel, RoadStyleHasActionableHelpAndRealDoubleClick) {
   QApplication::processEvents();
   const QRect tile = panel.view()->visualRect(first);
   ASSERT_TRUE(tile.isValid());
-  // Qt's item view needs an initial click to establish the pressed index.
   QTest::mouseClick(panel.view()->viewport(), Qt::LeftButton, Qt::NoModifier, tile.center());
   QTest::mouseDClick(panel.view()->viewport(), Qt::LeftButton, Qt::NoModifier, tile.center());
   ASSERT_EQ(activated.count(), 1);
@@ -66,175 +64,147 @@ TEST(LibraryPanel, RoadStyleHasActionableHelpAndRealDoubleClick) {
             panel.view()->model()->data(first, LibraryListModel::KeyRole).toString());
 
   panel.focus_category(QStringLiteral("Prawko | Gotowe drogi"));
-  EXPECT_TRUE(message->text().contains(QStringLiteral("Enter")));
-  panel.focus_category(QStringLiteral("Materials"));
-  EXPECT_TRUE(message->text().contains(QStringLiteral("pas")));
+  EXPECT_TRUE(instructions->text().contains(QStringLiteral("Enter")));
+  panel.focus_category(QStringLiteral("Materials")); // hidden, no longer navigable
+  EXPECT_TRUE(instructions->text().contains(QStringLiteral("Enter")));
 }
 
-TEST(LibraryPanel, ShowsEveryCatalogueItem) {
+TEST(LibraryPanel, CatalogueContainsOnlyEighteenPrawkoItems) {
   LibraryPanel panel(populated_model());
-  ASSERT_NE(panel.view()->model(), nullptr);
-  EXPECT_EQ(panel.view()->model()->rowCount(),
-            71); // 10 templates + 10 styles + T/X + 10 props (5 trees/shrub + 2 streetlights + 3
-                 // buildings) + 15 signals (the whole shipped sign catalogue, #414)
-                 // + 9 markings + 5 materials + 1 crosswalk + 6 stencils +
-                 // 2 prop sets + 1 prop assembly
-  // The grid gives every item an icon (the proxy prefers the bundled thumbnail).
-  const QModelIndex first = panel.view()->model()->index(0, 0);
-  EXPECT_FALSE(panel.view()->model()->data(first, Qt::DecorationRole).isNull());
-}
-
-TEST(LibraryPanel, SearchFiltersByLabel) {
-  LibraryPanel panel(populated_model());
-  auto* search = panel.findChild<QLineEdit*>(QStringLiteral("library_search"));
-  ASSERT_NE(search, nullptr);
-
-  search->setText(QStringLiteral("freeway"));
-  EXPECT_EQ(panel.view()->model()->rowCount(), 2); // the freeway template + its style
-
-  search->setText(QStringLiteral("intersection"));
-  EXPECT_EQ(panel.view()->model()->rowCount(), 2); // T + X
-
-  search->setText(QStringLiteral("tree"));
-  EXPECT_EQ(panel.view()->model()->rowCount(),
-            10); // pine/oak/birch/poplar + "Mixed trees" prop set + the two
-                 // "sTREEtlight" props + the two "Local sTREEt" road rows +
-                 // the "sTREEt name (D3-1)" sign (substring match)
-
-  search->setText(QStringLiteral("Traffic"));
-  EXPECT_EQ(panel.view()->model()->rowCount(), 2); // the traffic light and the
-                                                   // mast-arm signal assembly;
-                                                   // the sign pack labels its
-                                                   // entries by MUTCD
-                                                   // designation (#414)
-
-  search->clear();
-  EXPECT_EQ(panel.view()->model()->rowCount(), 71);
-}
-
-TEST(LibraryPanel, CategoryComboFiltersGrid) {
-  LibraryPanel panel(populated_model());
+  const QAbstractItemModel* visible = panel.view()->model();
+  ASSERT_NE(visible, nullptr);
+  ASSERT_EQ(visible->rowCount(), 18); // 6 roads + 6 surface styles + 6 traffic actors
   auto* combo = panel.category_combo();
   ASSERT_NE(combo, nullptr);
-  // Index 0 is "All categories" (empty userData); one entry per distinct
-  // category follows.
+  ASSERT_EQ(combo->count(), 4);
   EXPECT_TRUE(combo->itemData(0).toString().isEmpty());
-  EXPECT_GT(combo->count(), 1);
-
-  const int props = combo->findData(QStringLiteral("Props"));
-  ASSERT_GE(props, 0);
-  combo->setCurrentIndex(props);
-  const int shown = panel.view()->model()->rowCount();
-  EXPECT_GT(shown, 0);
-  EXPECT_LT(shown, 44); // a strict subset
-  for (int row = 0; row < shown; ++row) {
-    const QModelIndex index = panel.view()->model()->index(row, 0);
-    EXPECT_EQ(panel.view()->model()->data(index, LibraryListModel::CategoryRole).toString(),
-              QStringLiteral("Props"));
+  EXPECT_EQ(combo->itemData(1).toString(), QStringLiteral("Prawko | Gotowe drogi"));
+  EXPECT_EQ(combo->itemData(2).toString(), QStringLiteral("Prawko | Krawężniki i chodniki"));
+  EXPECT_EQ(combo->itemData(3).toString(), kScenarioActorCategory);
+  for (int i = 0; i < visible->rowCount(); ++i) {
+    const QModelIndex index = visible->index(i, 0);
+    const QString category = visible->data(index, LibraryListModel::CategoryRole).toString();
+    const QString key = visible->data(index, LibraryListModel::KeyRole).toString();
+    EXPECT_TRUE(category == QStringLiteral("Prawko | Gotowe drogi") ||
+                category == QStringLiteral("Prawko | Krawężniki i chodniki") ||
+                category == kScenarioActorCategory);
+    EXPECT_TRUE(key.startsWith(QStringLiteral("road.prawko.")) ||
+                key.startsWith(QStringLiteral("style.prawko.")) ||
+                key.startsWith(QStringLiteral("actor.")));
+    const QVariant decoration = visible->data(index, Qt::DecorationRole);
+    EXPECT_FALSE(decoration.isNull());
   }
-
-  combo->setCurrentIndex(0); // back to All
-  EXPECT_EQ(panel.view()->model()->rowCount(), 71);
+  EXPECT_EQ(populated_model().item_for_key(QStringLiteral("road.freeway")), nullptr);
+  EXPECT_EQ(populated_model().item_for_key(QStringLiteral("prop.tree.pine")), nullptr);
 }
 
-TEST(LibraryPanel, CategoryFilterCombinesWithSearch) {
+TEST(LibraryPanel, SearchCannotRevealObsoleteCategories) {
+  LibraryPanel panel(populated_model());
+  auto* search = panel.findChild<QLineEdit*>(QStringLiteral("library_search"));
+  ASSERT_NE(search, nullptr);
+  for (const QString& query : {QStringLiteral("freeway"),
+                               QStringLiteral("intersection"),
+                               QStringLiteral("pine"),
+                               QStringLiteral("Traffic light")}) {
+    search->setText(query);
+    EXPECT_EQ(panel.view()->model()->rowCount(), 0) << query.toStdString();
+  }
+  search->setText(QStringLiteral("Samochód"));
+  EXPECT_EQ(panel.view()->model()->rowCount(), 1);
+  search->clear();
+  EXPECT_EQ(panel.view()->model()->rowCount(), 18);
+}
+
+TEST(LibraryPanel, CategoriesFilterTheGridAndCombineWithSearch) {
   LibraryPanel panel(populated_model());
   auto* combo = panel.category_combo();
   auto* search = panel.findChild<QLineEdit*>(QStringLiteral("library_search"));
   ASSERT_NE(combo, nullptr);
   ASSERT_NE(search, nullptr);
-
-  combo->setCurrentIndex(combo->findData(QStringLiteral("Props")));
-  search->setText(QStringLiteral("pine")); // a Props item
-  EXPECT_EQ(panel.view()->model()->rowCount(), 1);
-  search->setText(QStringLiteral("asphalt")); // a Materials item — filtered out by category
+  for (int index = 1; index < 4; ++index) {
+    combo->setCurrentIndex(index);
+    EXPECT_EQ(panel.view()->model()->rowCount(), 6);
+    for (int row = 0; row < 6; ++row) {
+      EXPECT_EQ(panel.view()
+                    ->model()
+                    ->data(panel.view()->model()->index(row, 0), LibraryListModel::CategoryRole)
+                    .toString(),
+                combo->currentData().toString());
+    }
+  }
+  combo->setCurrentIndex(1);
+  search->setText(QStringLiteral("chodnik"));
+  EXPECT_GT(panel.view()->model()->rowCount(), 0);
+  search->setText(QStringLiteral("Pieszy"));
   EXPECT_EQ(panel.view()->model()->rowCount(), 0);
+  combo->setCurrentIndex(3);
+  EXPECT_EQ(panel.view()->model()->rowCount(), 1);
+  combo->setCurrentIndex(0);
+  search->clear();
+  EXPECT_EQ(panel.view()->model()->rowCount(), 18);
 }
 
-TEST(LibraryPanel, SelectingAnItemEmitsCurrentChanged) {
+TEST(LibraryPanel, SelectingAVisibleItemEmitsCurrentChanged) {
   LibraryPanel panel(populated_model());
   QSignalSpy spy(&panel, &LibraryPanel::asset_current_changed);
   ASSERT_TRUE(spy.isValid());
-
   const QModelIndex first = panel.view()->model()->index(0, 0);
   panel.view()->setCurrentIndex(first);
   ASSERT_EQ(spy.count(), 1);
-  EXPECT_FALSE(spy.at(0).at(0).toString().isEmpty());
+  EXPECT_TRUE(spy.at(0).at(0).toString().startsWith(QStringLiteral("road.prawko.")));
 }
 
-// A prop (Kind::Tree) selection additionally opens the Attributes-pane asset
-// editor (p6-s11 widened the gate beyond Crosswalk/PropSet).
-TEST(LibraryPanel, SelectingAPropItemEmitsAssetSelected) {
+TEST(LibraryPanel, FocusCategoryClearsSearchAndHidesOldCategories) {
   LibraryPanel panel(populated_model());
   auto* search = panel.findChild<QLineEdit*>(QStringLiteral("library_search"));
   ASSERT_NE(search, nullptr);
-  search->setText(QStringLiteral("pine")); // narrows to the single pine prop
+  search->setText(QStringLiteral("Samochód"));
   ASSERT_EQ(panel.view()->model()->rowCount(), 1);
-
-  QSignalSpy spy(&panel, &LibraryPanel::asset_selected);
-  ASSERT_TRUE(spy.isValid());
-  panel.view()->setCurrentIndex(panel.view()->model()->index(0, 0));
-  ASSERT_EQ(spy.count(), 1);
-  EXPECT_EQ(spy.at(0).at(0).toString(), QStringLiteral("prop.tree.pine"));
-}
-
-// An engaged Attributes-pane slot asks the Library to show its category
-// (P1/GW-3): the first item of that category becomes current.
-TEST(LibraryPanel, FocusCategorySelectsThatCategorysFirstItem) {
-  LibraryPanel panel(populated_model());
-  panel.focus_category(QStringLiteral("Props"));
-
-  const QModelIndex current = panel.view()->currentIndex();
-  ASSERT_TRUE(current.isValid());
-  EXPECT_EQ(panel.view()->model()->data(current, LibraryListModel::CategoryRole).toString(),
-            QStringLiteral("Props"));
-}
-
-// A stale search must not hide the category the slot is sending us to.
-TEST(LibraryPanel, FocusCategoryClearsAFilterThatWouldHideIt) {
-  LibraryPanel panel(populated_model());
-  auto* search = panel.findChild<QLineEdit*>(QStringLiteral("library_search"));
-  ASSERT_NE(search, nullptr);
-  search->setText(QStringLiteral("freeway")); // road rows only — no props visible
-  ASSERT_EQ(panel.view()->model()->rowCount(), 2);
-
-  panel.focus_category(QStringLiteral("Props"));
-
+  panel.focus_category(QStringLiteral("Prawko | Gotowe drogi"));
   EXPECT_TRUE(search->text().isEmpty());
-  EXPECT_EQ(panel.view()->model()->rowCount(), 7); // only the Props category after focus
+  EXPECT_EQ(panel.view()->model()->rowCount(), 6);
   ASSERT_TRUE(panel.view()->currentIndex().isValid());
   EXPECT_EQ(panel.view()
                 ->model()
                 ->data(panel.view()->currentIndex(), LibraryListModel::CategoryRole)
                 .toString(),
-            QStringLiteral("Props"));
+            QStringLiteral("Prawko | Gotowe drogi"));
+  panel.focus_category(QStringLiteral("Props"));
+  EXPECT_EQ(panel.view()->model()->rowCount(), 6);
+  EXPECT_EQ(panel.category_combo()->currentData().toString(),
+            QStringLiteral("Prawko | Gotowe drogi"));
 }
 
-TEST(LibraryPanel, FocusCategoryLeavesAnUnknownCategoryAlone) {
-  LibraryPanel panel(populated_model());
-  panel.focus_category(QStringLiteral("Nonexistent"));
-  EXPECT_FALSE(panel.view()->currentIndex().isValid());
-}
-
-// An overlay item with no thumbnail has a null source decoration; the proxy
-// falls back to a themed glyph so the grid still shows an icon (p6-s2).
-TEST(LibraryPanel, FallsBackToAThemedGlyphWhenAnItemHasNoThumbnail) {
+TEST(LibraryPanel, LegacyProjectOverlayCannotLeakIntoCuratedPalette) {
   LibraryListModel model;
+  const auto builtin =
+      LibraryManifest::load(std::filesystem::path(RM_ASSETS_DIR) / "library" / "manifest.json");
+  ASSERT_TRUE(builtin.has_value());
+  model.set_manifest(*builtin);
   const auto overlay = LibraryManifest::parse(QByteArray(R"({
     "manifest_version": 1,
-    "items": [{"key": "project.nothumb", "label": "No thumb", "category": "Project assets",
-               "create": {"kind": "material", "material": "gravel"}}]
+    "items": [{"key":"project.old","label":"Old signal","category":"Signals",
+               "create":{"kind":"signal","signal":"us.r1_1"}}]
   })"));
   ASSERT_TRUE(overlay.has_value());
   model.set_overlay(*overlay, QString());
-  // Source model: no decoration (null path).
-  EXPECT_FALSE(model.data(model.index(0, 0), Qt::DecorationRole).isValid());
-
+  EXPECT_NE(model.item_for_key(QStringLiteral("project.old")), nullptr);
   LibraryPanel panel(model);
-  const QModelIndex proxied = panel.view()->model()->index(0, 0);
-  // Proxy: a glyph fills in — a valid, non-null decoration.
-  const QVariant decoration = panel.view()->model()->data(proxied, Qt::DecorationRole);
-  ASSERT_TRUE(decoration.isValid());
+  EXPECT_EQ(panel.view()->model()->rowCount(), 18);
+  EXPECT_EQ(panel.view()->contextMenuPolicy(), Qt::NoContextMenu);
+  auto* search = panel.findChild<QLineEdit*>(QStringLiteral("library_search"));
+  ASSERT_NE(search, nullptr);
+  search->setText(QStringLiteral("Old signal"));
+  EXPECT_EQ(panel.view()->model()->rowCount(), 0);
+}
+
+TEST(LibraryPanel, ActorWithoutThumbnailStillHasAGlyph) {
+  LibraryPanel panel(populated_model());
+  panel.focus_category(kScenarioActorCategory);
+  ASSERT_EQ(panel.view()->model()->rowCount(), 6);
+  const QModelIndex first = panel.view()->model()->index(0, 0);
+  const QVariant decoration = panel.view()->model()->data(first, Qt::DecorationRole);
+  EXPECT_TRUE(decoration.isValid());
   EXPECT_FALSE(decoration.value<QIcon>().isNull());
 }
 

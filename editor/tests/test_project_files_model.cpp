@@ -49,7 +49,7 @@ void write_file(const std::filesystem::path& path, const std::string& contents) 
 /// tree is guaranteed to have, and they are what the editor decodes for real.
 void copy_png(const std::filesystem::path& destination) {
   const std::filesystem::path source =
-      std::filesystem::path(RM_ASSETS_DIR) / "library" / "thumbnails" / "assembly_t.png";
+      std::filesystem::path(RM_ASSETS_DIR) / "library" / "thumbnails" / "road_prawko_urban.png";
   std::filesystem::create_directories(destination.parent_path());
   std::error_code ec;
   std::filesystem::copy_file(

@@ -1,130 +1,52 @@
-# PrawkoRoadStudio — kontynuacja projektu
+# PrawkoRoadStudio
 
-**Nowy agent / nowa rozmowa?** Zacznij od [`HANDOFF.md`](HANDOFF.md), a następnie przeczytaj [`AGENTS.md`](AGENTS.md) i uruchom `scripts/prawko-resume.ps1`. Plik HANDOFF jest aktualizowany po każdej zakończonej sesji i wskazuje ostatni potwierdzony stan, następne zadanie oraz testy. Poniżej pozostaje dokumentacja bazowego projektu RoadMaker.
+**Edytor scen drogowych PrawkoNaRaz** — tworzenie dróg, chodników i scenariuszy ruchu w jednym widoku 3D, z zapisem OpenDRIVE (XODR) i OpenSCENARIO (XOSC).
 
----
+> Kontynuujesz pracę po przerwaniu rozmowy? Przeczytaj [HANDOFF.md](HANDOFF.md) i [AGENTS.md](AGENTS.md), a następnie uruchom `scripts/prawko-resume.ps1`. Tylko potwierdzony kod i testy oznaczamy jako ukończone.
 
-<img src="https://cdn.robomous.ai/public-images/robomous-banner.svg" alt="Robomous.ai" width=300 />
+## Czysta biblioteka Prawko
 
--------
+Aktualnie w bibliotece udostępnione są wyłącznie trzy kategorie:
 
-# RoadMaker
+| Kategoria | Zawartość |
+|---|---|
+| **Prawko \| Gotowe drogi** | 6 własnych profili dróg |
+| **Prawko \| Krawężniki i chodniki** | 6 własnych wariantów nawierzchni, krawężników i chodników |
+| **Uczestnicy ruchu** | samochód, ciężarówka, autobus, motocykl, rower, pieszy |
 
-[![CI](https://github.com/robomous/roadmaker/actions/workflows/ci.yml/badge.svg)](https://github.com/robomous/roadmaker/actions/workflows/ci.yml)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+**Razem: 18 elementów.** Pozostałe kategorie z bazowego RoadMaker zostały usunięte z aktywnego manifestu i zasobów graficznych palety. Nowe rodzaje obiektów będą tworzone i dodawane stopniowo jako własne komponenty PrawkoNaRaz.
 
-**RoadMaker** is an open source (Apache-2.0) road-network authoring toolkit for
-autonomous-driving simulation, developed by [Robomous](https://robomous.ai).
-It authors clothoid-based road geometry with full lane semantics, reads and
-writes [ASAM OpenDRIVE](https://www.asam.net/standards/detail/opendrive/),
-and generates simulation-ready 3D meshes.
+Nową scenę rozpoczynamy przez **New Scene**, bez wczytywania przykładowego skrzyżowania. Aby dodać drugą lub trzecią drogę, przeciągamy wybrany szablon na scenę, wskazujemy kolejny punkt i zatwierdzamy **Enter**. Zaznaczonego uczestnika ruchu można przesunąć w **Select** lub **Move**.
 
-The core value is **geometric and standards correctness**: exported OpenDRIVE
-validates, junctions carry coherent lane logic, and meshes are watertight and
-robust. A C++20 kernel does the work; a Qt 6 Widgets editor and a Python
-package sit on top ([architecture](docs/architecture/overview.md)).
+## Projekt i pliki
 
-![The RoadMaker editor: an urban intersection — a signalized four-arm
-junction with crosswalks, stop lines, lane arrows, traffic lights, and street
-trees — in the graphite-amber theme with the Library catalogue
-open](docs/user-guide/reference/img/gs1_hero.png)
+- `editor/` — aplikacja Qt/C++20, narzędzia myszy i biblioteka.
+- `core/` — geometria, formaty OpenDRIVE/OpenSCENARIO, eksporty i testy silnika.
+- `agent/` — automatyzacja scen i polecenia agenta (osobne repozytorium Git).
+- `assets/library/manifest.json` — **jedyna aktywna lista wbudowanych komponentów**.
+- `core/tests/fixtures/legacy_scenes/`, `legacy_prop_sources/`, `legacy_sign_sources/` — historyczne dane do regresji formatów i geometrii, **nie są zasobami biblioteki ani przykładami na ekranie startowym**.
+- `archive/` — lokalne raporty, zapisy odbiorów i kopie bezpieczeństwa (poza Git).
 
-Drag a road assembly, an intersection, or a prop straight from the **Library**
-onto the scene — every drop is one undoable edit:
+Testowe sceny historyczne wydzielono, aby zachować pokrycie testami bez zaśmiecania projektu użytkownika. Lokalne stare projekty scenariuszy usunięto z `agent/projects/` po zweryfikowanej kopii ZIP.
 
-![Placing trees along a junction by dragging them from the Library](docs/user-guide/reference/img/workflow.gif)
+## Uruchomienie (Windows)
 
-Prebuilt editor packages (DMG / NSIS installer / AppImage) and Python wheels
-will ship with the first release, **v0.1.0** — published when the
-[Road to Parity roadmap](docs/roadmap/README.md) is complete. Until then,
-`main` carries the pre-release version **0.0.1** and you build from source
-below.
+Po przygotowaniu lokalnego środowiska i skompilowaniu projektu:
 
-## Quickstart (from source)
-
-```sh
-git clone https://github.com/robomous/roadmaker.git
-cd roadmaker
-python3 scripts/setup_qt.py        # one-time: provisions Qt into ./.qt/
-cmake --preset dev-macos           # or dev-linux / dev-windows
-cmake --build --preset dev-macos
-ctest --preset dev-macos
-./build/dev-macos/editor/roadmaker-editor.app/Contents/MacOS/roadmaker-editor \
-    assets/samples/straight_road.xodr
+```powershell
+cd F:\PrawkoRoadStudio
+powershell -ExecutionPolicy Bypass -File scripts\prawko-resume.ps1 -Verify
+powershell -ExecutionPolicy Bypass -File scripts\prawko-build-win.ps1 -Target all -Jobs 3
+.\build\dev-windows\editor\roadmaker-editor.exe
 ```
 
-Details, kernel-only builds, and troubleshooting:
-[building](docs/getting-started/building.md) ·
-[running](docs/getting-started/running.md) ·
-[Python quickstart](docs/getting-started/running.md#python-package)
+Nie nadpisuj niezapisanej sceny i nie uruchamiaj jednocześnie dwóch agentów edytujących te same pliki. Wdrożenia są wykonywane w gałęzi roboczej i zatwierdzane po zielonym Quality Gate.
 
-## Documentation
+## Dokumentacja i pochodzenie
 
-New to authoring? The [user guide](docs/user-guide/index.md) walks through the
-editor tool by tool.
+- [HANDOFF.md](HANDOFF.md) — potwierdzony stan, testy, otwarte zadania i kolejny krok.
+- [AGENTS.md](AGENTS.md) — zasady bezpieczeństwa zmian, kontroli jakości i Git.
+- [Opis studia i operacji](docs/PRAWKO-ROAD-STUDIO.md).
+- [Architektura silnika](docs/architecture/overview.md).
 
-Everything lives under [`docs/`](docs/README.md): getting started,
-the [user guide](docs/user-guide/index.md),
-[contributing](docs/contributing/workflow.md),
-[standards](docs/standards/cpp-style.md),
-[architecture](docs/architecture/overview.md),
-[domain conventions](docs/domain/opendrive.md), design docs, and decision
-records.
-
-## Export formats
-
-RoadMaker tessellates a network into simulation-ready 3D meshes and writes:
-
-- **glTF 2.0** (`.glb`) — binary, self-contained, always available.
-- **OpenUSD** (`.usda`) — ASCII only, in editor/optional builds configured with
-  `-DRM_BUILD_USD=ON` (prebuilt release packages include it; Python wheels ship
-  it off). `.usdc`/`.usdz` **crate** output is intentionally unsupported —
-  every USD consumer (usdview, Omniverse/Isaac Sim, Blender) reads `.usda`. See
-  [docs/design/m2/04_usd_export.md](docs/design/m2/04_usd_export.md).
-
-## Roadmap
-
-RoadMaker follows the **"Road to Parity"** roadmap
-([docs/roadmap/README.md](docs/roadmap/README.md)): eight capability
-pillars — interaction & navigation, roads & lanes, markings, junctions &
-signals, terrain & structures, assets & props & materials, import & export,
-and scenarios — that converge on a commercial-grade editing experience.
-Acceptance is by hand-executed
-[golden workflows](docs/roadmap/golden_workflows/README.md), and day-to-day
-status lives on the public
-[project board](https://github.com/Robomous/RoadMaker/projects).
-
-**Release policy: there will be exactly one release — v0.1.0 — published
-only when every pillar is complete and the
-[release gate](docs/roadmap/README.md#release-gate) passes.** A release is
-a promise of maturity and utility, not a development checkpoint; sprints
-end with merged PRs, never with tags. Everything built from `main` reports
-version **0.0.1**; that number is reset scaffolding and does not move with
-sprints — it becomes `0.1.0` only at the release itself.
-
-### Current capabilities
-
-- ASAM OpenDRIVE 1.8/1.9 read/write/validate, clothoid geometry, watertight
-  simulation-ready meshes, structured diagnostics
-- Road-plan authoring: create/extend roads with junction formation on
-  crossings, the full lane tool suite (lane type & direction, width, add,
-  form, carve), road styles as draggable assets, enclosed-area ground
-  surfaces
-- Junction control: stop lines, locked/custom junctions (membership, merge,
-  span junctions), per-corner radius and materials, interior surface
-  control, editable maneuver roads with turn types
-- Markings: crosswalks, marking curve/point tools, arrow stencils, boundary
-  marking assets, per-instance materials
-- Props & assets: Library panel with drag-and-drop creation, four prop
-  placement tools plus prop sets, per-instance sizing persisted through
-  OpenDRIVE object dimensions
-- Editor: orbit-pivot camera with framing and cardinal views, scrub-editable
-  Attributes pane, 2D profile editor, in-app help with F1 context lookup,
-  full undo/redo, dark professional theme
-- glTF 2.0 + OpenUSD export, esmini round-trip CI gate, Python bindings
-
-## License
-
-Apache-2.0 © 2026 Robomous. Third-party dependencies are listed with their licenses
-in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md); bundled assets in
-[ASSETS_LICENSES.md](ASSETS_LICENSES.md).
+Silnik PrawkoRoadStudio wywodzi się z otwartego projektu [Robomous/RoadMaker](https://github.com/Robomous/RoadMaker). Zachowane pliki źródłowe i ich oznaczenia prawne podlegają odpowiednim warunkom [Apache 2.0](LICENSE). PrawkoNaRaz rozwija własny interfejs, geometrię i bibliotekę.

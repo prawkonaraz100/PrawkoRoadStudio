@@ -40,7 +40,7 @@ from __future__ import annotations
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SVG_DIR = REPO_ROOT / "assets" / "signs" / "us"
+SVG_DIR = REPO_ROOT / "core" / "tests" / "fixtures" / "legacy_sign_sources"
 GEN_CPP = REPO_ROOT / "core" / "src" / "assets" / "sign_symbols.gen.cpp"
 
 # Bytes per row in the emitted arrays — same shape as sign_font.gen.cpp.

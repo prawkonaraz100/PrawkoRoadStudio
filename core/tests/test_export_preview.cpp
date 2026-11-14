@@ -205,7 +205,7 @@ segment(RoadNetwork& network, const char* odr_id, double x0, double y0, double x
 ///
 /// It has to be built rather than loaded: not one committed sample carries a
 /// ground surface or a height field (`grep -l "rm:surface\|rm:terrain"
-/// assets/samples/*.xodr` matches none of the twelve), so a sample-based
+/// core/tests/fixtures/legacy_scenes/*.xodr` matches none of the twelve), so a sample-based
 /// fixture would make every omission assertion below vacuously true — which is
 /// precisely how #390 stayed invisible for two pillars.
 RoadNetwork full_channel_network() {

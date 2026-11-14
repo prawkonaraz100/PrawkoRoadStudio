@@ -48,12 +48,13 @@ TEST(LibraryManifest, ParsesTheShippedManifest) {
   const auto manifest = LibraryManifest::load(kManifest);
   ASSERT_TRUE(manifest.has_value()) << (manifest ? "" : manifest.error().message);
   EXPECT_EQ(manifest->version(), 1);
-  EXPECT_EQ(manifest->items().size(),
-            71U); // 10 road templates + 10 road styles + 2 assemblies + 10 tree props
-                  // (5 trees/shrub + 2 streetlights + 3 buildings) + 15 signals
-                  // (the whole shipped sign catalogue, #414)
-                  // + 9 markings + 5 materials + 1 crosswalk + 6 stencils + 2 prop sets
-                  // + 1 prop assembly (p6-s9, #323)
+  EXPECT_EQ(manifest->items().size(), 12U); // exactly 6 Prawko roads and 6 styles
+  for (const auto& entry : manifest->items()) {
+    EXPECT_TRUE(entry.key.startsWith(QStringLiteral("road.prawko.")) ||
+                entry.key.startsWith(QStringLiteral("style.prawko.")));
+    EXPECT_TRUE(entry.category == QStringLiteral("Prawko | Gotowe drogi") ||
+                entry.category == QStringLiteral("Prawko | Krawężniki i chodniki"));
+  }
 
   // Road templates resolve to a profile, road styles to a style name, assemblies
   // to a t/x kind, trees to a bundled prop model id, signals to a light/sign tag,
@@ -145,18 +146,17 @@ TEST(LibraryManifest, ParsesTheShippedManifest) {
       }
     }
   }
-  EXPECT_EQ(templates, 10);
-  EXPECT_EQ(styles, 10);
-  EXPECT_EQ(assemblies, 2);
-  EXPECT_EQ(trees, 10);
-  // Every catalogue entry is placeable from the Library — the pack ships whole.
-  EXPECT_EQ(std::size_t(signal_items), signs::catalog().size());
-  EXPECT_EQ(markings, 9);
-  EXPECT_EQ(materials, 5);
-  EXPECT_EQ(crosswalks, 1);
-  EXPECT_EQ(stencils, 6);
-  EXPECT_EQ(prop_sets, 2);
-  EXPECT_EQ(prop_assemblies, 1);
+  EXPECT_EQ(templates, 6);
+  EXPECT_EQ(styles, 6);
+  EXPECT_EQ(assemblies, 0);
+  EXPECT_EQ(trees, 0);
+  EXPECT_EQ(signal_items, 0);
+  EXPECT_EQ(markings, 0);
+  EXPECT_EQ(materials, 0);
+  EXPECT_EQ(crosswalks, 0);
+  EXPECT_EQ(stencils, 0);
+  EXPECT_EQ(prop_sets, 0);
+  EXPECT_EQ(prop_assemblies, 0);
 }
 
 TEST(LibraryManifest, ParsesCrosswalkCreateKind) {
@@ -475,7 +475,7 @@ TEST(LibraryListModel, OverlayTreeKeepsAResolvedQrcThumbnail) {
     "manifest_version": 1,
     "items": [
       {"key": "prop.tree.pine", "label": "Project Pine", "category": "Props",
-       "thumbnail": ":/library/thumbnails/prop_tree_pine.png",
+       "thumbnail": ":/library/thumbnails/road_prawko_urban.png",
        "create": {"kind": "tree", "model": "tree_pine", "default_scale": 2}}
     ]
   })"));
@@ -524,7 +524,7 @@ TEST(LibraryListModel, PassesQtModelSanityChecksEmptyAndPopulated) {
   const auto manifest = LibraryManifest::load(kManifest);
   ASSERT_TRUE(manifest.has_value());
   model.set_manifest(*manifest);
-  EXPECT_EQ(model.rowCount(), 71);
+  EXPECT_EQ(model.rowCount(), 12);
 }
 
 TEST(LibraryListModel, ExposesRolesAndItemLookup) {
@@ -542,7 +542,7 @@ TEST(LibraryListModel, ExposesRolesAndItemLookup) {
   ASSERT_NE(item, nullptr);
   EXPECT_EQ(model.data(first, LibraryListModel::KeyRole).toString(), item->key);
   EXPECT_EQ(model.item(-1), nullptr);
-  EXPECT_EQ(model.item(71), nullptr);
+  EXPECT_EQ(model.item(12), nullptr);
 }
 
 // The per-project overlay (p6-s1): project items merge into the built-in
@@ -618,7 +618,7 @@ TEST(LibraryListModel, SetManifestRemergesAnActiveOverlay) {
   const auto base = LibraryManifest::load(kManifest);
   ASSERT_TRUE(base.has_value());
   model.set_manifest(*base);       // the overlay survives a base reload
-  EXPECT_EQ(model.rowCount(), 72); // 71 base items + 1 overlay
+  EXPECT_EQ(model.rowCount(), 13); // 12 Prawko built-ins + 1 legacy overlay
   EXPECT_NE(model.item_for_key(QStringLiteral("project.only")), nullptr);
 }
 
@@ -724,7 +724,7 @@ TEST(LibraryListModel, ResolvesOverlayThumbnailsAgainstTheProjectDir) {
   QTemporaryDir project_dir;
   ASSERT_TRUE(project_dir.isValid());
   // Reuse a bundled PNG as the overlay's on-disk thumbnail.
-  QFile source(QStringLiteral(":/library/thumbnails/material_asphalt.png"));
+  QFile source(QStringLiteral(":/library/thumbnails/road_prawko_urban.png"));
   const QString on_disk = project_dir.filePath(QStringLiteral("custom.png"));
   ASSERT_TRUE(source.copy(on_disk));
 

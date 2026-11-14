@@ -160,7 +160,7 @@ add_executable(roadmaker_editor_tests
 )
 
 target_compile_definitions(roadmaker_editor_tests
-  PRIVATE RM_SAMPLES_DIR="${CMAKE_SOURCE_DIR}/assets/samples"
+  PRIVATE RM_SAMPLES_DIR="${CMAKE_SOURCE_DIR}/core/tests/fixtures/legacy_scenes"
           RM_ASSETS_DIR="${CMAKE_SOURCE_DIR}/assets"
           RM_GIS_FIXTURES_DIR="${CMAKE_SOURCE_DIR}/core/tests/data/gis"
           RM_LIDAR_FIXTURES_DIR="${CMAKE_SOURCE_DIR}/core/tests/data/lidar"

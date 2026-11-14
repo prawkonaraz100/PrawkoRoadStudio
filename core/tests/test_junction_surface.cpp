@@ -492,7 +492,7 @@ TEST(JunctionSurface, DISABLED_WriteFixtures) {
   const fs::path corpus = fs::path(RM_FUZZ_CORPUS_DIR);
   fs::create_directories(dir);
 
-  // The T-junction golden is already a committed sample (assets/samples); these
+  // The T-junction golden is already a committed sample (core/tests/fixtures/legacy_scenes); these
   // are the new degenerate goldens for #18.
   const std::vector<std::pair<std::string, JunctionId (*)(RoadNetwork&)>> scenarios{
       {"four_way", build_four_way},

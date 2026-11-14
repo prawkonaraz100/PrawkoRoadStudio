@@ -498,6 +498,41 @@ Nie są to wolne obiekty 3D ani prefabrykaty krawężnika
 najazdowego. Zachowany jest OpenDRIVE, a styl jest zwykłą
 operacją `apply_road_style` obsługiwaną przez Undo/Redo.
 
+### Reset biblioteki i scen testowych (14.11.2026)
+
+W aktywnym `assets/library/manifest.json` pozostało **dokładnie 12 własnych
+pozycji**: sześć dróg `road.prawko.*` i sześć stylów
+`style.prawko.*`. Pozostałe sześć pozycji biblioteki jest generowane z
+`osc::actor_catalog()`: samochód, ciężarówka, autobus, motocykl,
+rower i pieszy. W panelu Library, jego filtrach i wyszukiwarce
+widać więc **18 elementów w trzech kategoriach**, w trybie mapy i
+scenariusza; przy upuszczaniu aktora edytor przełącza się na Scenario.
+
+Historyczne szablony RoadMaker (sygnały, znaki USA, skrzyżowania,
+drzewa, budynki, materiały, malowania, stencil i inne) nie są już
+częścią aktywnej biblioteki. Ich miniatury zostały usunięte z
+`assets/library/thumbnails/` i zasobów Qt; starych komponentów
+nie można odnaleźć przez wpisanie nazwy w wyszukiwarkę ani przez
+filtr kategorii. Program wciąż potrafi **technicznie odczytać i
+renderować** stare modele, jeśli wymaga tego test zgodności formatu.
+Ten kod nie jest ponownym udostępnieniem biblioteki.
+
+Sceny demonstracyjne sprzed resetu usunięto z `assets/samples`
+i z ekranu Welcome. Nie usunięto ich z historii kontroli jakości:
+pliki potrzebne automatycznym testom przeniesiono do
+`core/tests/fixtures/legacy_scenes`, a historyczne źródła
+modeli do `core/tests/fixtures/legacy_prop_sources` i
+`legacy_sign_sources`. `RM_SAMPLES_DIR`, CI oraz generatory
+wskazują na nowe ścieżki. Nie są to sceny udostępniane
+kursantom ani zasoby do przeciągania z biblioteki.
+
+Osiem lokalnych projektów testowych z `agent/projects` zostało
+spakowanych do zweryfikowanego archiwum pod
+`archive/library-cleanup-20261114/agent-test-projects-backup.zip`
+i usuniętych z katalogu aktywnych projektów. Nowa praca rozpoczyna
+się od pustej sceny, a kolejne składniki powstaną jako własne
+modele PrawkoNaRaz.
+
 Pierwszy zwykły start po aktualizacji jednorazowo aktywuje
 `Textured Rendering` (PBR) i pamięta wykonaną migrację;
 później świadoma zmiana przez użytkownika pozostaje zapisana.

@@ -15,7 +15,7 @@
 """Build GS-1 — the M3a "Urban intersection" golden scene.
 
 Dogfoods the kernel edit layer end to end to author
-``assets/samples/gs1_urban_intersection.xodr`` — the acceptance artifact for
+``core/tests/fixtures/legacy_scenes/gs1_urban_intersection.xodr`` — the acceptance artifact for
 M3a (docs/roadmap/golden_scenes/gs1_urban_intersection.md): a signalized 4-arm
 urban junction with textured surfaces, crosswalks / stop lines / lane arrows on
 every arm, four traffic lights, two static signs, and a line of street trees.
@@ -24,7 +24,7 @@ Everything here is a real ``edit::Command`` on an ``EditStack`` — the same pat
 the editor uses — so the scene round-trips and validates like any authored file.
 
 Run:  python build_gs1.py [out.xodr]
-      (defaults to assets/samples/gs1_urban_intersection.xodr)
+      (defaults to core/tests/fixtures/legacy_scenes/gs1_urban_intersection.xodr)
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ from pathlib import Path
 import roadmaker as rm
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_OUT = REPO_ROOT / "assets" / "samples" / "gs1_urban_intersection.xodr"
+DEFAULT_OUT = REPO_ROOT / "core" / "tests" / "fixtures" / "legacy_scenes" / "gs1_urban_intersection.xodr"
 
 TREE_MODELS = ["tree_pine", "tree_oak", "tree_birch", "tree_poplar"]
 

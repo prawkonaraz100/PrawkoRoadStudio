@@ -39,6 +39,7 @@ committed; there is no byte-identity gate (zlib output varies across builds).
 
 from __future__ import annotations
 
+import json
 import math
 import random
 import struct
@@ -50,6 +51,13 @@ import gen_prop_meshes as props
 REPO_ROOT = Path(__file__).resolve().parent.parent
 OUT_DIR = REPO_ROOT / "assets" / "library" / "thumbnails"
 
+# This generator may know how to paint old shapes for historical testing.
+# Only thumbnails referenced by the active Prawko manifest get written.
+ACTIVE_THUMBNAILS = {
+    Path(item["thumbnail"]).name
+    for item in json.loads((REPO_ROOT / "assets/library/manifest.json").read_text(encoding="utf-8"))["items"]
+    if item.get("thumbnail")
+}
 SIZE = 96  # 2x the 48px Library icon size
 
 
@@ -104,6 +112,8 @@ def fill_tri(buf, p0, p1, p2, color, alpha=1.0) -> None:
 
 
 def write_png(path: Path, buf: bytearray) -> None:
+    if path.name not in ACTIVE_THUMBNAILS:
+        return
     def chunk(tag: bytes, data: bytes) -> bytes:
         return (struct.pack(">I", len(data)) + tag + data
                 + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF))

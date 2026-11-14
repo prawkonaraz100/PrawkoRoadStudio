@@ -192,7 +192,7 @@ TeeSetup setup_deg135() {
 ///
 /// `profile` applies to BOTH arms. Passing `urban_sidewalk()` builds the
 /// scenario issue #356 reports — a curved road meeting a junction of sidewalked
-/// roads — which nothing else in this matrix, and no scene in assets/samples,
+/// roads — which nothing else in this matrix, and no scene in core/tests/fixtures/legacy_scenes,
 /// covers.
 TeeSetup
 setup_curved(double r, bool inside, const LaneProfile& profile = LaneProfile::two_lane_rural()) {
@@ -1323,7 +1323,7 @@ TEST(TJunctionQualityTools, DISABLED_WriteStraightFloorGolden) {
   ASSERT_TRUE(out.good());
 }
 
-// Regenerates the committed tee golden (assets/samples + fuzz corpus per the
+// Regenerates the committed tee golden (core/tests/fixtures/legacy_scenes + fuzz corpus per the
 // new-xodr-feature rule). Run manually:
 // roadmaker_core_tests --gtest_also_run_disabled_tests
 //   --gtest_filter='*DISABLED_WriteTeeSample'.

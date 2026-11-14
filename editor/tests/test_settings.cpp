@@ -204,7 +204,7 @@ TEST_F(SettingsTest, LegacyRelativeEntriesAreHiddenAndPrunedOnTheNextWrite) {
   {
     QSettings raw;
     raw.setValue(QStringLiteral("files/recent"),
-                 QStringList{QStringLiteral("assets/samples/crossing.xodr"),
+                 QStringList{QStringLiteral("core/tests/fixtures/legacy_scenes/crossing.xodr"),
                              kept,
                              QStringLiteral("../elsewhere/t.xodr")});
   }

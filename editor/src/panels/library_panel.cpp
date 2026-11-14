@@ -21,13 +21,13 @@
 #include <QDragMoveEvent>
 #include <QDropEvent>
 #include <QItemSelectionModel>
-#include <QLineEdit>
 #include <QLabel>
+#include <QLineEdit>
 #include <QListView>
 #include <QMenu>
 #include <QMimeData>
-#include <QSplitter>
 #include <QSizePolicy>
+#include <QSplitter>
 #include <QStringList>
 #include <QUrl>
 #include <QVBoxLayout>
@@ -45,8 +45,10 @@ namespace {
 /// palette). Reuses the Create-Road template glyphs and the junction glyph;
 /// unknown keys fall back to a generic box.
 [[nodiscard]] QString icon_name_for(const QString& key) {
-  if (key == QStringLiteral("actor.pedestrian")) return QStringLiteral("crosswalk");
-  if (key.startsWith(QStringLiteral("actor."))) return QStringLiteral("maneuver");
+  if (key == QStringLiteral("actor.pedestrian"))
+    return QStringLiteral("crosswalk");
+  if (key.startsWith(QStringLiteral("actor.")))
+    return QStringLiteral("maneuver");
   if (key == QStringLiteral("road.rural")) {
     return QStringLiteral("template-rural");
   }
@@ -79,6 +81,16 @@ namespace {
     return QStringLiteral("trees");
   }
   return QStringLiteral("box");
+}
+
+// Prawko's curated catalogue. Legacy source data (and per-project overlays)
+// stay loaded for scene compatibility and existing stable item identifiers, but
+// the Library UI only offers the two authored Prawko groups and six actors.
+// Future Prawko components can be added deliberately to this allowlist.
+[[nodiscard]] bool is_curated_category(const QString& category) {
+  return category == QStringLiteral("Prawko | Gotowe drogi") ||
+         category == QStringLiteral("Prawko | Krawężniki i chodniki") ||
+         category == kScenarioActorCategory;
 }
 
 } // namespace
@@ -120,15 +132,19 @@ bool LibraryFilterProxy::filterAcceptsRow(int source_row, const QModelIndex& sou
   if (!QSortFilterProxyModel::filterAcceptsRow(source_row, source_parent)) {
     return false;
   }
-  if (category_filter_.isEmpty()) {
-    return true;
-  }
   const QModelIndex index = sourceModel()->index(source_row, 0, source_parent);
-  return sourceModel()->data(index, LibraryListModel::CategoryRole).toString() == category_filter_;
+  const QString category = sourceModel()->data(index, LibraryListModel::CategoryRole).toString();
+  // The "All categories" filter must NOT bypass the curated palette. This
+  // also excludes legacy project overlays and hidden items from search.
+  return is_curated_category(category) &&
+         (category_filter_.isEmpty() || category == category_filter_);
 }
 
 LibraryPanel::LibraryPanel(LibraryListModel& model, QWidget* parent)
     : QWidget(parent), model_(model) {
+  // Keep traffic participants available beside Prawko roads and sidewalks
+  // in BOTH Map and Scenario modes, not only after toggling Scenario.
+  model_.set_scenario_actors_visible(true);
   proxy_.setSourceModel(&model);
   proxy_.sort(0);
 
@@ -163,7 +179,8 @@ LibraryPanel::LibraryPanel(LibraryListModel& model, QWidget* parent)
   view_->setDragEnabled(true); // drag an item onto the viewport to create it
   view_->setDragDropMode(QAbstractItemView::DragOnly);
   connect(view_, &QListView::doubleClicked, this, [this](const QModelIndex& index) {
-    if (!index.isValid()) return;
+    if (!index.isValid())
+      return;
     if (const LibraryItem* item = model_.item(proxy_.mapToSource(index).row())) {
       emit asset_activated(item->key);
     }
@@ -180,8 +197,10 @@ LibraryPanel::LibraryPanel(LibraryListModel& model, QWidget* parent)
       this,
       [this](const QModelIndex& current, const QModelIndex&) { handle_current_changed(current); });
 
-  view_->setContextMenuPolicy(Qt::CustomContextMenu);
-  connect(view_, &QListView::customContextMenuRequested, this, &LibraryPanel::show_context_menu);
+  // Do not surface the old generic "New crosswalk/prop set/import" asset
+  // menu in the curated palette. The underlying scene import and legacy asset
+  // handling remain intact until we replace them with native Prawko assets.
+  view_->setContextMenuPolicy(Qt::NoContextMenu);
 
   // OS-file drop (p6-s8, #322). On the PANEL rather than the grid so a drop
   // anywhere in the dock lands, including on the file explorer half.
@@ -254,7 +273,7 @@ void LibraryPanel::populate_categories() {
   QStringList seen;
   for (int row = 0; row < model_.rowCount(); ++row) {
     const LibraryItem* item = model_.item(row);
-    if (item == nullptr || item->category.isEmpty() || seen.contains(item->category)) {
+    if (item == nullptr || !is_curated_category(item->category) || seen.contains(item->category)) {
       continue;
     }
     seen.append(item->category);
@@ -280,31 +299,39 @@ void LibraryPanel::handle_current_changed(const QModelIndex& index) {
     drag_instructions_->setText(tr("Przeciągnij uczestnika na scenę. Potem klikaj punkty trasy."));
     break;
   case LibraryItem::Kind::RoadTemplate:
-    drag_instructions_->setText(tr("Każde upuszczenie rozpoczyna nową drogę. Dodaj punkty, Enter kończy, Esc anuluje."));
+    drag_instructions_->setText(
+        tr("Każde upuszczenie rozpoczyna nową drogę. Dodaj punkty, Enter kończy, Esc anuluje."));
     break;
   case LibraryItem::Kind::RoadStyle:
     drag_instructions_->setText(tr("Upuść na drogę lub kliknij 2×, aby zmienić zaznaczoną drogę."));
     break;
   case LibraryItem::Kind::Material:
-    drag_instructions_->setText(tr("Upuść na pas jezdni. Po zmianie edytuj materiał w Properties."));
+    drag_instructions_->setText(
+        tr("Upuść na pas jezdni. Po zmianie edytuj materiał w Properties."));
     break;
   case LibraryItem::Kind::Marking:
-    drag_instructions_->setText(tr("Upuść na krawędź pasa. Zmienione oznakowanie zaznaczy się automatycznie."));
+    drag_instructions_->setText(
+        tr("Upuść na krawędź pasa. Zmienione oznakowanie zaznaczy się automatycznie."));
     break;
   case LibraryItem::Kind::Crosswalk:
-    drag_instructions_->setText(tr("Upuść przy wlocie skrzyżowania. Po wstawieniu edytuj przejście w Properties."));
+    drag_instructions_->setText(
+        tr("Upuść przy wlocie skrzyżowania. Po wstawieniu edytuj przejście w Properties."));
     break;
   case LibraryItem::Kind::Signal:
-    drag_instructions_->setText(tr("Upuść przy drodze; przeciągnij słupek, aby przesunąć. Move → pierścień obraca. Esc anuluje."));
+    drag_instructions_->setText(tr("Upuść przy drodze; przeciągnij słupek, aby przesunąć. Move → "
+                                   "pierścień obraca. Esc anuluje."));
     break;
   case LibraryItem::Kind::Tree:
-    drag_instructions_->setText(tr("Upuść przy drodze; przeciągnij obiekt, by przesunąć. Obrót i rozmiar: Properties / Move."));
+    drag_instructions_->setText(tr("Upuść przy drodze; przeciągnij obiekt, by przesunąć. Obrót i "
+                                   "rozmiar: Properties / Move."));
     break;
   case LibraryItem::Kind::PropAssembly:
-    drag_instructions_->setText(tr("Upuść przy drodze. Zaznaczona grupa przesuwa się razem; Ctrl+Z cofa. Obrót elementów: Move."));
+    drag_instructions_->setText(tr("Upuść przy drodze. Zaznaczona grupa przesuwa się razem; Ctrl+Z "
+                                   "cofa. Obrót elementów: Move."));
     break;
   case LibraryItem::Kind::Stencil:
-    drag_instructions_->setText(tr("Upuść na pas. Po umieszczeniu możesz zmienić materiał oznaczenia w Properties."));
+    drag_instructions_->setText(
+        tr("Upuść na pas. Po umieszczeniu możesz zmienić materiał oznaczenia w Properties."));
     break;
   case LibraryItem::Kind::Assembly:
     drag_instructions_->setText(tr("Przeciągnij na drogę, aby wstawić skrzyżowanie."));

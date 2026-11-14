@@ -64,7 +64,6 @@ protected:
   void showEvent(QShowEvent* event) override;
 
 private:
-  void populate_samples();
   void populate_projects();
   void populate_active_project();
   [[nodiscard]] QListWidgetItem* make_scene_item(const QString& display_name,
@@ -73,19 +72,13 @@ private:
 
   Settings& settings_;
   QListWidget* recent_list_ = nullptr;
-  QListWidget* samples_list_ = nullptr;
   QListWidget* projects_list_ = nullptr;
   QListWidget* project_scenes_list_ = nullptr;
   QWidget* recent_section_ = nullptr;
-  QWidget* samples_section_ = nullptr;
   QWidget* projects_section_ = nullptr;
   QWidget* project_section_ = nullptr;
   QLabel* project_label_ = nullptr;
   QString active_project_dir_; ///< empty = no project open
 };
-
-/// The committed sample scenes (assets/samples) resolved from the running
-/// binary's location — dev builds and bundles differ. Empty when not found.
-[[nodiscard]] std::filesystem::path find_samples_dir();
 
 } // namespace roadmaker::editor

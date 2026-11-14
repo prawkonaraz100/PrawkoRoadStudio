@@ -15,8 +15,8 @@
  */
 
 // WelcomeWidget: logic-free surface, so the tests pin the contract that
-// matters — buttons emit, the recent grid drops dead paths, samples resolve
-// from the repo, thumbnails have a writable home.
+// matters — buttons emit, the recent grid drops dead paths, no old samples are offered,
+// and thumbnails have a writable home.
 
 #include <gtest/gtest.h>
 
@@ -105,17 +105,10 @@ TEST_F(WelcomeWidgetTest, RecentGridListsOnlyExistingFilesAndEmitsPath) {
   EXPECT_EQ(spy.first().first().toString(), real);
 }
 
-TEST_F(WelcomeWidgetTest, SamplesResolveFromTheRepoCheckout) {
-  // find_samples_dir walks up from the binary — in the build tree that must
-  // land on <repo>/assets/samples (RM_SAMPLES_DIR pins the expectation).
-  const std::filesystem::path dir = find_samples_dir();
-  ASSERT_FALSE(dir.empty());
-  EXPECT_TRUE(std::filesystem::exists(dir / "crossing.xodr"));
-
+TEST_F(WelcomeWidgetTest, StartsWithNoLegacySampleScenes) {
+  // Historical fixtures belong to internal tests, not the product Welcome UI.
   WelcomeWidget widget(*settings_);
-  auto* list = widget.findChild<QListWidget*>(QStringLiteral("welcomeSamplesList"));
-  ASSERT_NE(list, nullptr);
-  EXPECT_GT(list->count(), 0);
+  EXPECT_EQ(widget.findChild<QListWidget*>(QStringLiteral("welcomeSamplesList")), nullptr);
 }
 
 TEST_F(WelcomeWidgetTest, RecentProjectTilesShowNameAndSceneCountAndEmitDir) {

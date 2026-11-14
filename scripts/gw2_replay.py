@@ -34,7 +34,7 @@ printed but EXCLUDED from the official pass tally.
 Run:  python3 scripts/gw2_replay.py [output-dir]
 Exit code 0 = every official automatable step passed with zero validation
 errors. The output .xodr is written to the output dir only (it is NOT a sample
-and must never land in assets/samples/).
+and must never land in core/tests/fixtures/legacy_scenes/).
 """
 
 from __future__ import annotations

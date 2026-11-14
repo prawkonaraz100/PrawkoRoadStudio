@@ -62,8 +62,8 @@
 #include <QSaveFile>
 #include <QShowEvent>
 #include <QStackedWidget>
-#include <QStyle>
 #include <QStatusBar>
+#include <QStyle>
 #include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
@@ -96,12 +96,12 @@
 #include "help/help_viewer.hpp"
 #include "help/manual_locator.hpp"
 #include "panels/asset_import_dialog.hpp"
-#include "panels/simulation_panel.hpp"
 #include "panels/diagnostics_panel.hpp"
 #include "panels/editor2d_host.hpp"
 #include "panels/library_panel.hpp"
 #include "panels/properties_panel.hpp"
 #include "panels/scene_tree_panel.hpp"
+#include "panels/simulation_panel.hpp"
 #include "panels/unit_spin_box.hpp"
 #include "tools/actor_tool.hpp"
 #include "tools/corner_tool.hpp"
@@ -664,7 +664,8 @@ MainWindow::MainWindow(QWidget* parent, bool restore_saved_layout)
     simulation_panel_->leave_preview();
     tool_manager_.set_active(ToolId::Route);
     const auto actors = selection_.selected_actors();
-    if (!actors.empty()) route_tool_->begin_from_actor(actors.front());
+    if (!actors.empty())
+      route_tool_->begin_from_actor(actors.front());
     viewport_->setFocus();
   });
   connect(actions_->scenario_mode, &QAction::toggled, this, [this](bool on) {
@@ -1158,12 +1159,15 @@ void MainWindow::build_docks() {
   connect(properties_panel_, &PropertiesPanel::status_message, this, [this](const QString& text) {
     viewport_->show_toast(text);
   });
-  connect(properties_panel_, &PropertiesPanel::actor_route_edit_requested, this,
+  connect(properties_panel_,
+          &PropertiesPanel::actor_route_edit_requested,
+          this,
           [this](const QString& actor) {
             // The Properties button and the toolbar route tool share exactly
             // one path; do not create an independent route-editing mode.
             const auto selected = selection_.selected_actors();
-            if (selected.empty() || selected.front() != actor.toStdString()) return;
+            if (selected.empty() || selected.front() != actor.toStdString())
+              return;
             if (!actions_->scenario_mode->isChecked()) {
               actions_->scenario_mode->setChecked(true);
             }
@@ -1200,8 +1204,10 @@ void MainWindow::build_docks() {
           &LibraryPanel::asset_current_changed,
           this,
           &MainWindow::on_library_asset_current_changed);
-  connect(library_panel_, &LibraryPanel::asset_activated,
-          this, &MainWindow::on_library_asset_activated);
+  connect(library_panel_,
+          &LibraryPanel::asset_activated,
+          this,
+          &MainWindow::on_library_asset_activated);
   connect(library_panel_,
           &LibraryPanel::new_crosswalk_asset_requested,
           this,
@@ -1290,19 +1296,28 @@ void MainWindow::build_docks() {
   simulation_dock_ = new QDockWidget(tr("Simulation"), this);
   simulation_dock_->setObjectName(QStringLiteral("dock.simulation"));
   simulation_panel_ = new SimulationPanel(document_, settings_, simulation_dock_);
-  connect(simulation_panel_, &SimulationPanel::video_export_requested,
-          this, &MainWindow::export_scenario_video);
-  connect(simulation_panel_, &SimulationPanel::preview_frame,
-          viewport_, &ViewportWidget::set_simulation_frame);
-  connect(simulation_panel_, &SimulationPanel::preview_closed,
-          viewport_, &ViewportWidget::clear_simulation_frame);
-  connect(viewport_, &ViewportWidget::simulation_preview_exit_requested,
-          simulation_panel_, &SimulationPanel::leave_preview);
-  connect(simulation_dock_, &QDockWidget::visibilityChanged, simulation_panel_, [this](bool visible) {
-    if (!visible) {
-      simulation_panel_->leave_preview();
-    }
-  });
+  connect(simulation_panel_,
+          &SimulationPanel::video_export_requested,
+          this,
+          &MainWindow::export_scenario_video);
+  connect(simulation_panel_,
+          &SimulationPanel::preview_frame,
+          viewport_,
+          &ViewportWidget::set_simulation_frame);
+  connect(simulation_panel_,
+          &SimulationPanel::preview_closed,
+          viewport_,
+          &ViewportWidget::clear_simulation_frame);
+  connect(viewport_,
+          &ViewportWidget::simulation_preview_exit_requested,
+          simulation_panel_,
+          &SimulationPanel::leave_preview);
+  connect(
+      simulation_dock_, &QDockWidget::visibilityChanged, simulation_panel_, [this](bool visible) {
+        if (!visible) {
+          simulation_panel_->leave_preview();
+        }
+      });
   simulation_dock_->setWidget(simulation_panel_);
   addDockWidget(Qt::BottomDockWidgetArea, simulation_dock_);
   simulation_dock_->hide();
@@ -1338,8 +1353,10 @@ void MainWindow::build_menus() {
   auto* export_video = file_menu->addAction(tr("Export Scenario &Video…"));
   export_video->setObjectName(QStringLiteral("export_scenario_video"));
   export_video->setEnabled(false);
-  connect(simulation_panel_, &SimulationPanel::video_availability_changed,
-          export_video, &QAction::setEnabled);
+  connect(simulation_panel_,
+          &SimulationPanel::video_availability_changed,
+          export_video,
+          &QAction::setEnabled);
   connect(export_video, &QAction::triggered, this, &MainWindow::export_scenario_video);
 #ifdef RM_HAVE_USD
   file_menu->addAction(actions_->export_usd);
@@ -1480,8 +1497,10 @@ void MainWindow::build_menus() {
   run_simulation_action_->setToolTip(
       tr("Oblicz ruch wszystkich uczestników i odtwórz go w widoku 3D"));
   run_simulation_action_->setEnabled(simulation_panel_->can_run());
-  connect(simulation_panel_, &SimulationPanel::run_availability_changed,
-          run_simulation_action_, &QAction::setEnabled);
+  connect(simulation_panel_,
+          &SimulationPanel::run_availability_changed,
+          run_simulation_action_,
+          &QAction::setEnabled);
   connect(run_simulation_action_, &QAction::triggered, this, [this] {
     simulation_dock_->show();
     simulation_dock_->raise();
@@ -1789,7 +1808,10 @@ static shortcuts::Id shortcut_for_tool(ToolId tool) {
 
 void MainWindow::apply_editor_mode() {
   const bool scenario = mode_ == EditorMode::Scenario;
-  library_model_.set_scenario_actors_visible(scenario);
+  // Keep the three curated Library categories visible regardless of mode:
+  // Prawko roads, Prawko pavements and traffic participants. Placement still
+  // changes to the appropriate editing mode when the asset is dropped.
+  library_model_.set_scenario_actors_visible(true);
 
   // ★ GATED BY THE REGISTRY'S OWN CLASSIFICATION, not by a hand-written list.
   // Every tool already declares its toolbar group, and toolbar_violations()
@@ -2365,15 +2387,19 @@ void MainWindow::on_library_asset_current_changed(const QString& key) {
 
 void MainWindow::on_library_asset_activated(const QString& key) {
   const LibraryItem* item = library_model_.item_for_key(key);
-  if (item == nullptr) return;
+  if (item == nullptr)
+    return;
   if (item->kind == LibraryItem::Kind::RoadTemplate) {
-    if (!actions_->tool_create_road->isChecked()) actions_->tool_create_road->trigger();
-    if (create_road_tool_ != nullptr) create_road_tool_->set_profile(profile_for(item->profile));
+    if (!actions_->tool_create_road->isChecked())
+      actions_->tool_create_road->trigger();
+    if (create_road_tool_ != nullptr)
+      create_road_tool_->set_profile(profile_for(item->profile));
     viewport_->show_toast(tr("Wybierz początek drogi na mapie, Enter kończy, Esc anuluje"),
                           ToastSeverity::Info);
     return;
   }
-  if (item->kind != LibraryItem::Kind::RoadStyle) return;
+  if (item->kind != LibraryItem::Kind::RoadStyle)
+    return;
   const auto selected = selection_.selected_roads();
   if (selected.size() != 1) {
     viewport_->show_toast(tr("Najpierw zaznacz jedną drogę lub przeciągnij styl na jezdnię"),
@@ -2383,7 +2409,8 @@ void MainWindow::on_library_asset_activated(const QString& key) {
   const RoadId road = selected.front();
   auto command = edit::apply_road_style(document_.network(), road, style_for(item->style));
   if (command != nullptr && document_.push_command(std::move(command)).has_value()) {
-    if (!actions_->tool_select->isChecked()) actions_->tool_select->trigger();
+    if (!actions_->tool_select->isChecked())
+      actions_->tool_select->trigger();
     selection_.select(SelectionEntry{.road = road});
     properties_dock_->show();
     properties_dock_->raise();
@@ -2672,15 +2699,22 @@ void MainWindow::preview_library_drag_for_capture(const QString& key,
   on_library_drag_moved(key, world_x, world_y);
 }
 
-void MainWindow::on_library_drop(const QString& key, double world_x, double world_y,
+void MainWindow::on_library_drop(const QString& key,
+                                 double world_x,
+                                 double world_y,
                                  double world_z) {
   const LibraryItem* item = library_model_.item_for_key(key);
   if (item == nullptr) {
     return;
   }
   if (item->kind == LibraryItem::Kind::ScenarioActor) {
-    auto position = actor_drop_position(document_.network(), item->actor_kind,
-                                        {world_x, world_y, world_z});
+    // Actors remain in the curated Library while in Map mode; switch to
+    // Scenario before placing so the route tool is enabled after the drop.
+    if (!actions_->scenario_mode->isChecked()) {
+      actions_->scenario_mode->setChecked(true);
+    }
+    auto position =
+        actor_drop_position(document_.network(), item->actor_kind, {world_x, world_y, world_z});
     if (!position) {
       viewport_->show_toast(tr("Upuść pojazd na pas ruchu."), ToastSeverity::Warning);
       return;
@@ -2694,7 +2728,8 @@ void MainWindow::on_library_drop(const QString& key, double world_x, double worl
       return;
     }
     selection_.select(SelectionEntry{.actor = name});
-    if (!actions_->tool_route->isChecked()) actions_->tool_route->trigger();
+    if (!actions_->tool_route->isChecked())
+      actions_->tool_route->trigger();
     route_tool_->begin_from_actor(name);
     viewport_->setFocus();
     return;
@@ -2708,17 +2743,20 @@ void MainWindow::on_library_drop(const QString& key, double world_x, double worl
     std::vector<SelectionEntry> entries;
     for (const LibraryCreatedEntity& placed :
          created_library_entities(before, document_.network())) {
-      entries.push_back(SelectionEntry{.road = placed.road, .object = placed.object,
-                                       .signal = placed.signal, .junction = placed.junction});
+      entries.push_back(SelectionEntry{.road = placed.road,
+                                       .object = placed.object,
+                                       .signal = placed.signal,
+                                       .junction = placed.junction});
     }
     // Materials and painted boundaries edit an existing lane rather than
     // creating an object, so select the exact lane the resolver changed.
     if (entries.empty() && action.target_road.is_valid() && action.target_lane.is_valid()) {
-      entries.push_back(SelectionEntry{.road = action.target_road,
-                                       .lane = action.target_lane});
+      entries.push_back(SelectionEntry{.road = action.target_road, .lane = action.target_lane});
     }
-    if (entries.empty()) return;
-    if (!actions_->tool_select->isChecked()) actions_->tool_select->trigger();
+    if (entries.empty())
+      return;
+    if (!actions_->tool_select->isChecked())
+      actions_->tool_select->trigger();
     selection_.select_many(entries);
     properties_dock_->show();
     properties_dock_->raise();
@@ -2727,12 +2765,14 @@ void MainWindow::on_library_drop(const QString& key, double world_x, double worl
   case LibraryDropKind::RoadTemplate:
     // Scenario mode disables road tools but the Library still exposes templates.
     // Switch to Map before arming Create Road or this drop silently does nothing.
-    if (actions_->scenario_mode->isChecked()) actions_->scenario_mode->setChecked(false);
+    if (actions_->scenario_mode->isChecked())
+      actions_->scenario_mode->setChecked(false);
     // An explicitly dropped template asks for a NEW road, not an extension of
     // the last road selected in the viewport. begin_at also resets any stale
     // in-progress stroke when the Create Road tool was already active.
     selection_.clear();
-    if (!actions_->tool_create_road->isChecked()) actions_->tool_create_road->trigger();
+    if (!actions_->tool_create_road->isChecked())
+      actions_->tool_create_road->trigger();
     if (create_road_tool_ != nullptr) {
       create_road_tool_->set_profile(action.profile);
       create_road_tool_->begin_at(world_x, world_y);
@@ -2755,7 +2795,8 @@ void MainWindow::on_library_drop(const QString& key, double world_x, double worl
       // The next natural interaction after dropping a style is editing the
       // modified road. Select it and reveal its normal Properties controls;
       // don't leave the user stuck in an earlier creation/placement tool.
-      if (!actions_->tool_select->isChecked()) actions_->tool_select->trigger();
+      if (!actions_->tool_select->isChecked())
+        actions_->tool_select->trigger();
       if (target.is_valid()) {
         selection_.select(SelectionEntry{.road = target});
         properties_dock_->show(); // direct access to editing controls
@@ -2815,7 +2856,9 @@ void MainWindow::on_library_drop(const QString& key, double world_x, double worl
   }
 }
 
-void MainWindow::on_library_drag_moved(const QString& key, double world_x, double world_y,
+void MainWindow::on_library_drag_moved(const QString& key,
+                                       double world_x,
+                                       double world_y,
                                        double world_z) {
   const LibraryItem* item = library_model_.item_for_key(key);
   if (item == nullptr) {
@@ -2823,12 +2866,14 @@ void MainWindow::on_library_drag_moved(const QString& key, double world_x, doubl
     return;
   }
   if (item->kind == LibraryItem::Kind::ScenarioActor) {
-    const auto position = actor_drop_position(document_.network(), item->actor_kind,
-                                              {world_x, world_y, world_z});
+    const auto position =
+        actor_drop_position(document_.network(), item->actor_kind, {world_x, world_y, world_z});
     const auto pose = position ? actor_world_pose(document_.network(), *position) : std::nullopt;
     const auto point = pose ? pose->position : std::array{world_x, world_y, world_z};
     viewport_->clear_drag_target_road();
-    viewport_->set_drop_preview(point[0], point[1], pose.has_value(),
+    viewport_->set_drop_preview(point[0],
+                                point[1],
+                                pose.has_value(),
                                 pose ? tr("Upuść i kliknij punkt trasy")
                                      : tr("Upuść pojazd na pas ruchu"),
                                 point[2]);
@@ -2841,27 +2886,32 @@ void MainWindow::on_library_drag_moved(const QString& key, double world_x, doubl
       resolve_library_drop(*item, document_.network(), world_x, world_y);
   QString instruction;
   if (!action.preview.valid || action.kind == LibraryDropKind::None) {
-    instruction = action.toast.isEmpty() ? tr("Tutaj nie można upuścić elementu")
-                                         : action.toast;
+    instruction = action.toast.isEmpty() ? tr("Tutaj nie można upuścić elementu") : action.toast;
   } else {
     switch (action.kind) {
     case LibraryDropKind::RoadTemplate:
-      instruction = tr("Nowa droga — puść, wskaż punkty i zatwierdź Enter"); break;
+      instruction = tr("Nowa droga — puść, wskaż punkty i zatwierdź Enter");
+      break;
     case LibraryDropKind::RoadStyle:
-      instruction = tr("Puść, aby zmienić przekrój drogi"); break;
+      instruction = tr("Puść, aby zmienić przekrój drogi");
+      break;
     case LibraryDropKind::Material:
-      instruction = tr("Puść, aby nałożyć materiał"); break;
+      instruction = tr("Puść, aby nałożyć materiał");
+      break;
     case LibraryDropKind::Tree:
     case LibraryDropKind::PropAssembly:
-      instruction = tr("Puść, aby umieścić obiekt"); break;
+      instruction = tr("Puść, aby umieścić obiekt");
+      break;
     case LibraryDropKind::Assembly:
-      instruction = tr("Puść, aby dodać skrzyżowanie"); break;
+      instruction = tr("Puść, aby dodać skrzyżowanie");
+      break;
     default:
-      instruction = tr("Puść, aby zastosować %1").arg(item->label); break;
+      instruction = tr("Puść, aby zastosować %1").arg(item->label);
+      break;
     }
   }
-  viewport_->set_drop_preview(action.preview.x, action.preview.y,
-                              action.preview.valid, instruction);
+  viewport_->set_drop_preview(
+      action.preview.x, action.preview.y, action.preview.valid, instruction);
   // A road-style drag highlights the road it would apply to (ghost==target);
   // every other item kind clears any lingering highlight.
   if (action.kind == LibraryDropKind::RoadStyle) {
@@ -2989,10 +3039,9 @@ void MainWindow::save_welcome_thumbnail() {
 
 void MainWindow::export_scene_image() {
   const QFileInfo scene(document_.file_path());
-  const QString suggested = document_.has_file()
-                                ? scene.dir().filePath(scene.completeBaseName() +
-                                                       QStringLiteral(".png"))
-                                : QStringLiteral("scene.png");
+  const QString suggested =
+      document_.has_file() ? scene.dir().filePath(scene.completeBaseName() + QStringLiteral(".png"))
+                           : QStringLiteral("scene.png");
   QFileDialog dialog(this, tr("Export Scene Image"), suggested, tr("PNG image (*.png)"));
   dialog.setAcceptMode(QFileDialog::AcceptSave);
   dialog.setDefaultSuffix(QStringLiteral("png"));
@@ -3012,9 +3061,8 @@ void MainWindow::export_scene_image() {
   }
   QSaveFile file(path);
   if (!file.open(QIODevice::WriteOnly) || !frame.save(&file, "PNG") || !file.commit()) {
-    QMessageBox::warning(this,
-                         tr("Export Scene Image"),
-                         tr("Could not write the image to %1.").arg(path));
+    QMessageBox::warning(
+        this, tr("Export Scene Image"), tr("Could not write the image to %1.").arg(path));
     return;
   }
   statusBar()->showMessage(tr("Exported scene image to %1").arg(path), 5000);
@@ -3026,8 +3074,7 @@ void MainWindow::export_scenario_video() {
     return;
   }
   simulation_panel_->pause();
-  const double duration = std::min(playback->duration(),
-                                   std::numeric_limits<int>::max() / 1000.0);
+  const double duration = std::min(playback->duration(), std::numeric_limits<int>::max() / 1000.0);
   QDialog options(this);
   options.setWindowTitle(tr("Export Scenario Video"));
   auto* form = new QFormLayout(&options);
@@ -3057,7 +3104,8 @@ void MainWindow::export_scenario_video() {
   }
   fps->setCurrentIndex(2);
   form->addRow(tr("&Frame rate"), fps);
-  auto* encoder = new QLineEdit(ScenarioVideoExport::find_encoder(settings_.ffmpeg_path()), &options);
+  auto* encoder =
+      new QLineEdit(ScenarioVideoExport::find_encoder(settings_.ffmpeg_path()), &options);
   encoder->setObjectName(QStringLiteral("video_encoder"));
   encoder->setReadOnly(true);
   encoder->setPlaceholderText(tr("Choose FFmpeg with libx264 support"));
@@ -3096,10 +3144,9 @@ void MainWindow::export_scenario_video() {
       .size = size->currentData().toSize(),
   };
   const QFileInfo scene(document_.file_path());
-  const QString suggested = document_.has_file()
-                                ? scene.dir().filePath(scene.completeBaseName() +
-                                                       QStringLiteral(".mp4"))
-                                : QStringLiteral("scenario.mp4");
+  const QString suggested =
+      document_.has_file() ? scene.dir().filePath(scene.completeBaseName() + QStringLiteral(".mp4"))
+                           : QStringLiteral("scenario.mp4");
   QFileDialog save(this, tr("Save Scenario Video"), suggested, tr("MP4 video (*.mp4)"));
   save.setAcceptMode(QFileDialog::AcceptSave);
   save.setDefaultSuffix(QStringLiteral("mp4"));
@@ -3143,8 +3190,10 @@ void MainWindow::export_scenario_video() {
     cancelled = true;
     exporter.cancel();
   });
-  connect(simulation_panel_, &SimulationPanel::video_availability_changed,
-          &exporter, [&exporter](bool available) {
+  connect(simulation_panel_,
+          &SimulationPanel::video_availability_changed,
+          &exporter,
+          [&exporter](bool available) {
             if (!available) {
               exporter.cancel();
             }
@@ -3156,8 +3205,8 @@ void MainWindow::export_scenario_video() {
   });
   const QString encoder_path = encoder->text();
   const QString start_error = exporter.start(encoder_path, path, video, [&](double time) {
-    return viewport_->capture_simulation_frame(video.size, camera, recording.poses_at(time),
-                                                driver_actor);
+    return viewport_->capture_simulation_frame(
+        video.size, camera, recording.poses_at(time), driver_actor);
   });
   if (!start_error.isEmpty()) {
     error = start_error;
@@ -3315,8 +3364,8 @@ void MainWindow::check_recovery() {
     AutosaveManager::discard(*candidate);
     return;
   }
-  const auto result = document_.load_recovery(candidate->xodr, candidate->original_path,
-                                              candidate->version < 2, candidate->has_scenario);
+  const auto result = document_.load_recovery(
+      candidate->xodr, candidate->original_path, candidate->version < 2, candidate->has_scenario);
   if (!result) {
     // Keep the set on disk — the user can retry on the next start.
     QMessageBox::warning(this,
@@ -3330,7 +3379,8 @@ void MainWindow::check_recovery() {
     if (auto protected_copy = autosave_.autosave_now(); protected_copy) {
       AutosaveManager::discard(*candidate);
     } else {
-      QMessageBox::warning(this, tr("Recovery copy kept"),
+      QMessageBox::warning(this,
+                           tr("Recovery copy kept"),
                            tr("The previous recovery copy was kept. Save your recovered scene."));
     }
   }

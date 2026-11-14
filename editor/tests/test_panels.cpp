@@ -1007,7 +1007,7 @@ LaneId lane_on_road(const Document& document, RoadId road, int odr_id) {
   return {};
 }
 
-TEST(PropertiesPanel, DroppingOnTheMarkingSlotSetsLaneRoadMarkInOneCommand) {
+TEST(PropertiesPanel, RemovedLegacyMarkingDoesNotChangeLaneOrCreateUndo) {
   Harness h;
   ASSERT_TRUE(h.document.load(kSample).has_value());
   PropertiesPanel panel(h.document, h.selection);
@@ -1021,17 +1021,13 @@ TEST(PropertiesPanel, DroppingOnTheMarkingSlotSetsLaneRoadMarkInOneCommand) {
   h.selection.select({.road = road, .lane = lane});
 
   // Capture the lane's mark before the drop so undo can be checked against it.
-  const std::vector<RoadMark> before = h.document.network().lane(lane)->road_marks;
+  const std::string before = xodr(h.document);
   const int base = h.document.undo_stack()->index();
+  // Legacy markings were removed from the curated manifest. A stale drag
+  // key may still come from an old scene or UI state, but must be ignored.
   emit slot->item_dropped(QStringLiteral("marking.double_dashed_yellow"));
-  EXPECT_EQ(h.document.undo_stack()->index(), base + 1);
-  ASSERT_FALSE(h.document.network().lane(lane)->road_marks.empty());
-  EXPECT_EQ(h.document.network().lane(lane)->road_marks.front().type, RoadMarkType::BrokenBroken);
-  EXPECT_EQ(h.document.network().lane(lane)->road_marks.front().color, RoadMarkColor::Yellow);
-
-  h.document.undo_stack()->undo();
   EXPECT_EQ(h.document.undo_stack()->index(), base);
-  EXPECT_EQ(h.document.network().lane(lane)->road_marks.size(), before.size());
+  EXPECT_EQ(xodr(h.document), before);
 }
 
 TEST(PropertiesPanel, AnUnknownDroppedMarkingIsRefusedWithoutAnUndoEntry) {

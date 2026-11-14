@@ -1,493 +1,126 @@
 {
   "manifest_version": 1,
-  "generated": "2026-07-13",
+  "generated": "2026-11-14",
   "items": [
-    {
-      "key": "road.freeway",
-      "label": "Freeway",
-      "category": "Road templates",
-      "thumbnail": "assets/library/thumbnails/road_freeway.png",
-      "create": { "kind": "road_template", "profile": "freeway" }
-    },
-    {
-      "key": "road.arterial",
-      "label": "Arterial",
-      "category": "Road templates",
-      "thumbnail": "assets/library/thumbnails/road_arterial.png",
-      "create": { "kind": "road_template", "profile": "arterial" }
-    },
-    {
-      "key": "road.collector",
-      "label": "Collector",
-      "category": "Road templates",
-      "thumbnail": "assets/library/thumbnails/road_collector.png",
-      "create": { "kind": "road_template", "profile": "collector" }
-    },
-    {
-      "key": "road.local",
-      "label": "Local street",
-      "category": "Road templates",
-      "thumbnail": "assets/library/thumbnails/road_local.png",
-      "create": { "kind": "road_template", "profile": "local" }
-    },
     {
       "key": "road.prawko.urban",
       "label": "Ulica miejska | krawężnik 15 cm",
       "category": "Prawko | Gotowe drogi",
       "thumbnail": "assets/library/thumbnails/road_prawko_urban.png",
-      "create": { "kind": "road_template", "profile": "prawko.urban" }
+      "create": {
+        "kind": "road_template",
+        "profile": "prawko.urban"
+      }
     },
     {
       "key": "road.prawko.wide",
       "label": "Ulica miejska | chodniki 2,5 m",
       "category": "Prawko | Gotowe drogi",
       "thumbnail": "assets/library/thumbnails/road_prawko_wide.png",
-      "create": { "kind": "road_template", "profile": "prawko.wide" }
+      "create": {
+        "kind": "road_template",
+        "profile": "prawko.wide"
+      }
     },
     {
       "key": "road.prawko.promenade",
       "label": "Ulica miejska | chodniki 3,0 m",
       "category": "Prawko | Gotowe drogi",
       "thumbnail": "assets/library/thumbnails/road_prawko_promenade.png",
-      "create": { "kind": "road_template", "profile": "prawko.promenade" }
+      "create": {
+        "kind": "road_template",
+        "profile": "prawko.promenade"
+      }
     },
     {
       "key": "road.prawko.one_side",
       "label": "Ulica | chodnik po jednej stronie",
       "category": "Prawko | Gotowe drogi",
       "thumbnail": "assets/library/thumbnails/road_prawko_one_side.png",
-      "create": { "kind": "road_template", "profile": "prawko.one_side" }
+      "create": {
+        "kind": "road_template",
+        "profile": "prawko.one_side"
+      }
     },
     {
       "key": "road.prawko.parking",
       "label": "Ulica | parking i chodniki",
       "category": "Prawko | Gotowe drogi",
       "thumbnail": "assets/library/thumbnails/road_prawko_parking.png",
-      "create": { "kind": "road_template", "profile": "prawko.parking" }
+      "create": {
+        "kind": "road_template",
+        "profile": "prawko.parking"
+      }
     },
     {
       "key": "road.prawko.no_curb",
       "label": "Ulica | bez krawężników",
       "category": "Prawko | Gotowe drogi",
       "thumbnail": "assets/library/thumbnails/road_prawko_no_curb.png",
-      "create": { "kind": "road_template", "profile": "prawko.no_curb" }
-    },
-    {
-      "key": "style.freeway",
-      "label": "Freeway style",
-      "category": "Road styles",
-      "thumbnail": "assets/library/thumbnails/style_freeway.png",
-      "create": { "kind": "road_style", "style": "freeway" }
-    },
-    {
-      "key": "style.arterial",
-      "label": "Arterial style",
-      "category": "Road styles",
-      "thumbnail": "assets/library/thumbnails/style_arterial.png",
-      "create": { "kind": "road_style", "style": "arterial" }
-    },
-    {
-      "key": "style.collector",
-      "label": "Collector style",
-      "category": "Road styles",
-      "thumbnail": "assets/library/thumbnails/style_collector.png",
-      "create": { "kind": "road_style", "style": "collector" }
-    },
-    {
-      "key": "style.local",
-      "label": "Local street style",
-      "category": "Road styles",
-      "thumbnail": "assets/library/thumbnails/style_local.png",
-      "create": { "kind": "road_style", "style": "local" }
+      "create": {
+        "kind": "road_template",
+        "profile": "prawko.no_curb"
+      }
     },
     {
       "key": "style.prawko.urban",
       "label": "Cała droga miejska | krawężnik 15 cm",
       "category": "Prawko | Krawężniki i chodniki",
       "thumbnail": "assets/library/thumbnails/style_prawko_urban.png",
-      "create": { "kind": "road_style", "style": "prawko.urban" }
+      "create": {
+        "kind": "road_style",
+        "style": "prawko.urban"
+      }
     },
     {
       "key": "style.prawko.wide",
       "label": "Cała droga miejska | chodniki 2,5 m",
       "category": "Prawko | Krawężniki i chodniki",
       "thumbnail": "assets/library/thumbnails/style_prawko_wide.png",
-      "create": { "kind": "road_style", "style": "prawko.wide" }
+      "create": {
+        "kind": "road_style",
+        "style": "prawko.wide"
+      }
     },
     {
       "key": "style.prawko.promenade",
       "label": "Cała droga miejska | chodniki 3,0 m",
       "category": "Prawko | Krawężniki i chodniki",
       "thumbnail": "assets/library/thumbnails/style_prawko_promenade.png",
-      "create": { "kind": "road_style", "style": "prawko.promenade" }
+      "create": {
+        "kind": "road_style",
+        "style": "prawko.promenade"
+      }
     },
     {
       "key": "style.prawko.one_side",
       "label": "Cała droga | chodnik po jednej stronie",
       "category": "Prawko | Krawężniki i chodniki",
       "thumbnail": "assets/library/thumbnails/style_prawko_one_side.png",
-      "create": { "kind": "road_style", "style": "prawko.one_side" }
+      "create": {
+        "kind": "road_style",
+        "style": "prawko.one_side"
+      }
     },
     {
       "key": "style.prawko.parking",
       "label": "Cała droga | parking i chodniki",
       "category": "Prawko | Krawężniki i chodniki",
       "thumbnail": "assets/library/thumbnails/style_prawko_parking.png",
-      "create": { "kind": "road_style", "style": "prawko.parking" }
+      "create": {
+        "kind": "road_style",
+        "style": "prawko.parking"
+      }
     },
     {
       "key": "style.prawko.no_curb",
       "label": "Cała droga | bez krawężników",
       "category": "Prawko | Krawężniki i chodniki",
       "thumbnail": "assets/library/thumbnails/style_prawko_no_curb.png",
-      "create": { "kind": "road_style", "style": "prawko.no_curb" }
-    },
-    {
-      "key": "assembly.t",
-      "label": "T-intersection",
-      "category": "Assemblies",
-      "thumbnail": "assets/library/thumbnails/assembly_t.png",
-      "create": { "kind": "assembly", "assembly": "t" }
-    },
-    {
-      "key": "assembly.x",
-      "label": "X-intersection",
-      "category": "Assemblies",
-      "thumbnail": "assets/library/thumbnails/assembly_x.png",
-      "create": { "kind": "assembly", "assembly": "x" }
-    },
-    {
-      "key": "prop.tree.pine",
-      "label": "Pine tree",
-      "category": "Props",
-      "thumbnail": "assets/library/thumbnails/prop_tree_pine.png",
-      "create": { "kind": "tree", "model": "tree_pine" }
-    },
-    {
-      "key": "prop.tree.oak",
-      "label": "Oak tree",
-      "category": "Props",
-      "thumbnail": "assets/library/thumbnails/prop_tree_oak.png",
-      "create": { "kind": "tree", "model": "tree_oak" }
-    },
-    {
-      "key": "prop.tree.birch",
-      "label": "Birch tree",
-      "category": "Props",
-      "thumbnail": "assets/library/thumbnails/prop_tree_birch.png",
-      "create": { "kind": "tree", "model": "tree_birch" }
-    },
-    {
-      "key": "prop.tree.poplar",
-      "label": "Poplar tree",
-      "category": "Props",
-      "thumbnail": "assets/library/thumbnails/prop_tree_poplar.png",
-      "create": { "kind": "tree", "model": "tree_poplar" }
-    },
-    {
-      "key": "prop.shrub",
-      "label": "Shrub",
-      "category": "Props",
-      "thumbnail": "assets/library/thumbnails/prop_shrub.png",
-      "create": { "kind": "tree", "model": "shrub" }
-    },
-    {
-      "key": "prop.streetlight",
-      "label": "Streetlight",
-      "category": "Props",
-      "thumbnail": "assets/library/thumbnails/streetlight_single.png",
-      "create": { "kind": "tree", "model": "streetlight_single" }
-    },
-    {
-      "key": "prop.streetlight_double",
-      "label": "Streetlight (double)",
-      "category": "Props",
-      "thumbnail": "assets/library/thumbnails/streetlight_double.png",
-      "create": { "kind": "tree", "model": "streetlight_double" }
-    },
-    {
-      "key": "building.low",
-      "label": "Low building",
-      "category": "Buildings",
-      "thumbnail": "assets/library/thumbnails/building_low.png",
-      "create": { "kind": "tree", "model": "building_low" }
-    },
-    {
-      "key": "building.mid",
-      "label": "Mid-rise building",
-      "category": "Buildings",
-      "thumbnail": "assets/library/thumbnails/building_mid.png",
-      "create": { "kind": "tree", "model": "building_mid" }
-    },
-    {
-      "key": "building.tower",
-      "label": "Tower building",
-      "category": "Buildings",
-      "thumbnail": "assets/library/thumbnails/building_tower.png",
-      "create": { "kind": "tree", "model": "building_tower" }
-    },
-    {
-      "key": "signal.traffic_light",
-      "label": "Traffic light",
-      "category": "Signals",
-      "thumbnail": "assets/library/thumbnails/signal_traffic_light.png",
-      "create": { "kind": "signal", "signal": "us.signal_head" }
-    },
-    {
-      "key": "signal.r1_1",
-      "label": "Stop sign (R1-1)",
-      "category": "Signals",
-      "thumbnail": "assets/library/thumbnails/sign_us_r1_1.png",
-      "create": { "kind": "signal", "signal": "us.r1_1" }
-    },
-    {
-      "key": "signal.r1_2",
-      "label": "Yield sign (R1-2)",
-      "category": "Signals",
-      "thumbnail": "assets/library/thumbnails/sign_us_r1_2.png",
-      "create": { "kind": "signal", "signal": "us.r1_2" }
-    },
-    {
-      "key": "signal.r2_1",
-      "label": "Speed limit (R2-1)",
-      "category": "Signals",
-      "thumbnail": "assets/library/thumbnails/sign_us_r2_1.png",
-      "create": { "kind": "signal", "signal": "us.r2_1" }
-    },
-    {
-      "key": "signal.r5_1",
-      "label": "Do not enter (R5-1)",
-      "category": "Signals",
-      "thumbnail": "assets/library/thumbnails/sign_us_r5_1.png",
-      "create": { "kind": "signal", "signal": "us.r5_1" }
-    },
-    {
-      "key": "signal.r6_1_right",
-      "label": "One way, right (R6-1)",
-      "category": "Signals",
-      "thumbnail": "assets/library/thumbnails/sign_us_r6_1_right.png",
-      "create": { "kind": "signal", "signal": "us.r6_1_right" }
-    },
-    {
-      "key": "signal.r6_1_left",
-      "label": "One way, left (R6-1)",
-      "category": "Signals",
-      "thumbnail": "assets/library/thumbnails/sign_us_r6_1_left.png",
-      "create": { "kind": "signal", "signal": "us.r6_1_left" }
-    },
-    {
-      "key": "signal.r3_1",
-      "label": "No right turn (R3-1)",
-      "category": "Signals",
-      "thumbnail": "assets/library/thumbnails/sign_us_r3_1.png",
-      "create": { "kind": "signal", "signal": "us.r3_1" }
-    },
-    {
-      "key": "signal.r3_2",
-      "label": "No left turn (R3-2)",
-      "category": "Signals",
-      "thumbnail": "assets/library/thumbnails/sign_us_r3_2.png",
-      "create": { "kind": "signal", "signal": "us.r3_2" }
-    },
-    {
-      "key": "signal.r4_7",
-      "label": "Keep right (R4-7)",
-      "category": "Signals",
-      "thumbnail": "assets/library/thumbnails/sign_us_r4_7.png",
-      "create": { "kind": "signal", "signal": "us.r4_7" }
-    },
-    {
-      "key": "signal.w1_2",
-      "label": "Curve ahead (W1-2)",
-      "category": "Signals",
-      "thumbnail": "assets/library/thumbnails/sign_us_w1_2.png",
-      "create": { "kind": "signal", "signal": "us.w1_2" }
-    },
-    {
-      "key": "signal.w3_1",
-      "label": "Stop ahead (W3-1)",
-      "category": "Signals",
-      "thumbnail": "assets/library/thumbnails/sign_us_w3_1.png",
-      "create": { "kind": "signal", "signal": "us.w3_1" }
-    },
-    {
-      "key": "signal.w11_2",
-      "label": "Pedestrian crossing (W11-2)",
-      "category": "Signals",
-      "thumbnail": "assets/library/thumbnails/sign_us_w11_2.png",
-      "create": { "kind": "signal", "signal": "us.w11_2" }
-    },
-    {
-      "key": "signal.s1_1",
-      "label": "School (S1-1)",
-      "category": "Signals",
-      "thumbnail": "assets/library/thumbnails/sign_us_s1_1.png",
-      "create": { "kind": "signal", "signal": "us.s1_1" }
-    },
-    {
-      "key": "signal.d3_1",
-      "label": "Street name (D3-1)",
-      "category": "Signals",
-      "thumbnail": "assets/library/thumbnails/sign_us_d3_1.png",
-      "create": { "kind": "signal", "signal": "us.d3_1" }
-    },
-    {
-      "key": "marking.solid_white",
-      "label": "Solid single white",
-      "category": "Markings",
-      "thumbnail": "assets/library/thumbnails/marking_solid_white.png",
-      "create": { "kind": "marking", "mark_type": "solid", "mark_color": "white", "mark_width": 0.1 }
-    },
-    {
-      "key": "marking.double_yellow",
-      "label": "Double yellow",
-      "category": "Markings",
-      "thumbnail": "assets/library/thumbnails/marking_double_yellow.png",
-      "create": { "kind": "marking", "mark_type": "solid_solid", "mark_color": "yellow", "mark_width": 0.1 }
-    },
-    {
-      "key": "marking.dashed_white",
-      "label": "Dashed white",
-      "category": "Markings",
-      "thumbnail": "assets/library/thumbnails/marking_dashed_white.png",
-      "create": { "kind": "marking", "mark_type": "broken", "mark_color": "white", "mark_width": 0.1 }
-    },
-    {
-      "key": "marking.dashed_yellow",
-      "label": "Dashed yellow",
-      "category": "Markings",
-      "thumbnail": "assets/library/thumbnails/marking_dashed_yellow.png",
-      "create": { "kind": "marking", "mark_type": "broken", "mark_color": "yellow", "mark_width": 0.1 }
-    },
-    {
-      "key": "marking.double_white",
-      "label": "Double white",
-      "category": "Markings",
-      "thumbnail": "assets/library/thumbnails/marking_double_white.png",
-      "create": { "kind": "marking", "mark_type": "solid_solid", "mark_color": "white", "mark_width": 0.1 }
-    },
-    {
-      "key": "marking.solid_broken_yellow",
-      "label": "Solid–broken yellow",
-      "category": "Markings",
-      "thumbnail": "assets/library/thumbnails/marking_solid_broken_yellow.png",
-      "create": { "kind": "marking", "mark_type": "solid_broken", "mark_color": "yellow", "mark_width": 0.1 }
-    },
-    {
-      "key": "marking.broken_solid_yellow",
-      "label": "Broken–solid yellow",
-      "category": "Markings",
-      "thumbnail": "assets/library/thumbnails/marking_broken_solid_yellow.png",
-      "create": { "kind": "marking", "mark_type": "broken_solid", "mark_color": "yellow", "mark_width": 0.1 }
-    },
-    {
-      "key": "marking.double_dashed_yellow",
-      "label": "Double dashed yellow",
-      "category": "Markings",
-      "thumbnail": "assets/library/thumbnails/marking_double_dashed_yellow.png",
-      "create": { "kind": "marking", "mark_type": "broken_broken", "mark_color": "yellow", "mark_width": 0.1 }
-    },
-    {
-      "key": "marking.edge_white",
-      "label": "Wide edge white",
-      "category": "Markings",
-      "thumbnail": "assets/library/thumbnails/marking_edge_white.png",
-      "create": { "kind": "marking", "mark_type": "solid", "mark_color": "white", "mark_width": 0.15 }
-    },
-    {
-      "key": "crosswalk.zebra",
-      "label": "Zebra crosswalk",
-      "category": "Crosswalks",
-      "create": { "kind": "crosswalk", "width": 3.0, "border_width": 0.0, "dash_length": 0.6, "dash_gap": 0.6, "material": "material.paint_white", "segmentation": "crosswalk" }
-    },
-    {
-      "key": "stencil.arrow_left",
-      "label": "Left-turn arrow",
-      "category": "Stencils",
-      "create": { "kind": "stencil", "subtype": "arrowLeft", "length": 4.0, "width_frac": 0.5, "material": "material.paint_white", "segmentation": "road_marking" }
-    },
-    {
-      "key": "stencil.arrow_straight",
-      "label": "Straight arrow",
-      "category": "Stencils",
-      "create": { "kind": "stencil", "subtype": "arrowStraight", "length": 4.0, "width_frac": 0.5, "material": "material.paint_white", "segmentation": "road_marking" }
-    },
-    {
-      "key": "stencil.arrow_right",
-      "label": "Right-turn arrow",
-      "category": "Stencils",
-      "create": { "kind": "stencil", "subtype": "arrowRight", "length": 4.0, "width_frac": 0.5, "material": "material.paint_white", "segmentation": "road_marking" }
-    },
-    {
-      "key": "stencil.arrow_left_right",
-      "label": "Left-right arrow",
-      "category": "Stencils",
-      "create": { "kind": "stencil", "subtype": "arrowLeftRight", "length": 4.0, "width_frac": 0.5, "material": "material.paint_white", "segmentation": "road_marking" }
-    },
-    {
-      "key": "stencil.arrow_straight_left",
-      "label": "Straight-left arrow",
-      "category": "Stencils",
-      "create": { "kind": "stencil", "subtype": "arrowStraightLeft", "length": 4.0, "width_frac": 0.5, "material": "material.paint_white", "segmentation": "road_marking" }
-    },
-    {
-      "key": "stencil.arrow_straight_right",
-      "label": "Straight-right arrow",
-      "category": "Stencils",
-      "create": { "kind": "stencil", "subtype": "arrowStraightRight", "length": 4.0, "width_frac": 0.5, "material": "material.paint_white", "segmentation": "road_marking" }
-    },
-    {
-      "key": "material.asphalt",
-      "label": "Asphalt",
-      "category": "Materials",
-      "thumbnail": "assets/library/thumbnails/material_asphalt.png",
-      "create": { "kind": "material", "material": "asphalt" }
-    },
-    {
-      "key": "material.asphalt_worn",
-      "label": "Asphalt (worn)",
-      "category": "Materials",
-      "thumbnail": "assets/library/thumbnails/material_asphalt_worn.png",
-      "create": { "kind": "material", "material": "asphalt_worn" }
-    },
-    {
-      "key": "material.concrete",
-      "label": "Concrete",
-      "category": "Materials",
-      "thumbnail": "assets/library/thumbnails/material_concrete.png",
-      "create": { "kind": "material", "material": "concrete" }
-    },
-    {
-      "key": "material.paint_white",
-      "label": "White paint",
-      "category": "Materials",
-      "thumbnail": "assets/library/thumbnails/material_paint_white.png",
-      "create": { "kind": "material", "material": "paint_white" }
-    },
-    {
-      "key": "material.paint_yellow",
-      "label": "Yellow paint",
-      "category": "Materials",
-      "thumbnail": "assets/library/thumbnails/material_paint_yellow.png",
-      "create": { "kind": "material", "material": "paint_yellow" }
-    },
-    {
-      "key": "prop_set.mixed",
-      "label": "Mixed trees",
-      "category": "Prop sets",
-      "create": { "kind": "prop_set", "entries": [ { "model": "tree_pine", "portion": 3 }, { "model": "tree_birch", "portion": 1 } ] }
-    },
-    {
-      "key": "prop_set.city",
-      "label": "City buildings",
-      "category": "Prop sets",
-      "create": { "kind": "prop_set", "entries": [ { "model": "building_low", "portion": 3 }, { "model": "building_mid", "portion": 2 }, { "model": "building_tower", "portion": 1 } ] }
-    },
-    {
-      "key": "prop_assembly.signal_mast",
-      "label": "Traffic signal, mast arm",
-      "category": "Prop assemblies",
-      "create": { "kind": "prop_assembly", "prop_assembly": "signal_mast" }
+      "create": {
+        "kind": "road_style",
+        "style": "prawko.no_curb"
+      }
     }
   ]
 }

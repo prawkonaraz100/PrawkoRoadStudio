@@ -75,6 +75,7 @@ public:
   explicit LibraryPanel(LibraryListModel& model, QWidget* parent = nullptr);
 
   [[nodiscard]] QListView* view() { return view_; }
+
   [[nodiscard]] QLabel* drag_instructions() const { return drag_instructions_; }
 
   /// Scrolls to and selects the first item of `category` (the manifest's
@@ -160,8 +161,8 @@ private:
   void handle_current_changed(const QModelIndex& index);
   void show_context_menu(const QPoint& pos);
 
-  /// Fills category_combo_ with "All categories" + each distinct category in the
-  /// merged model, in first-seen order.
+  /// Shows "All categories" plus exactly three curated Prawko categories,
+  /// regardless of extra legacy entries in the source manifest or overlays.
   void populate_categories();
 
   LibraryListModel& model_;

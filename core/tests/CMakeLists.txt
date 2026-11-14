@@ -133,7 +133,7 @@ endif()
 
 target_compile_definitions(roadmaker_core_tests PRIVATE
   RM_DOCS_DIR="${CMAKE_SOURCE_DIR}/docs"
-  RM_SAMPLES_DIR="${CMAKE_SOURCE_DIR}/assets/samples"
+  RM_SAMPLES_DIR="${CMAKE_SOURCE_DIR}/core/tests/fixtures/legacy_scenes"
   RM_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/junctions"
   RM_FUZZ_CORPUS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fuzz/corpus"
   RM_ESMINI_FIXTURES_DIR="${CMAKE_SOURCE_DIR}/tests/esmini"

@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Regenerate the canonical visual-review scenes in assets/samples/.
+"""Regenerate the canonical visual-review scenes in core/tests/fixtures/legacy_scenes/.
 
 Four scenes cover what the renderer must get right
 (docs/standards/product-parity.md — visual acceptance):
@@ -45,7 +45,7 @@ from pathlib import Path
 import gen_prop_meshes as props
 import roadmaker as rm
 
-SAMPLES = Path(__file__).resolve().parent.parent / "assets" / "samples"
+SAMPLES = Path(__file__).resolve().parent.parent / "core" / "tests" / "fixtures" / "legacy_scenes"
 
 # Prop dimensions come from the mesh author itself rather than a second copy of
 # the numbers — there is no Python binding for props::model(), and a sample

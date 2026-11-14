@@ -22,8 +22,7 @@ Checks (policy: docs/design/m2/05_assets.md):
 2. Every assets/manifest.json entry uses an allowed license.
 
 Exemptions:
-- assets/samples/ — project-authored .xodr test data covered by the repo
-  LICENSE (not media assets).
+- Legacy test-only fixtures under core/tests/fixtures/ are not shipped UI assets.
 - assets/manifest.json and *.qrc — machinery, not assets.
 """
 
@@ -37,7 +36,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 LEDGER = REPO_ROOT / "ASSETS_LICENSES.md"
 MANIFEST = REPO_ROOT / "assets" / "manifest.json"
 SCAN_ROOTS = ("assets", "editor/resources")
-EXEMPT_DIRS = ("assets/samples",)
+EXEMPT_DIRS: tuple[str, ...] = ()
 EXEMPT_NAMES = {"manifest.json"}
 EXEMPT_SUFFIXES = {".qrc"}
 

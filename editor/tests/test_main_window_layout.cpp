@@ -23,6 +23,8 @@
 // fatal-on-failure and only runs on realize, so offscreen tests must stay
 // construction-only (this is why --screenshot mode probes GL first).
 
+#include "roadmaker/xodr/writer.hpp"
+
 #include <gtest/gtest.h>
 
 #include <QAction>
@@ -59,9 +61,9 @@
 #include "document/project.hpp"
 #include "document/scene_sidecar.hpp"
 #include "panels/editor2d_host.hpp"
-#include "roadmaker/xodr/writer.hpp"
-#include "viewport/viewport_widget.hpp"
+#include "panels/library_panel.hpp"
 #include "viewport/projection.hpp"
+#include "viewport/viewport_widget.hpp"
 
 namespace roadmaker::editor {
 namespace {
@@ -132,8 +134,8 @@ TEST_F(MainWindowLayoutTest, ScenarioModeShowsActorLibraryAndRouteTools) {
 
   const auto tool_named = [tools](const QString& name) -> QAction* {
     const auto actions = tools->actions();
-    const auto found =
-        std::ranges::find_if(actions, [&name](QAction* action) { return action->iconText() == name; });
+    const auto found = std::ranges::find_if(
+        actions, [&name](QAction* action) { return action->iconText() == name; });
     return found == actions.end() ? nullptr : *found;
   };
   auto* actor = tool_named(QStringLiteral("Actor"));
@@ -159,9 +161,8 @@ TEST_F(MainWindowLayoutTest, ScenarioModeShowsActorLibraryAndRouteTools) {
   auto* storyboard = window_.menuBar()->findChild<QMenu*>(QStringLiteral("scenario_menu"));
   ASSERT_NE(storyboard, nullptr);
   const auto entries = storyboard->actions();
-  auto entry = std::ranges::find_if(entries, [](QAction* action) {
-    return action->text() == QStringLiteral("Storyboard…");
-  });
+  auto entry = std::ranges::find_if(
+      entries, [](QAction* action) { return action->text() == QStringLiteral("Storyboard…"); });
   ASSERT_NE(entry, entries.end());
   (*entry)->trigger();
   EXPECT_FALSE(storyboard_dock->isHidden());
@@ -188,7 +189,8 @@ TEST_F(MainWindowLayoutTest, LibraryMimeDropAndViewportClicksWriteBothKindsOfRou
   const auto state_path = directory.filePath(QStringLiteral("practice.rmscene.json"));
   {
     std::ofstream state(std::filesystem::path(state_path.toStdU16String()));
-    state << R"({"scene_version":1,"view":{"distance":60,"pitch":1.56,"projection":"orthographic","target":[50,0,0],"yaw":-1.57}})";
+    state
+        << R"({"scene_version":1,"view":{"distance":60,"pitch":1.56,"projection":"orthographic","target":[50,0,0],"yaw":-1.57}})";
   }
   window_.load_file(scene);
   auto* run = window_.findChild<QAction*>(QStringLiteral("run_scenario_simulation"));
@@ -203,8 +205,8 @@ TEST_F(MainWindowLayoutTest, LibraryMimeDropAndViewportClicksWriteBothKindsOfRou
   const auto pixel = [viewport](double x, double y) {
     const double w = viewport->width();
     const double h = viewport->height();
-    const auto projected = project_to_screen(viewport->camera().matrices(float(w / h)),
-                                              x, y, 0.0, w, h);
+    const auto projected =
+        project_to_screen(viewport->camera().matrices(float(w / h)), x, y, 0.0, w, h);
     return projected ? QPointF((*projected)[0], (*projected)[1]).toPoint() : QPoint(-1, -1);
   };
   const auto drop = [viewport, &pixel](const QByteArray& key, double x, double y) {
@@ -244,9 +246,8 @@ TEST_F(MainWindowLayoutTest, LibraryMimeDropAndViewportClicksWriteBothKindsOfRou
   auto* route_toolbar = window_.findChild<QToolBar*>(QStringLiteral("toolbar.tools"));
   ASSERT_NE(route_toolbar, nullptr);
   const auto tools = route_toolbar->actions();
-  const auto route = std::ranges::find_if(tools, [](QAction* action) {
-    return action->iconText() == QStringLiteral("Trasa");
-  });
+  const auto route = std::ranges::find_if(
+      tools, [](QAction* action) { return action->iconText() == QStringLiteral("Trasa"); });
   ASSERT_NE(route, tools.end());
   auto* edit_route = window_.findChild<QPushButton*>(QStringLiteral("actor_edit_route_button"));
   ASSERT_NE(edit_route, nullptr);
@@ -257,9 +258,8 @@ TEST_F(MainWindowLayoutTest, LibraryMimeDropAndViewportClicksWriteBothKindsOfRou
   finish->click();
   const auto menus = window_.menuBar()->actions();
   const auto save = menus.front()->menu()->actions();
-  const auto save_action = std::ranges::find_if(save, [](QAction* action) {
-    return action->text() == QStringLiteral("&Save");
-  });
+  const auto save_action = std::ranges::find_if(
+      save, [](QAction* action) { return action->text() == QStringLiteral("&Save"); });
   ASSERT_NE(save_action, save.end());
   (*save_action)->trigger();
   auto xosc = scene;
@@ -283,12 +283,13 @@ TEST_F(MainWindowLayoutTest, RepeatedRoadLibraryDropsAuthorMultipleIndependentRo
   QTemporaryDir directory;
   ASSERT_TRUE(directory.isValid());
   const auto scene = std::filesystem::path(directory.path().toStdU16String()) / "roads.xodr";
-  std::filesystem::copy_file(std::filesystem::path(RM_SAMPLES_DIR) /
-                                 "prawko_crosswalk_clear.xodr", scene);
+  std::filesystem::copy_file(std::filesystem::path(RM_SAMPLES_DIR) / "prawko_crosswalk_clear.xodr",
+                             scene);
   {
     std::ofstream state(std::filesystem::path(
         directory.filePath(QStringLiteral("roads.rmscene.json")).toStdU16String()));
-    state << R"({"scene_version":1,"view":{"distance":60,"pitch":1.56,"projection":"orthographic","target":[50,0,0],"yaw":-1.57}})";
+    state
+        << R"({"scene_version":1,"view":{"distance":60,"pitch":1.56,"projection":"orthographic","target":[50,0,0],"yaw":-1.57}})";
   }
   window_.load_file(scene);
   auto* viewport = window_.viewport();
@@ -297,10 +298,9 @@ TEST_F(MainWindowLayoutTest, RepeatedRoadLibraryDropsAuthorMultipleIndependentRo
   const auto pixel = [viewport](double x, double y) {
     const double w = viewport->width();
     const double h = viewport->height();
-    const auto projected = project_to_screen(viewport->camera().matrices(float(w / h)),
-                                              x, y, 0.0, w, h);
-    return projected ? QPointF((*projected)[0], (*projected)[1]).toPoint()
-                     : QPoint(-100, -100);
+    const auto projected =
+        project_to_screen(viewport->camera().matrices(float(w / h)), x, y, 0.0, w, h);
+    return projected ? QPointF((*projected)[0], (*projected)[1]).toPoint() : QPoint(-100, -100);
   };
   const auto drop = [viewport, &pixel](const QByteArray& key, double x, double y) {
     const QPoint pos = pixel(x, y);
@@ -327,17 +327,15 @@ TEST_F(MainWindowLayoutTest, RepeatedRoadLibraryDropsAuthorMultipleIndependentRo
   auto* save = window_.findChild<QAction*>(QStringLiteral("file_save"));
   if (!save) {
     const auto actions = window_.menuBar()->actions().front()->menu()->actions();
-    const auto match = std::ranges::find_if(actions, [](const QAction* action) {
-      return action->text() == QStringLiteral("&Save");
-    });
+    const auto match = std::ranges::find_if(
+        actions, [](const QAction* action) { return action->text() == QStringLiteral("&Save"); });
     ASSERT_NE(match, actions.end());
     save = *match;
   }
   ASSERT_NE(save, nullptr);
   auto* footer = window_.findChild<QLabel*>(QStringLiteral("status_entities"));
   ASSERT_NE(footer, nullptr);
-  EXPECT_TRUE(footer->text().startsWith(QStringLiteral("1 roads")))
-      << footer->text().toStdString();
+  EXPECT_TRUE(footer->text().startsWith(QStringLiteral("1 roads"))) << footer->text().toStdString();
   EXPECT_EQ(read_count(), 1U);
   // First select the existing road to catch the accidental extend gesture.
   QTest::mouseClick(viewport, Qt::LeftButton, Qt::NoModifier, pixel(50.0, 0.0));
@@ -382,6 +380,42 @@ TEST_F(MainWindowLayoutTest, RepeatedRoadLibraryDropsAuthorMultipleIndependentRo
   EXPECT_TRUE(footer->text().startsWith(QStringLiteral("2 roads")));
   (*redo)->trigger();
   EXPECT_TRUE(footer->text().startsWith(QStringLiteral("3 roads")));
+}
+
+TEST_F(MainWindowLayoutTest, CuratedLibraryStaysAvailableAcrossMapAndScenarioModes) {
+  auto* library = window_.findChild<LibraryPanel*>();
+  ASSERT_NE(library, nullptr);
+  auto* scenario_mode = window_.findChild<QAction*>(QStringLiteral("scenario_mode"));
+  ASSERT_NE(scenario_mode, nullptr);
+  const auto verify = [library] {
+    // Changing modes may focus its relevant category; explicitly select
+    // All to verify total availability rather than the current filter.
+    library->category_combo()->setCurrentIndex(0);
+    ASSERT_EQ(library->category_combo()->count(), 4);
+    // The current category is intentionally retained across editing modes.
+    // Switch to All before checking the 18-item complete catalogue.
+    library->category_combo()->setCurrentIndex(0);
+    ASSERT_EQ(library->view()->model()->rowCount(), 18);
+    const int actor_category = library->category_combo()->findData(kScenarioActorCategory);
+    ASSERT_GE(actor_category, 0);
+    library->category_combo()->setCurrentIndex(actor_category);
+    ASSERT_EQ(library->view()->model()->rowCount(), 6);
+    for (int row = 0; row < 6; ++row) {
+      EXPECT_EQ(library->view()
+                    ->model()
+                    ->data(library->view()->model()->index(row, 0), LibraryListModel::CategoryRole)
+                    .toString(),
+                kScenarioActorCategory);
+    }
+    library->category_combo()->setCurrentIndex(0);
+    EXPECT_EQ(library->view()->model()->rowCount(), 18);
+  };
+  scenario_mode->setChecked(false);
+  verify();
+  scenario_mode->setChecked(true);
+  verify();
+  scenario_mode->setChecked(false);
+  verify();
 }
 
 TEST_F(MainWindowLayoutTest, ImageExportIsEnabledWhenASceneOpens) {

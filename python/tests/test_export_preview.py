@@ -20,7 +20,7 @@ import pytest
 
 import roadmaker as rm
 
-SAMPLES = pathlib.Path(__file__).resolve().parents[2] / "assets" / "samples"
+SAMPLES = pathlib.Path(__file__).resolve().parents[2] / "core" / "tests" / "fixtures" / "legacy_scenes"
 
 
 @pytest.fixture
