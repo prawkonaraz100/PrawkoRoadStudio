@@ -108,6 +108,11 @@ EndpointHeadings CreateRoadTool::locked_headings() const {
 }
 
 void CreateRoadTool::begin_at(double world_x, double world_y) {
+  // Every Library drop is a NEW road request. A previously armed Create Road
+  // tool may still own points from an unfinished stroke, and the selection
+  // model may still name the old road. Neither may hijack the next drop.
+  reset_session();
+  library_new_road_ = true;
   ToolEvent event;
   event.world_x = world_x;
   event.world_y = world_y;
@@ -148,7 +153,7 @@ void CreateRoadTool::place_point(const ToolEvent& event) {
   // NEARER endpoint lengthens that road (same id) to the final point, rather
   // than authoring a new welded road. Either end extends now (#275) — the
   // kernel prepends/reverses for a Start, appends for an End.
-  if (first_point && selected_road_.has_value() && snapped.has_value() &&
+  if (first_point && !library_new_road_ && selected_road_.has_value() && snapped.has_value() &&
       snapped->kind == edit::SnapKind::RoadEndpoint && snapped->road == *selected_road_) {
     if (const Road* road = document_.network().road(*selected_road_); road != nullptr) {
       const PathPoint start = road->plan_view.evaluate(0.0);
@@ -316,6 +321,7 @@ void CreateRoadTool::reset_session() {
   hover_snap_.reset();
   cursor_.reset();
   extend_end_.reset();
+  library_new_road_ = false;
   emit preview_changed();
 }
 
@@ -415,8 +421,7 @@ PreviewGeometry CreateRoadTool::preview() const {
 }
 
 QString CreateRoadTool::instruction() const {
-  return tr("Click to place waypoints · Enter or double-click creates the road · Backspace removes "
-            "the last · Esc cancels");
+  return tr("Klikaj punkty drogi · Enter / dwuklik kończy · Backspace usuwa punkt · Esc anuluje");
 }
 
 } // namespace roadmaker::editor

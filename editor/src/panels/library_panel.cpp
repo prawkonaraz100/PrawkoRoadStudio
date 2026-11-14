@@ -280,7 +280,7 @@ void LibraryPanel::handle_current_changed(const QModelIndex& index) {
     drag_instructions_->setText(tr("Przeciągnij uczestnika na scenę. Potem klikaj punkty trasy."));
     break;
   case LibraryItem::Kind::RoadTemplate:
-    drag_instructions_->setText(tr("Przeciągnij na teren, dodaj punkty. Enter kończy, Esc anuluje."));
+    drag_instructions_->setText(tr("Każde upuszczenie rozpoczyna nową drogę. Dodaj punkty, Enter kończy, Esc anuluje."));
     break;
   case LibraryItem::Kind::RoadStyle:
     drag_instructions_->setText(tr("Upuść na drogę lub kliknij 2×, aby zmienić zaznaczoną drogę."));

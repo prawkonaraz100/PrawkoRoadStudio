@@ -70,8 +70,11 @@ public:
 
   [[nodiscard]] std::size_t waypoint_count() const { return points_.size(); }
 
-  /// Places the first waypoint at a world point — a library road-template drop
-  /// arms the tool here so the user continues from the drop location.
+  /// Starts a FRESH road at a library drop point, even if the Create Road
+  /// tool was already active or a previous road remains selected. Existing
+  /// waypoints are discarded; the next clicks finish only this new stroke.
+  /// A template drop NEVER extends the selected road (the toolbar's separate
+  /// endpoint-extension gesture still does).
   void begin_at(double world_x, double world_y);
 
   [[nodiscard]] QString instruction() const override;
@@ -113,6 +116,7 @@ private:
   /// Set when the first placed point anchored on the selected road's END: the
   /// session extends that road to the last point instead of authoring a new one.
   std::optional<RoadEnd> extend_end_;
+  bool library_new_road_ = false;
 };
 
 } // namespace roadmaker::editor

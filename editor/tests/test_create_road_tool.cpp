@@ -492,6 +492,85 @@ TEST(CreateRoadTool, ExtendEndpointClickAddsCurvatureContinuousExtension) {
             roadmaker::tol::kWeldHeading);
 }
 
+// A Library template drop is not a shortcut for the toolbar's "extend the
+// selected road" operation. Starting a second road at the exact endpoint of
+// the selected first one must CREATE road 2 (with a welded end), not stretch 1.
+TEST(CreateRoadTool, LibraryDropAtSelectedRoadEndCreatesASecondAndThirdRoad) {
+  Document document;
+  ASSERT_TRUE(document.push_command(roadmaker::edit::create_road(
+      {Waypoint{.x = 0.0, .y = 0.0}, Waypoint{.x = 100.0, .y = 0.0}},
+      LaneProfile::local_road(), "Original")).has_value());
+  const RoadId first = document.network().find_road("1");
+  ASSERT_TRUE(first.is_valid());
+  const double original_length = document.network().road(first)->plan_view.length();
+  CreateRoadTool tool(document);
+  tool.set_profile(LaneProfile::local_road());
+  tool.set_selected_road(first); // e.g. selection stays after editing road 1
+  tool.begin_at(100.0, 0.0);      // drop another template ON the selected road end
+  ASSERT_EQ(tool.waypoint_count(), 1U);
+  click(tool, 165.0, 0.0);
+  ASSERT_TRUE(tool.key_press(Qt::Key_Return, Qt::NoModifier));
+
+  EXPECT_EQ(document.network().road_count(), 2U)
+      << "A Library template extended the selected road instead of creating a second";
+  EXPECT_TRUE(document.network().find_road("2").is_valid());
+  EXPECT_NEAR(document.network().road(first)->plan_view.length(), original_length, 1e-6);
+  const int before_third = document.undo_stack()->count();
+
+  tool.set_selected_road(first); // old road remains selected or is re-selected
+  tool.begin_at(30.0, 80.0);
+  click(tool, 100.0, 80.0);
+  ASSERT_TRUE(tool.key_press(Qt::Key_Return, Qt::NoModifier));
+  EXPECT_EQ(document.network().road_count(), 3U);
+  EXPECT_TRUE(document.network().find_road("3").is_valid());
+  EXPECT_EQ(document.undo_stack()->count(), before_third + 1);
+  document.undo_stack()->undo();
+  EXPECT_EQ(document.network().road_count(), 2U);
+  document.undo_stack()->redo();
+  EXPECT_EQ(document.network().road_count(), 3U);
+  EXPECT_TRUE(roadmaker::write_xodr(document.network()).has_value());
+}
+
+// A fresh drag of a Library tile while the Create Road tool is already checked
+// must REPLACE the pending stroke rather than silently append a waypoint to it.
+// This is independent of whether there are 0, 1 or 10 existing roads.
+TEST(CreateRoadTool, RepeatedLibraryDropRearmsAtNewPositionInsteadOfAppendingOldPoints) {
+  Document document;
+  ASSERT_TRUE(document.push_command(roadmaker::edit::create_road(
+      {Waypoint{.x = 0.0, .y = 0.0}, Waypoint{.x = 90.0, .y = 0.0}},
+      LaneProfile::local_road(), "Existing")).has_value());
+  CreateRoadTool tool(document);
+  tool.begin_at(10.0, 60.0);
+  click(tool, 45.0, 60.0);
+  ASSERT_EQ(tool.waypoint_count(), 2U);
+  const int initial_undo = document.undo_stack()->count();
+
+  // QToolManager::set_active does nothing when already CreateRoad. A new drop
+  // must reset independently of tool activation and honor its new profile.
+  tool.set_profile(LaneProfile::collector());
+  tool.begin_at(10.0, -60.0);
+  ASSERT_EQ(tool.waypoint_count(), 1U);
+  EXPECT_EQ(tool.preview().handles.size(), 1U);
+  EXPECT_NEAR(tool.preview().handles.front().y, -60.0, 0.5);
+  click(tool, 65.0, -60.0);
+  ASSERT_TRUE(tool.key_press(Qt::Key_Enter, Qt::NoModifier));
+  ASSERT_EQ(document.network().road_count(), 2U);
+  EXPECT_EQ(document.undo_stack()->count(), initial_undo + 1);
+  const RoadId created = document.network().find_road("2");
+  ASSERT_TRUE(created.is_valid());
+  const auto* new_road = document.network().road(created);
+  ASSERT_NE(new_road, nullptr);
+  const auto& waypoints = *new_road->authoring_waypoints;
+  ASSERT_EQ(waypoints.size(), 2U);
+  EXPECT_NEAR(waypoints[0].y, -60.0, 0.5);
+  EXPECT_NEAR(waypoints[1].y, -60.0, 0.5);
+  EXPECT_EQ(new_road->sections.size(), 1U);
+  const auto* section = document.network().lane_section(new_road->sections.front());
+  ASSERT_NE(section, nullptr);
+  EXPECT_EQ(section->lanes.size(), 4U); // collector: left driving, right driving+shoulder, centre
+  EXPECT_TRUE(roadmaker::write_xodr(document.network()).has_value());
+}
+
 TEST(CreateRoadTool, ExtendStartEndpointClickExtendsBackward) {
   Document document;
   ASSERT_TRUE(document

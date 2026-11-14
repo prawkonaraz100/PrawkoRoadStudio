@@ -2720,12 +2720,21 @@ void MainWindow::on_library_drop(const QString& key, double world_x, double worl
   };
   switch (action.kind) {
   case LibraryDropKind::RoadTemplate:
-    actions_->tool_create_road->trigger(); // activate Create Road
+    // Scenario mode disables road tools but the Library still exposes templates.
+    // Switch to Map before arming Create Road or this drop silently does nothing.
+    if (actions_->scenario_mode->isChecked()) actions_->scenario_mode->setChecked(false);
+    // An explicitly dropped template asks for a NEW road, not an extension of
+    // the last road selected in the viewport. begin_at also resets any stale
+    // in-progress stroke when the Create Road tool was already active.
+    selection_.clear();
+    if (!actions_->tool_create_road->isChecked()) actions_->tool_create_road->trigger();
     if (create_road_tool_ != nullptr) {
       create_road_tool_->set_profile(action.profile);
       create_road_tool_->begin_at(world_x, world_y);
     }
-    viewport_->show_toast(tr("Create Road armed — click to add points"), ToastSeverity::Info);
+    viewport_->setFocus();
+    viewport_->show_toast(tr("Nowa droga — wskaż kolejny punkt i naciśnij Enter"),
+                          ToastSeverity::Info);
     break;
   case LibraryDropKind::PropSet:
     // A dropped prop set arms Prop Curve with the set current (#367): track the
@@ -2832,7 +2841,7 @@ void MainWindow::on_library_drag_moved(const QString& key, double world_x, doubl
   } else {
     switch (action.kind) {
     case LibraryDropKind::RoadTemplate:
-      instruction = tr("Nowa droga — puść i klikaj punkty"); break;
+      instruction = tr("Nowa droga — puść, wskaż punkty i zatwierdź Enter"); break;
     case LibraryDropKind::RoadStyle:
       instruction = tr("Puść, aby zmienić przekrój drogi"); break;
     case LibraryDropKind::Material:

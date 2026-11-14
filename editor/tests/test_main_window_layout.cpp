@@ -276,6 +276,88 @@ TEST_F(MainWindowLayoutTest, LibraryMimeDropAndViewportClicksWriteBothKindsOfRou
   EXPECT_NE(xml.find("<Waypoint ", second_waypoint + 1), std::string::npos);
 }
 
+// Reproduces the reported "only one road can be dropped" issue at the real
+// Qt viewport boundary. In particular the second drop occurs while Create Road
+// is already checked; ToolManager will NOT re-activate the same tool.
+TEST_F(MainWindowLayoutTest, RepeatedRoadLibraryDropsAuthorMultipleIndependentRoads) {
+  QTemporaryDir directory;
+  ASSERT_TRUE(directory.isValid());
+  const auto scene = std::filesystem::path(directory.path().toStdU16String()) / "roads.xodr";
+  std::filesystem::copy_file(std::filesystem::path(RM_SAMPLES_DIR) /
+                                 "prawko_crosswalk_clear.xodr", scene);
+  {
+    std::ofstream state(std::filesystem::path(
+        directory.filePath(QStringLiteral("roads.rmscene.json")).toStdU16String()));
+    state << R"({"scene_version":1,"view":{"distance":60,"pitch":1.56,"projection":"orthographic","target":[50,0,0],"yaw":-1.57}})";
+  }
+  window_.load_file(scene);
+  auto* viewport = window_.viewport();
+  viewport->resize(800, 500);
+  viewport->set_camera_preset(QStringLiteral("ortho"));
+  const auto pixel = [viewport](double x, double y) {
+    const double w = viewport->width();
+    const double h = viewport->height();
+    const auto projected = project_to_screen(viewport->camera().matrices(float(w / h)),
+                                              x, y, 0.0, w, h);
+    return projected ? QPointF((*projected)[0], (*projected)[1]).toPoint()
+                     : QPoint(-100, -100);
+  };
+  const auto drop = [viewport, &pixel](const QByteArray& key, double x, double y) {
+    const QPoint pos = pixel(x, y);
+    ASSERT_TRUE(viewport->rect().contains(pos)) << pos.x() << ", " << pos.y();
+    QMimeData mime;
+    mime.setData(QString::fromLatin1(kLibraryItemMimeType), key);
+    QDragEnterEvent enter(pos, Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(viewport, &enter);
+    ASSERT_TRUE(enter.isAccepted());
+    QDropEvent event(QPointF(pos), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(viewport, &event);
+    ASSERT_TRUE(event.isAccepted());
+  };
+  const auto read_count = [&scene]() {
+    std::ifstream stream(scene, std::ios::binary);
+    const std::string xml{std::istreambuf_iterator<char>(stream), {}};
+    std::size_t count = 0, pos = 0;
+    while ((pos = xml.find("<road ", pos)) != std::string::npos) {
+      ++count;
+      pos += 6;
+    }
+    return count;
+  };
+  auto* save = window_.findChild<QAction*>(QStringLiteral("file_save"));
+  if (!save) {
+    const auto actions = window_.menuBar()->actions().front()->menu()->actions();
+    const auto match = std::ranges::find_if(actions, [](const QAction* action) {
+      return action->text() == QStringLiteral("&Save");
+    });
+    ASSERT_NE(match, actions.end());
+    save = *match;
+  }
+  ASSERT_NE(save, nullptr);
+  EXPECT_EQ(read_count(), 1U);
+  // First select the existing road to catch the accidental extend gesture.
+  QTest::mouseClick(viewport, Qt::LeftButton, Qt::NoModifier, pixel(50.0, 0.0));
+
+  drop("road.prawko.urban", 28.0, 24.0);
+  QTest::mouseClick(viewport, Qt::LeftButton, Qt::NoModifier, pixel(78.0, 24.0));
+  QTest::keyClick(viewport, Qt::Key_Return);
+  save->trigger();
+  EXPECT_EQ(read_count(), 2U) << "The first Library drop did not create another road";
+
+  // If Scenario mode was enabled between placements, a road template must
+  // return to Map mode and activate Create Road rather than silently refuse.
+  auto* scenario_mode = window_.findChild<QAction*>(QStringLiteral("scenario_mode"));
+  ASSERT_NE(scenario_mode, nullptr);
+  scenario_mode->setChecked(true);
+  ASSERT_TRUE(scenario_mode->isChecked());
+  drop("road.prawko.wide", 28.0, -24.0);
+  EXPECT_FALSE(scenario_mode->isChecked());
+  QTest::mouseClick(viewport, Qt::LeftButton, Qt::NoModifier, pixel(78.0, -24.0));
+  QTest::keyClick(viewport, Qt::Key_Return);
+  save->trigger();
+  EXPECT_EQ(read_count(), 3U) << "A second template drop didn't add road 3";
+}
+
 TEST_F(MainWindowLayoutTest, ImageExportIsEnabledWhenASceneOpens) {
   auto* image = window_.findChild<QAction*>(QStringLiteral("export_scene_image"));
   ASSERT_NE(image, nullptr);

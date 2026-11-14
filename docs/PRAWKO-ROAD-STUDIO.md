@@ -472,9 +472,15 @@ Aby pracować myszą, podczas zwykłego uruchamiania edytora otwiera
 się po lewej stronie zakładka **Library**, w której aktywna jest
 kategoria **Prawko | Gotowe drogi**. Przeciągnięcie szablonu
 uruchamia rysowanie nowej drogi — należy dodać jej punkty, a następnie
-zatwierdzić standardową operacją Create Road. Aby przebudować już
-istniejącą drogę, wybierz kategorię **Prawko | Krawężniki i chodniki**
-i upuść styl na jej jezdni; cofnięcie działa przez `Ctrl+Z`.
+zatwierdzić standardową operacją Create Road. **Każde kolejne upuszczenie
+szablonu rozpoczyna osobną drogę**, również gdy inna droga jest zaznaczona,
+gdy narzędzie Create Road już działa lub gdy edytor przełączono do Scenario
+(automatycznie wróci wówczas do trybu mapy). Wskaż minimum drugi punkt
+drogi i naciśnij Enter lub zakończ dwuklikiem: samo upuszczenie rozpoczyna
+rysowanie, jeszcze nie zapisuje gotowej drogi. Ponowne upuszczenie w trakcie
+rysowania zastępuje niezakończony szkic nowym, nie dopisuje punktów do starego.
+Aby przebudować już istniejącą drogę, wybierz kategorię **Prawko | Krawężniki
+i chodniki** i upuść styl na jej jezdni; cofnięcie działa przez `Ctrl+Z`.
 
 | Identyfikator wariantu | Geometria nowej drogi/stylu |
 |---|---|
