@@ -43,7 +43,8 @@ W obu wariantach samochód zaczyna hamować po 2,45 s, a pieszy wchodzi na przej
 1. Włącz **Scenario**. Biblioteka otworzy kategorię **Uczestnicy ruchu** z samochodem, ciężarówką, autobusem, motocyklem, rowerem i pieszym.
 2. Przeciągnij uczestnika na scenę. Pojazd przyciąga się do środka pasa. Pieszego można upuścić także na chodnik. Edytor zaznacza obiekt, przełącza na **Trasę** i pokazuje, co kliknąć dalej.
 3. Kliknij cel i kolejne punkty. Przeciągnij węzeł, aby go skorygować. Kliknij **Zakończ trasę** albo wciśnij Enter, a następnie dodaj następnego uczestnika. Ctrl+Z cofa pojedyncze ustawienie lub zmianę trasy.
-4. Kliknij **Uruchom symulację** na górnym pasku obok **Scenario**. Odtwarzanie ruszy po obliczeniu przebiegu. **Wróć do edycji** lub **Select** pozwala ponownie zaznaczyć uczestnika na scenie.
+4. Po zakończeniu trasy zaznacz uczestnika, aby w **Properties** zmienić **Prędkość początkową** w km/h lub nacisnąć **Edytuj trasę**, co włącza to samo narzędzie rysowania punktów. W pliku XOSC prędkość jest zapisana w m/s; samo otwarcie panelu nie modyfikuje zapisu.
+5. Kliknij **Uruchom symulację** na górnym pasku obok **Scenario**. Odtwarzanie ruszy po obliczeniu przebiegu. **Wróć do edycji** lub **Select** pozwala ponownie zaznaczyć uczestnika na scenie.
 
 Domyślna prędkość pojazdu bez ustawionej prędkości to 30 km/h. Pieszy porusza się po narysowanej ścieżce od początku przebiegu z prędkością 1,4 m/s i zatrzymuje na ostatnim punkcie. Trasę pojazdu esmini wykorzystuje do wyboru dróg i pasów. Zatrzymanie auta wymaga akcji hamowania w **Scenario → Storyboard**.
 

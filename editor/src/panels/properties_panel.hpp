@@ -80,6 +80,9 @@ signals:
   /// never touches the viewport itself.
   void status_message(const QString& text);
 
+  /// Opens the route drawing tool for the currently selected traffic participant.
+  void actor_route_edit_requested(const QString& actor);
+
   /// A slot was engaged: MainWindow should show `category` in the Library. The
   /// panel does not know the Library exists.
   void library_category_requested(const QString& category);
@@ -490,6 +493,7 @@ private:
   /// a speed is not a length, so it never passes through the display-unit layer
   /// (#412's rule cuts on lengths only) — the same call signal_value_spin_ makes.
   QDoubleSpinBox* actor_speed_spin_;
+  QPushButton* actor_edit_route_button_;
   /// Shown INSTEAD of the anchor rows when the actor is placed by a world or
   /// road position: retyping a position drops the old element's preserved tier
   /// (set_entity_init_pose's contract), so this pane never converts one

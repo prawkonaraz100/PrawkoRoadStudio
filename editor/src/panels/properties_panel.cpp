@@ -372,7 +372,9 @@ PropertiesPanel::PropertiesPanel(Document& document,
       actor_lane_edit_(new QLineEdit), actor_s_spin_(new UnitSpinBox),
       actor_offset_spin_(new UnitSpinBox), actor_box_width_spin_(new UnitSpinBox),
       actor_box_length_spin_(new UnitSpinBox), actor_box_height_spin_(new UnitSpinBox),
-      actor_speed_spin_(new QDoubleSpinBox), actor_position_hint_(new QLabel(this)),
+      actor_speed_spin_(new QDoubleSpinBox),
+      actor_edit_route_button_(new QPushButton(tr("Edytuj trasę"), this)),
+      actor_position_hint_(new QLabel(this)),
       object_group_(new QGroupBox(tr("Prop"), this)), object_kind_label_(new QLabel(this)),
       model_slot_(new SlotWidget(QStringLiteral("Props"), this)),
       instance_material_slot_(new SlotWidget(QStringLiteral("Materials"), this)),
@@ -1424,13 +1426,13 @@ PropertiesPanel::PropertiesPanel(Document& document,
   actor_box_length_spin_->setObjectName(QStringLiteral("actor_box_length_spin"));
   actor_box_height_spin_->setObjectName(QStringLiteral("actor_box_height_spin"));
   actor_speed_spin_->setObjectName(QStringLiteral("actor_speed_spin"));
-  actor_speed_spin_->setRange(0.0, 200.0);
+  actor_speed_spin_->setRange(0.0, 720.0); // XOSC retains m/s
   actor_speed_spin_->setDecimals(2);
-  actor_speed_spin_->setSingleStep(1.0);
-  actor_speed_spin_->setSuffix(tr(" m/s"));
-  actor_speed_spin_->setToolTip(
-      tr("Speed this actor starts the scenario at. Metres per second — OpenSCENARIO's own unit, "
-         "so it is not converted for display."));
+  actor_speed_spin_->setSingleStep(5.0);
+  actor_speed_spin_->setSuffix(tr(" km/h"));
+  actor_speed_spin_->setToolTip(tr("Prędkość początkowa w km/h. W XOSC zapisywana w m/s."));
+  actor_edit_route_button_->setObjectName(QStringLiteral("actor_edit_route_button"));
+  actor_edit_route_button_->setToolTip(tr("Zaznacz i popraw punkty trasy na scenie 3D"));
   actor_position_hint_->setWordWrap(true);
   actor_position_hint_->setStyleSheet(QStringLiteral("color: palette(mid);"));
   actor_form_ = new QFormLayout(actor_group_);
@@ -1444,7 +1446,8 @@ PropertiesPanel::PropertiesPanel(Document& document,
   actor_form_->addRow(tr("Width"), actor_box_width_spin_);
   actor_form_->addRow(tr("Length"), actor_box_length_spin_);
   actor_form_->addRow(tr("Height"), actor_box_height_spin_);
-  actor_form_->addRow(tr("Initial speed"), actor_speed_spin_);
+  actor_form_->addRow(tr("Prędkość początkowa"), actor_speed_spin_);
+  actor_form_->addRow(actor_edit_route_button_);
   actor_group_->hide();
   connect(actor_name_edit_, &QLineEdit::editingFinished, this, [this] { push_actor_name(); });
   for (QLineEdit* edit : {actor_road_edit_, actor_lane_edit_}) {
@@ -1459,6 +1462,11 @@ PropertiesPanel::PropertiesPanel(Document& document,
   }
   connect(
       actor_speed_spin_, &QDoubleSpinBox::editingFinished, this, [this] { push_actor_speed(); });
+  connect(actor_edit_route_button_, &QPushButton::clicked, this, [this] {
+    if (const osc::ScenarioObject* actor = primary_actor()) {
+      emit actor_route_edit_requested(QString::fromStdString(actor->name));
+    }
+  });
 
   auto* layout = new QVBoxLayout(this);
   layout->addWidget(placeholder_);
@@ -2686,14 +2694,13 @@ void PropertiesPanel::refresh_actor(const osc::ScenarioObject& object) {
   actor_speed_spin_->setEnabled(speed_editable);
   actor_speed_spin_->setToolTip(
       speed_editable
-          ? tr("Speed this actor starts the scenario at. Metres per second — OpenSCENARIO's own "
-               "unit, so it is not converted for display.")
+          ? tr("Prędkość początkowa w km/h (w pliku XOSC zachowujemy m/s).")
           : tr("This actor's initial speed is relative to another entity, which this version "
                "does not model. Editing it here would discard that target."));
   {
     const QSignalBlocker block_speed(actor_speed_spin_);
     actor_speed_spin_->setValue(speed != nullptr && speed->absolute_target.has_value()
-                                    ? speed->absolute_target->value
+                                    ? speed->absolute_target->value * 3.6
                                     : 0.0);
   }
 
@@ -2772,8 +2779,12 @@ void PropertiesPanel::push_actor_speed() {
   if (speed != nullptr && !speed->absolute_target.has_value()) {
     return; // an unmodeled relative target; the spin is disabled
   }
-  const double value = actor_speed_spin_->value();
-  if (speed != nullptr && speed->absolute_target->value == value) {
+  const double display_kmh = actor_speed_spin_->value();
+  const double value = display_kmh / 3.6;
+  // Two-decimal km/h display must not silently re-author a more precise
+  // imported XOSC value when the inspector merely loses keyboard focus.
+  if (speed != nullptr &&
+      std::abs(speed->absolute_target->value * 3.6 - display_kmh) < 0.005) {
     return; // no-op: the re-entrancy guard
   }
   if (speed == nullptr && value == 0.0) {

@@ -1154,6 +1154,17 @@ void MainWindow::build_docks() {
   connect(properties_panel_, &PropertiesPanel::status_message, this, [this](const QString& text) {
     viewport_->show_toast(text);
   });
+  connect(properties_panel_, &PropertiesPanel::actor_route_edit_requested, this,
+          [this](const QString& actor) {
+            // The Properties button and the toolbar route tool share exactly
+            // one path; do not create an independent route-editing mode.
+            const auto selected = selection_.selected_actors();
+            if (selected.empty() || selected.front() != actor.toStdString()) return;
+            if (!actions_->scenario_mode->isChecked()) {
+              actions_->scenario_mode->setChecked(true);
+            }
+            actions_->tool_route->trigger();
+          });
   // An engaged Attributes-pane slot sends the user to the Library: the panel
   // asks for a category, MainWindow owns the dock that can show it.
   connect(properties_panel_,

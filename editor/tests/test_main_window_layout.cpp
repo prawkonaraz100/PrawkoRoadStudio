@@ -248,7 +248,11 @@ TEST_F(MainWindowLayoutTest, LibraryMimeDropAndViewportClicksWriteBothKindsOfRou
     return action->iconText() == QStringLiteral("Trasa");
   });
   ASSERT_NE(route, tools.end());
-  (*route)->trigger();
+  auto* edit_route = window_.findChild<QPushButton*>(QStringLiteral("actor_edit_route_button"));
+  ASSERT_NE(edit_route, nullptr);
+  ASSERT_TRUE(edit_route->isEnabled());
+  edit_route->click(); // same tool as the toolbar, from the selected participant's inspector
+  EXPECT_TRUE((*finish_action)->isVisible());
   QTest::mouseClick(viewport, Qt::LeftButton, Qt::NoModifier, pixel(80.0, -1.75));
   finish->click();
   const auto menus = window_.menuBar()->actions();

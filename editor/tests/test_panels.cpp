@@ -3506,7 +3506,8 @@ TEST(PropertiesPanel, ActorInitialSpeedCommitsOneCommandAndAnUnsetZeroPushesNoth
   EXPECT_EQ(h.document.undo_stack()->count(), base);
   EXPECT_EQ(h.document.scenario().storyboard.init.actions.privates.front().actions.size(), 1U);
 
-  speed->setValue(13.5);
+  EXPECT_EQ(speed->suffix(), QStringLiteral(" km/h"));
+  speed->setValue(54.0); // the instructor's km/h, not OpenSCENARIO m/s
   emit speed->editingFinished();
   EXPECT_EQ(h.document.undo_stack()->count(), base + 1);
   const std::vector<osc::PrivateAction>& actions =
@@ -3515,10 +3516,47 @@ TEST(PropertiesPanel, ActorInitialSpeedCommitsOneCommandAndAnUnsetZeroPushesNoth
   ASSERT_TRUE(actions[1].longitudinal.has_value());
   ASSERT_TRUE(actions[1].longitudinal->speed.has_value());
   ASSERT_TRUE(actions[1].longitudinal->speed->absolute_target.has_value());
-  EXPECT_DOUBLE_EQ(actions[1].longitudinal->speed->absolute_target->value, 13.5);
-
+  EXPECT_DOUBLE_EQ(actions[1].longitudinal->speed->absolute_target->value, 15.0);
+  EXPECT_DOUBLE_EQ(speed->value(), 54.0);
   emit speed->editingFinished();
   EXPECT_EQ(h.document.undo_stack()->count(), base + 1);
+  h.document.undo_stack()->undo();
+  EXPECT_DOUBLE_EQ(speed->value(), 0.0);
+  h.document.undo_stack()->redo();
+  EXPECT_DOUBLE_EQ(speed->value(), 54.0);
+  // A re-seeded, precisely stored value must not create a second Undo.
+  emit speed->editingFinished();
+  EXPECT_EQ(h.document.undo_stack()->count(), base + 1);
+  ASSERT_TRUE(h.document.push_scenario_command(
+      osc::edit::set_entity_init_speed(h.document.scenario(), "Car1", 13.333333)));
+  const int imported_base = h.document.undo_stack()->count();
+  EXPECT_DOUBLE_EQ(speed->value(), 48.0) << "m/s to km/h display rounding";
+  emit speed->editingFinished();
+  EXPECT_EQ(h.document.undo_stack()->count(), imported_base)
+      << "Viewing a rounded imported speed must not rewrite its exact m/s value";
+  EXPECT_DOUBLE_EQ(h.document.scenario().storyboard.init.actions.privates.front()
+                       .actions[1].longitudinal->speed->absolute_target->value,
+                   13.333333);
+}
+
+TEST(PropertiesPanel, SelectedParticipantOffersOneClickRouteEditing) {
+  Harness h;
+  ASSERT_TRUE(h.document.load(kSample).has_value());
+  place_actor(h.document, all_roads(h.document).front(), "Car1");
+  PropertiesPanel panel(h.document, h.selection);
+  h.selection.select({.actor = "Car1"});
+  auto* route = panel.findChild<QPushButton*>(QStringLiteral("actor_edit_route_button"));
+  ASSERT_NE(route, nullptr);
+  ASSERT_TRUE(route->isEnabled());
+  ASSERT_TRUE(route->isVisibleTo(&panel) || !panel.isVisible())
+      << "The button must be part of the actor section, not a detached action";
+  QSignalSpy requested(&panel, &PropertiesPanel::actor_route_edit_requested);
+  route->click();
+  ASSERT_EQ(requested.size(), 1);
+  EXPECT_EQ(requested.at(0).at(0).toString(), QStringLiteral("Car1"));
+  h.selection.clear();
+  route->click();
+  EXPECT_EQ(requested.size(), 1) << "No actor selected: no route edit request";
 }
 
 // The pane follows the scenario without a selection change: the Actor tool
