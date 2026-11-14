@@ -47,6 +47,8 @@ struct Scenario;
 
 namespace roadmaker::editor {
 
+struct Ray;
+
 /// How far off a road's reference line a drop may land and still snap to it.
 ///
 /// Generous on purpose — wider than a carriageway, so a click near the kerb
@@ -149,24 +151,18 @@ inline constexpr double kActorGrabRadius = 3.0;
 
 /// The scenario actor nearest (x, y) within `radius`, or nullopt.
 ///
-/// ★ THE ONE ACTOR HIT TEST, shared by the Actor tool (which grabs, and which
-/// selects rather than stacking a second actor on one) and by the Select tool
-/// (which picks). Actors are NOT in the `NetworkMesh`, so `pick()` cannot see
-/// them at all (`viewport/picking.hpp` ray-casts kernel meshes); this is the
-/// substitute, and having exactly one of it is what keeps the two tools from
-/// disagreeing about what is under the cursor.
-///
-/// Compares in the PLAN VIEW, not in screen space: the two callers both receive
-/// world coordinates on `ToolEvent`, and a screen-space radius would make the
-/// grab depend on the zoom the gesture started at.
-///
-/// An entity that is declared but never placed, or placed with a world/road
-/// position this version does not draw, is never returned — nothing is drawn
-/// for it, so nothing may be picked for it either.
+/// Plan-view fallback for tool events without a viewport ray. Considers only
+/// actors with a resolvable initial pose.
 [[nodiscard]] std::optional<std::string> actor_at(const osc::Scenario& scenario,
                                                   const RoadNetwork& network,
                                                   double x,
                                                   double y,
                                                   double radius = kActorGrabRadius);
+
+/// The visible actor box nearest the camera, bounded by the first map hit.
+[[nodiscard]] std::optional<std::string> pick_actor(const osc::Scenario& scenario,
+                                                     const RoadNetwork& network,
+                                                     const Ray& ray,
+                                                     double max_distance);
 
 } // namespace roadmaker::editor

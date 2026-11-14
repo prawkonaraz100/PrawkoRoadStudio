@@ -110,7 +110,7 @@ SimulationPanel::SimulationPanel(Document& document, Settings& settings, QWidget
       details_(new QPlainTextEdit(this)), run_(new QPushButton(tr("Run Simulation"), this)),
       cancel_(new QPushButton(tr("Cancel"), this)), play_(new QPushButton(tr("&Play"), this)),
       restart_(new QPushButton(tr("From Start"), this)),
-      edit_(new QPushButton(tr("Return to Editing"), this)),
+      edit_(new QPushButton(tr("Wróć do edycji"), this)),
       export_video_(new QPushButton(tr("Export MP4…"), this)),
       timeline_(new TimelineSlider(this)), time_label_(new QLabel(this)),
       events_(new QComboBox(this)), camera_(new QComboBox(this)) {
@@ -165,7 +165,7 @@ SimulationPanel::SimulationPanel(Document& document, Settings& settings, QWidget
   timer_.setTimerType(Qt::PreciseTimer);
 
   status_->setText(tr("Open a scenario with actors to simulate."));
-  connect(run_, &QPushButton::clicked, this, &SimulationPanel::run);
+  connect(run_, &QPushButton::clicked, this, [this] { run(); });
   connect(cancel_, &QPushButton::clicked, this, &SimulationPanel::cancel);
   connect(play_, &QPushButton::clicked, this, &SimulationPanel::toggle_playback);
   connect(restart_, &QPushButton::clicked, this, [this] { seek(0); });
@@ -224,7 +224,7 @@ SimulationPanel::SimulationPanel(Document& document, Settings& settings, QWidget
   update_controls();
 }
 
-void SimulationPanel::run() {
+void SimulationPanel::run(bool play_when_ready) {
   if (simulation_.running()) {
     return;
   }
@@ -249,6 +249,7 @@ void SimulationPanel::run() {
     status_->setText(QString::fromStdString(started.error().message));
     return;
   }
+  play_when_ready_ = play_when_ready;
   reset_playback();
   details_->clear();
   update_controls();
@@ -259,9 +260,16 @@ void SimulationPanel::cancel() {
   simulation_.cancel();
 }
 
+bool SimulationPanel::can_run() const {
+  return !simulation_.running() && !document_.scenario().entities.scenario_objects.empty();
+}
+
 void SimulationPanel::update_controls() {
-  run_->setEnabled(!simulation_.running() &&
-                   !document_.scenario().entities.scenario_objects.empty());
+  const bool available_to_run = can_run();
+  if (run_->isEnabledTo(this) != available_to_run) {
+    run_->setEnabled(available_to_run);
+    emit run_availability_changed(available_to_run);
+  }
   cancel_->setEnabled(simulation_.running());
   const bool available = playback_.has_value();
   play_->setEnabled(available && timeline_->maximum() > 0);
@@ -372,6 +380,8 @@ void SimulationPanel::reset_playback() {
 }
 
 void SimulationPanel::show_result(const QString& error) {
+  const bool autoplay = play_when_ready_;
+  play_when_ready_ = false;
   update_controls();
   if (!error.isEmpty()) {
     status_->setText(error.section('\n', 0, 0));
@@ -428,7 +438,11 @@ void SimulationPanel::show_result(const QString& error) {
     timeline_->setRange(0, timeline_ms(playback_->duration()));
     static_cast<TimelineSlider*>(timeline_)->set_markers(std::move(markers));
     if (isVisible()) {
-      seek(0);
+      if (autoplay && timeline_->maximum() > 0) {
+        toggle_playback();
+      } else {
+        seek(0);
+      }
     } else {
       time_label_->setText(tr("%1 / %2 s").arg(0.0, 0, 'f', 2).arg(playback_->duration(), 0, 'f', 2));
       update_controls();

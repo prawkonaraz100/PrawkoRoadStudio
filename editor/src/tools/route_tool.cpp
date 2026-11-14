@@ -296,14 +296,15 @@ bool RouteTool::mouse_press(const ToolEvent& event) {
   }
 
   screen_ = event.screen;
-  if (!event.surface_point()) return false;
-  const auto world = *event.surface_point();
+  const auto surface = event.surface_point();
+  if (!surface && !event.actor_hit) return false;
+  const auto world = surface.value_or(std::array<double, 3>{});
   PressState state{.world_x = world[0], .world_y = world[1]};
 
   // An actor under the cursor wins over a waypoint: retargeting is the rarer
   // gesture, so it must not be shadowed by a waypoint that happens to sit on
   // the actor's own anchor. Same shared hit test as the Actor/Select tools.
-  if (const std::optional<std::string> hit =
+  if (const auto hit = event.screen ? event.actor_hit :
           actor_at(document_.scenario(), document_.network(), world[0], world[1],
                    pedestrian() ? 0.55 : kActorGrabRadius)) {
     if (*hit != target_ || !pedestrian() || !walking_path()) state.actor = *hit;

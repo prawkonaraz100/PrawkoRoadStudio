@@ -98,6 +98,7 @@ TEST_F(MainWindowLayoutTest, ToolbarsHoldNoVariableWidthLabels) {
 TEST_F(MainWindowLayoutTest, ScenarioModeShowsActorLibraryAndRouteTools) {
   auto* mode = window_.findChild<QAction*>(QStringLiteral("scenario_mode"));
   auto* main = window_.findChild<QToolBar*>(QStringLiteral("toolbar.main"));
+  auto* run = window_.findChild<QAction*>(QStringLiteral("run_scenario_simulation"));
   auto* tools = window_.findChild<QToolBar*>(QStringLiteral("toolbar.tools"));
   auto* storyboard_dock = window_.findChild<QDockWidget*>(QStringLiteral("dock.editor2d"));
   auto* editor = window_.findChild<Editor2DHost*>();
@@ -105,6 +106,7 @@ TEST_F(MainWindowLayoutTest, ScenarioModeShowsActorLibraryAndRouteTools) {
   auto* options = window_.findChild<QToolBar*>(QStringLiteral("toolbar.options"));
   ASSERT_NE(mode, nullptr);
   ASSERT_NE(main, nullptr);
+  ASSERT_NE(run, nullptr);
   ASSERT_NE(tools, nullptr);
   ASSERT_NE(storyboard_dock, nullptr);
   ASSERT_NE(editor, nullptr);
@@ -120,6 +122,9 @@ TEST_F(MainWindowLayoutTest, ScenarioModeShowsActorLibraryAndRouteTools) {
   }
   ASSERT_NE(actor_kind_action, nullptr);
   ASSERT_TRUE(main->actions().contains(mode));
+  EXPECT_EQ(main->actions().indexOf(run), main->actions().indexOf(mode) + 1);
+  EXPECT_TRUE(run->isVisible());
+  EXPECT_FALSE(run->isEnabled());
   const auto menus = window_.menuBar()->actions();
   EXPECT_TRUE(std::ranges::any_of(menus, [mode](QAction* entry) {
     return entry->menu() != nullptr && entry->menu()->actions().contains(mode);
@@ -186,6 +191,9 @@ TEST_F(MainWindowLayoutTest, LibraryMimeDropAndViewportClicksWriteBothKindsOfRou
     state << R"({"scene_version":1,"view":{"distance":60,"pitch":1.56,"projection":"orthographic","target":[50,0,0],"yaw":-1.57}})";
   }
   window_.load_file(scene);
+  auto* run = window_.findChild<QAction*>(QStringLiteral("run_scenario_simulation"));
+  ASSERT_NE(run, nullptr);
+  EXPECT_FALSE(run->isEnabled());
   auto* mode = window_.findChild<QAction*>(QStringLiteral("scenario_mode"));
   ASSERT_NE(mode, nullptr);
   mode->setChecked(true);
@@ -224,6 +232,7 @@ TEST_F(MainWindowLayoutTest, LibraryMimeDropAndViewportClicksWriteBothKindsOfRou
   EXPECT_FALSE((*finish_action)->isVisible());
   drop("actor.car", 42.0, -1.75);
   ASSERT_TRUE((*finish_action)->isVisible());
+  EXPECT_TRUE(run->isEnabled());
   QTest::mouseClick(viewport, Qt::LeftButton, Qt::NoModifier, pixel(65.0, -1.75));
   finish->click();
   drop("actor.pedestrian", 58.0, -6.1);
@@ -231,6 +240,17 @@ TEST_F(MainWindowLayoutTest, LibraryMimeDropAndViewportClicksWriteBothKindsOfRou
   QTest::mouseClick(viewport, Qt::LeftButton, Qt::NoModifier, pixel(58.0, 5.1));
   finish->click();
   EXPECT_FALSE((*finish_action)->isVisible());
+  QTest::mouseClick(viewport, Qt::LeftButton, Qt::NoModifier, pixel(43.0, -1.75));
+  auto* route_toolbar = window_.findChild<QToolBar*>(QStringLiteral("toolbar.tools"));
+  ASSERT_NE(route_toolbar, nullptr);
+  const auto tools = route_toolbar->actions();
+  const auto route = std::ranges::find_if(tools, [](QAction* action) {
+    return action->iconText() == QStringLiteral("Trasa");
+  });
+  ASSERT_NE(route, tools.end());
+  (*route)->trigger();
+  QTest::mouseClick(viewport, Qt::LeftButton, Qt::NoModifier, pixel(80.0, -1.75));
+  finish->click();
   const auto menus = window_.menuBar()->actions();
   const auto save = menus.front()->menu()->actions();
   const auto save_action = std::ranges::find_if(save, [](QAction* action) {
@@ -245,6 +265,11 @@ TEST_F(MainWindowLayoutTest, LibraryMimeDropAndViewportClicksWriteBothKindsOfRou
   const std::string xml{std::istreambuf_iterator<char>(stream), {}};
   EXPECT_NE(xml.find("<AssignRouteAction>"), std::string::npos);
   EXPECT_NE(xml.find("<FollowTrajectoryAction>"), std::string::npos);
+  const auto first_waypoint = xml.find("<Waypoint ");
+  ASSERT_NE(first_waypoint, std::string::npos);
+  const auto second_waypoint = xml.find("<Waypoint ", first_waypoint + 1);
+  ASSERT_NE(second_waypoint, std::string::npos);
+  EXPECT_NE(xml.find("<Waypoint ", second_waypoint + 1), std::string::npos);
 }
 
 TEST_F(MainWindowLayoutTest, ImageExportIsEnabledWhenASceneOpens) {

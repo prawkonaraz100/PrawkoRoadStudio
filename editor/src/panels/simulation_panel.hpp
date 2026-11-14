@@ -25,10 +25,11 @@ class SimulationPanel : public QWidget {
 public:
   SimulationPanel(Document& document, Settings& settings, QWidget* parent = nullptr);
 
-  void run();
+  void run(bool play_when_ready = false);
   void cancel();
   void leave_preview();
   void pause();
+  [[nodiscard]] bool can_run() const;
   [[nodiscard]] QString driver_actor() const { return driver_actor_; }
 
   [[nodiscard]] const std::optional<SimulationRun>& result() const { return simulation_.result(); }
@@ -40,6 +41,7 @@ signals:
   void preview_frame(const QVector<SimulationActorPose>& poses, const QString& driver_actor);
   void preview_closed();
   void video_availability_changed(bool available);
+  void run_availability_changed(bool available);
   void video_export_requested();
 
 private:
@@ -75,6 +77,7 @@ private:
   int time_ms_ = 0;
   bool preview_active_ = false;
   bool scene_changed_ = false;
+  bool play_when_ready_ = false;
 };
 
 } // namespace roadmaker::editor

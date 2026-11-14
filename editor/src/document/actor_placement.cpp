@@ -32,6 +32,7 @@
 #include <vector>
 
 #include "document/prop_placement.hpp"
+#include "render/scene_builder.hpp"
 #include "viewport/picking.hpp"
 
 namespace roadmaker::editor {
@@ -314,6 +315,28 @@ std::optional<std::string> actor_at(
     }
   }
   return best;
+}
+
+std::optional<std::string> pick_actor(const osc::Scenario& scenario,
+                                      const RoadNetwork& network,
+                                      const Ray& ray,
+                                      double max_distance) {
+  std::optional<std::string> closest;
+  for (const auto& object : scenario.entities.scenario_objects) {
+    const auto* box = actor_bounding_box(object);
+    const auto* initial = actor_init_position(scenario, object.name);
+    if (!box || !initial) continue;
+    const auto pose = actor_world_pose(network, *initial);
+    if (!pose) continue;
+    const auto transform = actor_transform(pose->position, pose->heading, *box,
+                                           pose->pitch, pose->roll);
+    const auto hit = intersect_instance_box(ray, transform, max_distance);
+    if (hit && *hit < max_distance) {
+      max_distance = *hit;
+      closest = object.name;
+    }
+  }
+  return closest;
 }
 
 const osc::Position* actor_init_position(const osc::Scenario& scenario, std::string_view actor) {

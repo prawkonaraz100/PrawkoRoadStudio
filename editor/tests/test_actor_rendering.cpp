@@ -38,6 +38,7 @@
 #include "document/actor_placement.hpp"
 #include "document/document.hpp"
 #include "render/scene_builder.hpp"
+#include "viewport/picking.hpp"
 
 namespace roadmaker::editor {
 namespace {
@@ -287,6 +288,21 @@ TEST(ActorRendering, TheUnitCubeIsClosedAndFlatShaded) {
   for (std::size_t i = 0; i < mesh.positions.size(); ++i) {
     EXPECT_NEAR(std::abs(mesh.positions[i]), 0.5F, 1e-6F) << "vertex component " << i;
   }
+}
+
+TEST(ActorRendering, PickingUsesTheVisibleVehicleBodyAndRespectsOcclusion) {
+  Document document;
+  author_straight_road(document);
+  const auto road = road_odr_id(document);
+  auto truck = osc::make_actor(osc::ActorKind::Truck, "Truck");
+  ASSERT_TRUE(document.push_scenario_command(
+      osc::edit::place_scenario_object(document.scenario(), std::move(truck),
+                                       lane_at(road, "-1", 50.0))));
+  const Ray hood{{54.0, -1.75, 20.0}, {0.0, 0.0, -1.0}};
+  EXPECT_EQ(pick_actor(document.scenario(), document.network(), hood, 20.0), "Truck");
+  EXPECT_FALSE(pick_actor(document.scenario(), document.network(), hood, 5.0));
+  const Ray beside{{51.5, -3.4, 20.0}, {0.0, 0.0, -1.0}};
+  EXPECT_FALSE(pick_actor(document.scenario(), document.network(), beside, 20.0));
 }
 
 } // namespace roadmaker::editor

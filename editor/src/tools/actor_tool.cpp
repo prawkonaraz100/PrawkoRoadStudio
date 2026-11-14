@@ -65,7 +65,7 @@ bool ActorTool::mouse_press(const ToolEvent& event) {
   // Shares `actor_at` with the Select tool: two hit tests would eventually
   // disagree about what is under the cursor, and the disagreement would only
   // ever show up as "clicking the actor did something else".
-  if (const std::optional<std::string> hit =
+  if (const auto hit = event.screen ? event.actor_hit :
           actor_at(document_.scenario(), document_.network(), event.world_x, event.world_y)) {
     state.actor = *hit;
   }

@@ -98,9 +98,11 @@ bool SelectTool::mouse_press(const ToolEvent& event) {
     return false;
   }
   const Waypoint cursor{.x = event.world_x, .y = event.world_y};
+  const auto actor = event.screen ? event.actor_hit :
+      actor_at(document_.scenario(), document_.network(), cursor.x, cursor.y);
   // Node handles pick with priority over lane patches (02 §1) — but only on
   // selected roads, where handles are visible.
-  if (auto grab = pick_selected_node(cursor)) {
+  if (auto grab = actor ? std::nullopt : pick_selected_node(cursor)) {
     drag_ = std::move(grab);
     emit status_message(selection_.entries().size() > 1
                             ? tr("Moving the grabbed node — multi-node move comes later in M2. "
@@ -109,15 +111,6 @@ bool SelectTool::mouse_press(const ToolEvent& event) {
     emit preview_changed();
     return true;
   }
-  // ★ AN ACTOR IS TESTED BEFORE `event.pick`, and it has to be: actors are not
-  // in the NetworkMesh at all, so `pick()` ray-casts straight past them to the
-  // road underneath and reports THAT. Checking the pick first would mean a click
-  // on an actor always selected the road it stands on — the exact conflation
-  // GW-6 step 4 rules out. `actor_at` is the same hit test the Actor tool grabs
-  // with, so the two can never disagree about what is under the cursor.
-  const std::optional<std::string> actor =
-      actor_at(document_.scenario(), document_.network(), cursor.x, cursor.y);
-
   // Thin parts of a selected complex prefab (pole/arm) can be only 1-2
   // physical pixels wide. If the exact ray misses their triangles, a road may
   // be behind them: a drag must not accidentally move that whole road. Apply

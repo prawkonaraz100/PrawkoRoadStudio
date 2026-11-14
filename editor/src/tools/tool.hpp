@@ -19,6 +19,7 @@
 #include <QObject>
 #include <QString>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include "viewport/picking.hpp"
@@ -89,6 +90,8 @@ struct ToolEvent {
     return std::nullopt;
   }
   bool ground_valid = true;
+  /// Nearest visible participant under a real viewport mouse press.
+  std::optional<std::string> actor_hit;
 };
 
 // A draggable/interactive handle knob, positioned in the kernel frame. The

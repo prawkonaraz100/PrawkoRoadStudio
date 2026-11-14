@@ -34,7 +34,7 @@ Test pierwszego filmu obejmuje weryfikację rozdzielczości, FPS i czasu oraz po
 
 ## Ćwiczenie z widoczności przed przejściem
 
-Na ekranie startowym wybierz jeden z dwóch przykładów **Przejście dla pieszych**. Użyj **File → Save As**, aby utworzyć kopię do edycji. Uruchom **Scenario → Run Simulation**. W panelu **Simulation** wybierz **Camera → Driver view — Auto**. W **Camera → Editor camera** zapisany widok pokazuje tę samą sytuację z góry. **Export MP4…** nagrywa wybrane ujęcie.
+Na ekranie startowym wybierz jeden z dwóch przykładów **Przejście dla pieszych**. Użyj **File → Save As**, aby utworzyć kopię do edycji. Kliknij **Uruchom symulację** na górnym pasku. W panelu **Simulation** wybierz **Camera → Driver view — Auto**. W **Camera → Editor camera** zapisany widok pokazuje tę samą sytuację z góry. **Export MP4…** nagrywa wybrane ujęcie.
 
 W obu wariantach samochód zaczyna hamować po 2,45 s, a pieszy wchodzi na przejście po 2,70 s. W drugim wariancie zaparkowany dostawczak przesłania pieszego od strony kierowcy. Porównaj początek przejścia w obu ujęciach. Zatrzymanie samochodu jest zaprogramowane w scenariuszu.
 
@@ -43,6 +43,8 @@ W obu wariantach samochód zaczyna hamować po 2,45 s, a pieszy wchodzi na przej
 1. Włącz **Scenario**. Biblioteka otworzy kategorię **Uczestnicy ruchu** z samochodem, ciężarówką, autobusem, motocyklem, rowerem i pieszym.
 2. Przeciągnij uczestnika na scenę. Pojazd przyciąga się do środka pasa. Pieszego można upuścić także na chodnik. Edytor zaznacza obiekt, przełącza na **Trasę** i pokazuje, co kliknąć dalej.
 3. Kliknij cel i kolejne punkty. Przeciągnij węzeł, aby go skorygować. Kliknij **Zakończ trasę** albo wciśnij Enter, a następnie dodaj następnego uczestnika. Ctrl+Z cofa pojedyncze ustawienie lub zmianę trasy.
-4. Uruchom **Scenario → Run Simulation**. Domyślna prędkość pojazdu bez ustawionej prędkości to 30 km/h. Pieszy porusza się po narysowanej ścieżce od początku przebiegu z prędkością 1,4 m/s i zatrzymuje na ostatnim punkcie. Trasę pojazdu esmini wykorzystuje do wyboru dróg i pasów. Zatrzymanie auta wymaga akcji hamowania w **Scenario → Storyboard**.
+4. Kliknij **Uruchom symulację** na górnym pasku obok **Scenario**. Odtwarzanie ruszy po obliczeniu przebiegu. **Wróć do edycji** lub **Select** pozwala ponownie zaznaczyć uczestnika na scenie.
+
+Domyślna prędkość pojazdu bez ustawionej prędkości to 30 km/h. Pieszy porusza się po narysowanej ścieżce od początku przebiegu z prędkością 1,4 m/s i zatrzymuje na ostatnim punkcie. Trasę pojazdu esmini wykorzystuje do wyboru dróg i pasów. Zatrzymanie auta wymaga akcji hamowania w **Scenario → Storyboard**.
 
 Założenie techniczne to wspólny model C++ i jeden widok Qt, z silnikiem oraz enkoderem zarządzanymi przez edytor. Zintegrowana symulacja zasila odtwarzanie i render tym samym zapisem przebiegu. Obraz statyczny i film korzystają ze wspólnego sposobu rysowania kadru. Powiązania z mapą i przebieg mają wersjonowane dane scenariusza, a wynikowe pliki PNG/MP4 trafiają do wskazanej lokalizacji. Interaktywna odpowiedź kursanta pozostaje rozwinięciem dydaktycznym po zamknięciu podstawowego przepływu produkcji materiałów. [Wcześniejszy audyt architektury](PRAWKO-SCENARIUSZE-DYDAKTYCZNE.md)

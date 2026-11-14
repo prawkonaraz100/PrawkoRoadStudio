@@ -47,12 +47,14 @@
 #include <cmath>
 #include <cstring>
 #include <functional>
+#include <limits>
 #include <numbers>
 #include <numeric>
 #include <span>
 #include <unordered_set>
 #include <utility>
 
+#include "document/actor_placement.hpp"
 #include "document/highlight.hpp"
 #include "document/library_list_model.hpp"
 #include "document/simulation_trace.hpp"
@@ -754,6 +756,13 @@ void ViewportWidget::render_frame(const OrbitCamera& camera, const QSize& size) 
     std::vector<HighlightState> states;
     states.reserve(batch.instances.size());
     for (const ScenePropInstance& inst : batch.instances) {
+      if (!inst.actor.empty()) {
+        const bool selected = std::ranges::any_of(selection_.entries(), [&](const auto& entry) {
+          return entry.actor == inst.actor;
+        });
+        states.push_back(selected ? HighlightState::Selected : HighlightState::None);
+        continue;
+      }
       states.push_back(phase_highlight(inst.road,
                                        highlight_state_for(inst.road,
                                                            {},
@@ -1964,6 +1973,10 @@ ToolEvent ViewportWidget::make_tool_event(const QMouseEvent* event) const {
     tool_event.ground_valid = false;
   }
   tool_event.pick = pick(document_.mesh(), road_aabbs_, ray);
+  if (event->type() == QEvent::MouseButtonPress) {
+    tool_event.actor_hit = pick_actor(document_.scenario(), document_.network(), ray,
+        tool_event.pick ? tool_event.pick->distance : std::numeric_limits<double>::infinity());
+  }
   // Station of the cursor along the picked road's reference line — only when a
   // road was hit (a lane/road body); empty-space clicks carry no station.
   if (tool_event.pick.has_value()) {

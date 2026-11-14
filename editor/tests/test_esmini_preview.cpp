@@ -343,6 +343,33 @@ TEST(EsminiSimulation, RealEngineWalksToTheAuthoredEndAndStops) {
   EXPECT_GT(last->time, 8.5);
 }
 
+TEST(SimulationPanel, ToolbarRunStartsPlaybackWhenTheCurrentRunFinishes) {
+  const QString engine = resolve_esmini({});
+  if (engine.isEmpty() || EsminiSimulation::find_converter(engine).isEmpty()) {
+    GTEST_SKIP() << "Set ESMINI_PATH to test the real engine.";
+  }
+  const Settings::ReadOnlySession read_only;
+  Settings settings;
+  Document document;
+  author_simulation(document, 0.1, 2.0);
+  SimulationPanel panel(document, settings);
+  panel.show();
+  QSignalSpy frames(&panel, &SimulationPanel::preview_frame);
+  QSignalSpy available(&panel, &SimulationPanel::run_availability_changed);
+  panel.run(/*play_when_ready=*/true);
+  EXPECT_FALSE(panel.can_run());
+  ASSERT_TRUE(!frames.isEmpty() || frames.wait(15'000));
+  ASSERT_TRUE(panel.result());
+  EXPECT_TRUE(panel.can_run());
+  ASSERT_EQ(available.size(), 2);
+  const auto* play = panel.findChild<QPushButton*>(QStringLiteral("simulation_play"));
+  ASSERT_NE(play, nullptr);
+  EXPECT_EQ(play->text(), QStringLiteral("&Pause"));
+  EXPECT_TRUE(frames.wait(1000));
+  panel.leave_preview();
+  EXPECT_EQ(play->text(), QStringLiteral("&Play"));
+}
+
 TEST(SimulationPanel, PlaysAndSeeksRealTelemetryThenInvalidatesAfterAMapEdit) {
   const QString engine = resolve_esmini({});
   if (engine.isEmpty() || EsminiSimulation::find_converter(engine).isEmpty()) {

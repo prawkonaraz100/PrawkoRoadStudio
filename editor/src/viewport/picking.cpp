@@ -40,7 +40,7 @@ Vec3 to_vec(const std::array<double, 3>& a) {
 
 /// Ray/AABB slab test; returns false when the box is missed or lies entirely
 /// beyond `max_distance`.
-bool intersects_aabb(const Ray& ray, const RoadAabb& box, double max_distance) {
+std::optional<double> intersect_aabb(const Ray& ray, const RoadAabb& box, double max_distance) {
   double t_near = 0.0;
   double t_far = max_distance;
   for (std::size_t axis = 0; axis < 3; ++axis) {
@@ -48,7 +48,7 @@ bool intersects_aabb(const Ray& ray, const RoadAabb& box, double max_distance) {
     const double d = ray.direction[axis];
     if (std::abs(d) < std::numeric_limits<double>::epsilon()) {
       if (o < box.lo[axis] || o > box.hi[axis]) {
-        return false;
+        return std::nullopt;
       }
       continue;
     }
@@ -60,10 +60,10 @@ bool intersects_aabb(const Ray& ray, const RoadAabb& box, double max_distance) {
     t_near = std::max(t_near, t0);
     t_far = std::min(t_far, t1);
     if (t_near > t_far) {
-      return false;
+      return std::nullopt;
     }
   }
-  return true;
+  return t_near;
 }
 
 /// Möller–Trumbore, no backface culling. Returns the ray parameter t >= 0 or
@@ -112,6 +112,25 @@ double distance_sq(const ReferenceLine& line, double s, double x, double y) {
 }
 
 } // namespace
+
+std::optional<double>
+intersect_instance_box(const Ray& ray, const InstanceData& box, double max_distance) {
+  // The actor transform has orthogonal axes scaled by its dimensions. Project
+  // onto each scaled axis to express the same ray parameter in unit-box space.
+  Ray local;
+  const Vec3 origin = to_vec(ray.origin) -
+                      Vec3{box.model[12], box.model[13], box.model[14]};
+  const Vec3 direction = to_vec(ray.direction);
+  for (std::size_t i = 0; i < 3; ++i) {
+    const Vec3 axis{box.model[4 * i], box.model[4 * i + 1], box.model[4 * i + 2]};
+    const double length_squared = axis.squaredNorm();
+    if (!(length_squared > 0.0)) return std::nullopt;
+    local.origin[i] = origin.dot(axis) / length_squared;
+    local.direction[i] = direction.dot(axis) / length_squared;
+  }
+  return intersect_aabb(local, RoadAabb{{-0.5, -0.5, -0.5}, {0.5, 0.5, 0.5}},
+                        max_distance);
+}
 
 Ray make_pick_ray(const CameraMatrices& camera, double px, double py, double width, double height) {
   const Eigen::Matrix4d view = Eigen::Map<const Eigen::Matrix4f>(camera.view.data()).cast<double>();
@@ -298,7 +317,7 @@ pick(const NetworkMesh& mesh, std::span<const RoadAabb> road_aabbs, const Ray& r
   double best_t = std::numeric_limits<double>::max();
 
   for (std::size_t road_index = 0; road_index < mesh.roads.size(); ++road_index) {
-    if (road_index < road_aabbs.size() && !intersects_aabb(ray, road_aabbs[road_index], best_t)) {
+    if (road_index < road_aabbs.size() && !intersect_aabb(ray, road_aabbs[road_index], best_t)) {
       continue;
     }
     const RoadMesh& road = mesh.roads[road_index];

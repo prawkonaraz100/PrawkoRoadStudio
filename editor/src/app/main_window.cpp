@@ -62,6 +62,7 @@
 #include <QSaveFile>
 #include <QShowEvent>
 #include <QStackedWidget>
+#include <QStyle>
 #include <QStatusBar>
 #include <QTimer>
 #include <QToolBar>
@@ -332,6 +333,7 @@ MainWindow::MainWindow(QWidget* parent, bool restore_saved_layout)
   SelectTool* select_tool_ptr = select_tool.get();
   tool_manager_.register_tool(ToolId::Select, std::move(select_tool));
   connect(actions_->tool_select, &QAction::triggered, this, [this] {
+    simulation_panel_->leave_preview();
     tool_manager_.set_active(ToolId::Select);
   });
 
@@ -655,6 +657,7 @@ MainWindow::MainWindow(QWidget* parent, bool restore_saved_layout)
     tool_manager_.set_active(ToolId::ActorPlace);
   });
   connect(actions_->tool_route, &QAction::triggered, this, [this] {
+    simulation_panel_->leave_preview();
     tool_manager_.set_active(ToolId::Route);
     const auto actors = selection_.selected_actors();
     if (!actors.empty()) route_tool_->begin_from_actor(actors.front());
@@ -1455,11 +1458,19 @@ void MainWindow::build_menus() {
 
   QMenu* scenario_menu = menuBar()->addMenu(tr("&Scenario"));
   scenario_menu->setObjectName(QStringLiteral("scenario_menu"));
-  auto* run_simulation = scenario_menu->addAction(tr("&Run Simulation"));
-  connect(run_simulation, &QAction::triggered, this, [this] {
+  run_simulation_action_ = scenario_menu->addAction(tr("U&ruchom symulację"));
+  run_simulation_action_->setObjectName(QStringLiteral("run_scenario_simulation"));
+  run_simulation_action_->setIconText(tr("Uruchom symulację"));
+  run_simulation_action_->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
+  run_simulation_action_->setToolTip(
+      tr("Oblicz ruch wszystkich uczestników i odtwórz go w widoku 3D"));
+  run_simulation_action_->setEnabled(simulation_panel_->can_run());
+  connect(simulation_panel_, &SimulationPanel::run_availability_changed,
+          run_simulation_action_, &QAction::setEnabled);
+  connect(run_simulation_action_, &QAction::triggered, this, [this] {
     simulation_dock_->show();
     simulation_dock_->raise();
-    simulation_panel_->run();
+    simulation_panel_->run(/*play_when_ready=*/true);
   });
   auto* storyboard = scenario_menu->addAction(tr("Storyboard…"));
   connect(storyboard, &QAction::triggered, this, [this] {
@@ -1538,6 +1549,7 @@ void MainWindow::build_toolbar() {
   fill(core_toolbar_, shortcuts::ToolbarTab::kCore);
   core_toolbar_->addSeparator();
   core_toolbar_->addAction(actions_->scenario_mode);
+  core_toolbar_->addAction(run_simulation_action_);
 
   all_toolbars_.push_back(core_toolbar_);
 

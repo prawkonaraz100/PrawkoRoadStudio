@@ -51,6 +51,10 @@ struct Ray {
 [[nodiscard]] Ray
 make_pick_ray(const CameraMatrices& camera, double px, double py, double width, double height);
 
+/// First hit of the ray against the transformed unit cube [-0.5, 0.5]^3.
+[[nodiscard]] std::optional<double>
+intersect_instance_box(const Ray& ray, const InstanceData& box, double max_distance);
+
 /// Intersection of the pixel (px, py) ray with the ground plane z=0, in the
 /// same viewport convention as make_pick_ray. nullopt when the ray is parallel
 /// to the plane, points away from it (t < 0), or the hit lies farther than

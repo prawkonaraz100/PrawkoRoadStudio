@@ -367,6 +367,7 @@ private:
   QAction* template_action_ = nullptr;
   QAction* actor_kind_action_ = nullptr;
   QAction* finish_route_action_ = nullptr;
+  QAction* run_simulation_action_ = nullptr;
   class RouteTool* route_tool_ = nullptr;
   QComboBox* actor_kind_combo_ = nullptr;
   /// View ▸ Textured Rendering. Held because a scene's sidecar may override the
