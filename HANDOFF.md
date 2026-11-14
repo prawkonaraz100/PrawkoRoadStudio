@@ -1026,4 +1026,4 @@ powershell -NoProfile -ExecutionPolicy Bypass -File F:\PrawkoRoadStudio\scripts\
 5. **Nie nadpisuj otwartej niezapisanej sceny.** Pliki `agent/projects/` nie są objęte Git; backupują się lokalnie, ale niezapisanej sceny GUI nie da się odzyskać z tych kopii.
 6. Jeśli nie ma dostępu do komputera lub testów, opisz ograniczenie, zamiast twierdzić, że praca została wykonana.
 
-<!-- agent_head: 35c48c11cdb7efca8e08d1be731463657bbe7a32 -->
+<!-- agent_head: 67a92fa24b4054b7f094c9b667f3634c35ad9210 -->
