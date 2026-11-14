@@ -271,6 +271,10 @@ MainWindow::MainWindow(QWidget* parent, bool restore_saved_layout)
     diagnostics_dock_->setVisible(!document_.diagnostics().empty() ||
                                   diagnostics_dock_->isVisible());
   });
+  // Keep the road/lane/junction status COUNTER live after a Create Road,
+  // delete, junction edit, Undo or Redo. Previously it only refreshed on
+  // load/new: the viewport showed three roads while the footer still said one.
+  connect(&document_, &Document::topology_changed, this, &MainWindow::update_status_entities);
   // QUndoStack::isClean drives the modified flag; the [*] placeholder in
   // the window title renders it (§8).
   connect(document_.undo_stack(), &QUndoStack::cleanChanged, this, [this](bool clean) {
@@ -1905,6 +1909,7 @@ void MainWindow::build_status_bar() {
   };
   connect(&tool_manager_, &ToolManager::active_changed, this, show_instruction);
   show_instruction(); // the startup tool
+  status_entities_->setObjectName(QStringLiteral("status_entities"));
   statusBar()->addPermanentWidget(status_entities_);
   auto* version_label =
       new QLabel(tr("kernel %1")

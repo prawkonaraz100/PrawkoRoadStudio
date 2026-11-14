@@ -334,6 +334,10 @@ TEST_F(MainWindowLayoutTest, RepeatedRoadLibraryDropsAuthorMultipleIndependentRo
     save = *match;
   }
   ASSERT_NE(save, nullptr);
+  auto* footer = window_.findChild<QLabel*>(QStringLiteral("status_entities"));
+  ASSERT_NE(footer, nullptr);
+  EXPECT_TRUE(footer->text().startsWith(QStringLiteral("1 roads")))
+      << footer->text().toStdString();
   EXPECT_EQ(read_count(), 1U);
   // First select the existing road to catch the accidental extend gesture.
   QTest::mouseClick(viewport, Qt::LeftButton, Qt::NoModifier, pixel(50.0, 0.0));
@@ -341,6 +345,8 @@ TEST_F(MainWindowLayoutTest, RepeatedRoadLibraryDropsAuthorMultipleIndependentRo
   drop("road.prawko.urban", 28.0, 24.0);
   QTest::mouseClick(viewport, Qt::LeftButton, Qt::NoModifier, pixel(78.0, 24.0));
   QTest::keyClick(viewport, Qt::Key_Return);
+  EXPECT_TRUE(footer->text().startsWith(QStringLiteral("2 roads")))
+      << "The status bar showed the stale 1-road count after adding road 2";
   save->trigger();
   EXPECT_EQ(read_count(), 2U) << "The first Library drop did not create another road";
 
@@ -354,8 +360,28 @@ TEST_F(MainWindowLayoutTest, RepeatedRoadLibraryDropsAuthorMultipleIndependentRo
   EXPECT_FALSE(scenario_mode->isChecked());
   QTest::mouseClick(viewport, Qt::LeftButton, Qt::NoModifier, pixel(78.0, -24.0));
   QTest::keyClick(viewport, Qt::Key_Return);
+  EXPECT_TRUE(footer->text().startsWith(QStringLiteral("3 roads")))
+      << "The status bar showed a stale road count after adding road 3";
   save->trigger();
   EXPECT_EQ(read_count(), 3U) << "A second template drop didn't add road 3";
+  // The same footer must follow Undo and Redo, not only fresh additions.
+  const auto menus = window_.menuBar()->actions();
+  ASSERT_GE(menus.size(), 2);
+  QMenu* edit_menu = menus[1]->menu();
+  ASSERT_NE(edit_menu, nullptr);
+  const auto edit_actions = edit_menu->actions();
+  const auto undo = std::ranges::find_if(edit_actions, [](const QAction* action) {
+    return action->text().startsWith(QStringLiteral("&Undo"));
+  });
+  const auto redo = std::ranges::find_if(edit_actions, [](const QAction* action) {
+    return action->text().startsWith(QStringLiteral("&Redo"));
+  });
+  ASSERT_NE(undo, edit_actions.end());
+  ASSERT_NE(redo, edit_actions.end());
+  (*undo)->trigger();
+  EXPECT_TRUE(footer->text().startsWith(QStringLiteral("2 roads")));
+  (*redo)->trigger();
+  EXPECT_TRUE(footer->text().startsWith(QStringLiteral("3 roads")));
 }
 
 TEST_F(MainWindowLayoutTest, ImageExportIsEnabledWhenASceneOpens) {
