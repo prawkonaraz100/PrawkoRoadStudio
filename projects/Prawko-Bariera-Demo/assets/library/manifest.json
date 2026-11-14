@@ -1,0 +1,18 @@
+{
+  "manifest_version": 1,
+  "items": [
+    {
+      "key": "prop.prawko_bariera_drogowa",
+      "label": "Bariera ostrzegawcza Prawko",
+      "category": "Prawko | Obiekty 3D",
+      "create": {
+        "kind": "tree",
+        "model": "prawko_bariera_drogowa",
+        "model_file": "assets/props/prawko_bariera_drogowa.glb",
+        "source": "F:\\PrawkoRoadStudio\\assets\\prawko\\blender\\prawko_bariera_drogowa.glb",
+        "license": "Model własny PrawkoNaRaz"
+      },
+      "thumbnail": "assets/library/thumbnails/bariera_prawko.png"
+    }
+  ]
+}

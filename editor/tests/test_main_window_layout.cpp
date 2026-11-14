@@ -23,6 +23,7 @@
 // fatal-on-failure and only runs on realize, so offscreen tests must stay
 // construction-only (this is why --screenshot mode probes GL first).
 
+#include "roadmaker/xodr/reader.hpp"
 #include "roadmaker/xodr/writer.hpp"
 
 #include <gtest/gtest.h>
@@ -31,6 +32,7 @@
 #include <QApplication>
 #include <QComboBox>
 #include <QDockWidget>
+#include <QDoubleSpinBox>
 #include <QDragEnterEvent>
 #include <QLabel>
 #include <QMenu>
@@ -58,6 +60,7 @@
 #include "app/settings.hpp"
 #include "app/shortcut_registry.hpp"
 #include "app/welcome_widget.hpp"
+#include "document/asset_import.hpp"
 #include "document/library_list_model.hpp"
 #include "document/project.hpp"
 #include "document/scene_sidecar.hpp"
@@ -387,6 +390,115 @@ TEST_F(MainWindowLayoutTest, RepeatedRoadLibraryDropsAuthorMultipleIndependentRo
   EXPECT_TRUE(footer->text().startsWith(QStringLiteral("3 roads")));
 }
 
+// End-to-end mouse-boundary regression with our real GLB from Blender,
+// imported into a temporary project using the PRODUCT importer, not a mock.
+// Drop a Library tile onto the Qt viewport, edit pose through Properties,
+// save XODR and confirm the reopened scene still owns this model.
+TEST_F(MainWindowLayoutTest, BlenderBarrierLibraryDropAndPropertiesMoveRotateSave) {
+  QTemporaryDir directory;
+  ASSERT_TRUE(directory.isValid());
+  // Opt-in forensic capture of this test's ACTUAL serialized editor output.
+  // CI and ordinary runs still clean up the temporary project as usual.
+  if (qEnvironmentVariableIsSet("PRAWKO_KEEP_BLENDER_TEST")) {
+    directory.setAutoRemove(false);
+  }
+  const auto root = std::filesystem::path(directory.path().toStdU16String());
+  ASSERT_TRUE(Project::create(root, QStringLiteral("Prawko GLB proof")).has_value());
+  const auto scene = root / "bariera.xodr";
+  std::filesystem::copy_file(std::filesystem::path(RM_SAMPLES_DIR) / "straight_road.xodr", scene);
+  {
+    std::ofstream state(root / "bariera.rmscene.json");
+    state
+        << R"({"scene_version":1,"view":{"distance":60,"pitch":1.56,"projection":"orthographic","target":[50,0,0],"yaw":-1.57}})";
+  }
+  AssetImportRequest request;
+  request.source =
+      std::filesystem::path(RM_ASSETS_DIR) / "prawko/blender/prawko_bariera_drogowa.glb";
+  request.label = QStringLiteral("Bariera ostrzegawcza Prawko");
+  request.category = QStringLiteral("Prawko | Obiekty 3D");
+  request.license = QStringLiteral("Model własny PrawkoNaRaz");
+  auto imported = import_prop_asset(root, request);
+  ASSERT_TRUE(imported.has_value()) << imported.error().message;
+  LibraryManifest overlay;
+  overlay.upsert(std::get<0>(*imported));
+  const auto manifest = root / "assets/library/manifest.json";
+  std::filesystem::create_directories(manifest.parent_path());
+  ASSERT_TRUE(overlay.save(manifest).has_value());
+
+  window_.load_file(scene);
+  auto* library = window_.findChild<LibraryPanel*>();
+  ASSERT_NE(library, nullptr);
+  const auto* proxy = library->view()->model();
+  ASSERT_NE(proxy, nullptr);
+  const int models_category =
+      library->category_combo()->findData(QStringLiteral("Prawko | Obiekty 3D"));
+  ASSERT_GE(models_category, 0);
+  auto* add_menu = window_.findChild<QMenu*>(QStringLiteral("menu.prawko_library"));
+  ASSERT_NE(add_menu, nullptr);
+  ASSERT_EQ(add_menu->actions().size(), 4);
+  EXPECT_TRUE(add_menu->actions()[3]->isVisible());
+  add_menu->actions()[3]->trigger();
+  EXPECT_EQ(library->category_combo()->currentData().toString(),
+            QStringLiteral("Prawko | Obiekty 3D"));
+  library->category_combo()->setCurrentIndex(models_category);
+  ASSERT_EQ(proxy->rowCount(), 1);
+  const QModelIndex tile = proxy->index(0, 0);
+  const QByteArray key = proxy->data(tile, LibraryListModel::KeyRole).toByteArray();
+  EXPECT_EQ(key, QByteArray("prop.bariera_ostrzegawcza_prawko"));
+
+  auto* viewport = window_.viewport();
+  viewport->resize(800, 500);
+  viewport->set_camera_preset(QStringLiteral("ortho"));
+  const double w = viewport->width(), h = viewport->height();
+  const auto projected =
+      project_to_screen(viewport->camera().matrices(float(w / h)), 44.0, -5.0, 0.0, w, h);
+  ASSERT_TRUE(projected.has_value());
+  const QPoint pos = QPointF((*projected)[0], (*projected)[1]).toPoint();
+  ASSERT_TRUE(viewport->rect().contains(pos));
+  std::unique_ptr<QMimeData> mime(proxy->mimeData({tile}));
+  ASSERT_NE(mime, nullptr);
+  QDragEnterEvent enter(pos, Qt::CopyAction, mime.get(), Qt::LeftButton, Qt::NoModifier);
+  QApplication::sendEvent(viewport, &enter);
+  ASSERT_TRUE(enter.isAccepted());
+  QDropEvent drop(QPointF(pos), Qt::CopyAction, mime.get(), Qt::LeftButton, Qt::NoModifier);
+  QApplication::sendEvent(viewport, &drop);
+  ASSERT_TRUE(drop.isAccepted());
+
+  // The drop selected the newly created object. Heading and along-road
+  // position are user-editable, not just internal fields.
+  auto* heading = window_.findChild<QDoubleSpinBox*>(QStringLiteral("object_hdg_spin"));
+  auto* station = window_.findChild<QDoubleSpinBox*>(QStringLiteral("object_s_spin"));
+  ASSERT_NE(heading, nullptr);
+  ASSERT_NE(station, nullptr);
+  const double old_s = station->value();
+  EXPECT_GT(old_s, 20.0);
+  station->setValue(old_s + 6.0);
+  QMetaObject::invokeMethod(station, "editingFinished", Qt::DirectConnection);
+  heading->setValue(1.571);
+  QMetaObject::invokeMethod(heading, "editingFinished", Qt::DirectConnection);
+
+  auto* save = window_.findChild<QAction*>(QStringLiteral("file_save"));
+  if (save == nullptr) {
+    const auto file_actions = window_.menuBar()->actions().front()->menu()->actions();
+    const auto it = std::ranges::find_if(file_actions, [](const QAction* action) {
+      return action->text() == QStringLiteral("&Save");
+    });
+    ASSERT_NE(it, file_actions.end());
+    save = *it;
+  }
+  save->trigger();
+  const auto reloaded = load_xodr(scene);
+  ASSERT_TRUE(reloaded.has_value()) << reloaded.error().message;
+  int count = 0;
+  reloaded->network.for_each_object([&](ObjectId, const Object& object) {
+    ++count;
+    EXPECT_EQ(object.name, "bariera_ostrzegawcza_prawko");
+    EXPECT_NEAR(object.s, old_s + 6.0, 0.01);
+    EXPECT_NEAR(object.hdg, 1.571, 0.01);
+  });
+  EXPECT_EQ(count, 1) << "The UI drop did not persist a real GLB object";
+}
+
 TEST_F(MainWindowLayoutTest, CuratedLibraryStaysAvailableAcrossMapAndScenarioModes) {
   auto* library = window_.findChild<LibraryPanel*>();
   ASSERT_NE(library, nullptr);
@@ -474,10 +586,13 @@ TEST_F(MainWindowLayoutTest, SingleCompactToolbarPresentsOnlyThePrawkoWorkflow) 
   }
   EXPECT_EQ(add->text(), QStringLiteral("Dodaj"));
   EXPECT_EQ(more->text(), QStringLiteral("Więcej"));
-  ASSERT_EQ(library->actions().size(), 3);
+  ASSERT_EQ(library->actions().size(), 4);
   EXPECT_EQ(library->actions()[0]->text(), QStringLiteral("Gotowe drogi"));
   EXPECT_EQ(library->actions()[1]->text(), QStringLiteral("Krawężniki i chodniki"));
   EXPECT_EQ(library->actions()[2]->text(), QStringLiteral("Uczestnicy ruchu"));
+  EXPECT_EQ(library->actions()[3]->text(), QStringLiteral("Obiekty 3D"));
+  EXPECT_FALSE(library->actions()[3]->isVisible())
+      << "No imported models: do not show an empty category.";
   auto* category = window_.findChild<QComboBox*>(QStringLiteral("library_category"));
   ASSERT_NE(category, nullptr);
   for (int index = 0; index < 3; ++index) {

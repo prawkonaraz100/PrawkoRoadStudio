@@ -231,6 +231,11 @@ Expected<void> Document::load_scene(const std::filesystem::path& path,
   return {};
 }
 
+void Document::refresh_registered_project_models() {
+  mesh_ = build_network_mesh(network_, studio_mesh_options());
+  emit mesh_changed({});
+}
+
 std::filesystem::path Document::scenario_path() const {
   if (file_path_.isEmpty()) {
     return {};

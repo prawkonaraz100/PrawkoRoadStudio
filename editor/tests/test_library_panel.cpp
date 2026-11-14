@@ -21,9 +21,11 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListView>
+#include <QMimeData>
 #include <QSignalSpy>
 #include <QTest>
 #include <filesystem>
+#include <memory>
 
 #include "document/library_list_model.hpp"
 #include "document/library_manifest.hpp"
@@ -206,6 +208,52 @@ TEST(LibraryPanel, ActorWithoutThumbnailStillHasAGlyph) {
   const QVariant decoration = panel.view()->model()->data(first, Qt::DecorationRole);
   EXPECT_TRUE(decoration.isValid());
   EXPECT_FALSE(decoration.value<QIcon>().isNull());
+}
+
+TEST(LibraryPanel, RealImportedBlenderModelAppearsAndIsDraggable) {
+  LibraryListModel model;
+  const auto builtin =
+      LibraryManifest::load(std::filesystem::path(RM_ASSETS_DIR) / "library/manifest.json");
+  ASSERT_TRUE(builtin.has_value());
+  model.set_manifest(*builtin);
+  const auto overlay = LibraryManifest::parse(QByteArray(R"({
+    "manifest_version":1,
+    "items":[{
+      "key":"prop.prawko_bariera_drogowa",
+      "label":"Bariera ostrzegawcza Prawko",
+      "category":"Prawko | Obiekty 3D",
+      "create":{
+        "kind":"tree", "model":"prawko_bariera_drogowa",
+        "model_file":"assets/props/prawko_bariera_drogowa.glb"
+      }
+    },{
+      "key":"prop.old", "label":"Stary rekwizyt",
+      "category":"Props", "create":{"kind":"tree", "model":"tree_pine"}
+    }]
+  })"));
+  ASSERT_TRUE(overlay.has_value());
+  model.set_overlay(*overlay, QString());
+  LibraryPanel panel(model);
+  ASSERT_EQ(panel.category_combo()->count(), 5);
+  EXPECT_EQ(panel.view()->model()->rowCount(), 19);
+  const int category = panel.category_combo()->findData(QStringLiteral("Prawko | Obiekty 3D"));
+  ASSERT_GE(category, 0);
+  panel.category_combo()->setCurrentIndex(category);
+  ASSERT_EQ(panel.view()->model()->rowCount(), 1);
+  const QModelIndex tile = panel.view()->model()->index(0, 0);
+  ASSERT_TRUE(tile.isValid());
+  EXPECT_EQ(panel.view()->model()->data(tile, LibraryListModel::KeyRole).toString(),
+            QStringLiteral("prop.prawko_bariera_drogowa"));
+  panel.view()->setCurrentIndex(tile);
+  std::unique_ptr<QMimeData> mime(panel.view()->model()->mimeData({tile}));
+  ASSERT_NE(mime, nullptr);
+  EXPECT_EQ(mime->data(kLibraryItemMimeType), QByteArray("prop.prawko_bariera_drogowa"));
+  panel.category_combo()->setCurrentIndex(0);
+  EXPECT_EQ(panel.view()->model()->rowCount(), 19);
+  auto* search = panel.findChild<QLineEdit*>(QStringLiteral("library_search"));
+  ASSERT_NE(search, nullptr);
+  search->setText(QStringLiteral("Stary rekwizyt"));
+  EXPECT_EQ(panel.view()->model()->rowCount(), 0);
 }
 
 } // namespace

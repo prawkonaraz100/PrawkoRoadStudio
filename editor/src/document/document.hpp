@@ -200,6 +200,12 @@ public:
 
   [[nodiscard]] const NetworkMesh& mesh() const { return mesh_; }
 
+  /// Rebuilds the cached scene mesh after registering external project GLB
+  /// models. A scene is initially parsed before MainWindow discovers its
+  /// containing project; without this, existing model instances disappear
+  /// until the user edits the road. This is not an edit or an undo step.
+  void refresh_registered_project_models();
+
   [[nodiscard]] const std::vector<Diagnostic>& diagnostics() const { return diagnostics_; }
 
   /// Live CROSS-DOCUMENT findings: `osc::validate_scenario_against_network`

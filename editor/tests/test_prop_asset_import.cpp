@@ -21,9 +21,12 @@
 // tools place it and the exporters draw it exactly as they do a bundled prop.
 
 #include "roadmaker/assets/prop_library.hpp"
+#include "roadmaker/edit/operations.hpp"
 #include "roadmaker/mesh/mesh_builder.hpp"
 #include "roadmaker/road/authoring.hpp"
 #include "roadmaker/road/network.hpp"
+#include "roadmaker/xodr/reader.hpp"
+#include "roadmaker/xodr/writer.hpp"
 
 #include <gtest/gtest.h>
 
@@ -31,6 +34,7 @@
 #include <QFile>
 #include <QJsonObject>
 #include <QTemporaryDir>
+#include <QUndoStack>
 #include <algorithm>
 #include <filesystem>
 #include <string>
@@ -38,6 +42,8 @@
 #include <vector>
 
 #include "document/asset_import.hpp"
+#include "document/document.hpp"
+#include "document/library_drop.hpp"
 #include "document/library_manifest.hpp"
 #include "document/prop_placement.hpp"
 
@@ -338,6 +344,116 @@ TEST_F(PropAssetImport, TheItemRoundTripsThroughTheManifest) {
     return d.message.find("could not be loaded") != std::string::npos;
   });
   EXPECT_FALSE(broken);
+}
+
+// This is the ACTUAL asset authored and exported by Blender 5.3, not a
+// programmatically fabricated fixture. Exercises its real importer, then the
+// same Library-drop and pose commands as the mouse and Properties panel.
+TEST_F(PropAssetImport, PrawkoBlenderBarrierDropsMovesRotatesAndSurvivesReload) {
+  const auto source =
+      std::filesystem::path(RM_ASSETS_DIR) / "prawko/blender/prawko_bariera_drogowa.glb";
+  ASSERT_TRUE(std::filesystem::is_regular_file(source));
+  QTemporaryDir project;
+  ASSERT_TRUE(project.isValid());
+  AssetImportRequest req = request_for(source, QStringLiteral("Prawko Bariera Drogowa"));
+  req.category = QStringLiteral("Prawko | Obiekty 3D");
+  auto imported = import_prop_asset(fs_path(project.path()), req);
+  ASSERT_TRUE(imported.has_value()) << imported.error().message;
+  const LibraryItem item = std::get<0>(*imported);
+  EXPECT_EQ(item.category, QStringLiteral("Prawko | Obiekty 3D"));
+  EXPECT_EQ(item.model, QStringLiteral("prawko_bariera_drogowa"));
+  EXPECT_TRUE(std::filesystem::exists(std::get<1>(*imported).copied_to));
+  LibraryManifest manifest;
+  manifest.upsert(item);
+  const auto path = fs_path(project.path()) / "assets/library/manifest.json";
+  std::filesystem::create_directories(path.parent_path());
+  ASSERT_TRUE(manifest.save(path).has_value());
+  auto reloaded = LibraryManifest::load(path);
+  ASSERT_TRUE(reloaded.has_value()) << reloaded.error().message;
+  ASSERT_EQ(reloaded->items().size(), 1U);
+  const auto registration = register_project_prop_models(fs_path(project.path()), *reloaded);
+  (void)registration;
+  const props::PropModel* model = props::model("prawko_bariera_drogowa");
+  ASSERT_NE(model, nullptr);
+  EXPECT_GT(model->height, 1.0);
+  EXPECT_GT(model->radius, 0.5);
+  EXPECT_GE(model->parts.size(), 10U);
+
+  Document document;
+  ASSERT_TRUE(document
+                  .push_command(edit::create_road(
+                      {{0.0, 0.0}, {100.0, 0.0}}, LaneProfile::two_lane_default(), "1"))
+                  .has_value());
+  auto drop = resolve_library_drop(reloaded->items().front(), document.network(), 42.0, -5.0);
+  EXPECT_EQ(drop.kind, LibraryDropKind::Tree);
+  ASSERT_NE(drop.command, nullptr);
+  ASSERT_TRUE(document.push_command(std::move(drop.command)).has_value());
+  ObjectId object_id{};
+  document.network().for_each_object([&](ObjectId found, const Object&) { object_id = found; });
+  ASSERT_TRUE(object_id.is_valid());
+  const Object* before = document.network().object(object_id);
+  ASSERT_NE(before, nullptr);
+  EXPECT_EQ(before->name, "prawko_bariera_drogowa");
+  const double initial_s = before->s;
+  const double initial_hdg = before->hdg;
+  auto move =
+      move_object_command(document.network(), object_id, initial_s + 6.0, -6.0, 1.5707963267948966);
+  ASSERT_NE(move, nullptr);
+  ASSERT_TRUE(document.push_command(std::move(move)).has_value());
+  const Object* moved = document.network().object(object_id);
+  ASSERT_NE(moved, nullptr);
+  EXPECT_NEAR(moved->s, initial_s + 6.0, 1e-6);
+  EXPECT_NEAR(moved->t, -6.0, 1e-6);
+  EXPECT_NEAR(moved->hdg, 1.5707963267948966, 1e-6);
+  EXPECT_EQ(build_network_mesh(document.network()).objects.size(), 1U);
+  document.undo_stack()->undo();
+  EXPECT_NEAR(document.network().object(object_id)->hdg, initial_hdg, 1e-6);
+  document.undo_stack()->redo();
+  EXPECT_NEAR(document.network().object(object_id)->hdg, 1.5707963267948966, 1e-6);
+
+  const auto scene = fs_path(project.path()) / "barrier.xodr";
+  const auto saved = save_xodr(document.network(), scene, "Prawko Barrier Proof");
+  ASSERT_TRUE(saved.has_value()) << saved.error().message;
+  const auto reopened = load_xodr(scene);
+  ASSERT_TRUE(reopened.has_value()) << reopened.error().message;
+  int count = 0;
+  reopened->network.for_each_object([&](ObjectId, const Object& obj) {
+    ++count;
+    EXPECT_EQ(obj.name, "prawko_bariera_drogowa");
+    EXPECT_NEAR(obj.s, initial_s + 6.0, 1e-4);
+    EXPECT_NEAR(obj.hdg, 1.5707963267948966, 1e-4);
+  });
+  EXPECT_EQ(count, 1);
+  EXPECT_EQ(build_network_mesh(reopened->network).objects.size(), 1U);
+}
+
+TEST_F(PropAssetImport, PrawkoDemoSceneReloadsItsOwnBlenderModel) {
+  const std::filesystem::path project =
+      std::filesystem::path(RM_REPO_ROOT_DIR) / "projects/Prawko-Bariera-Demo";
+  Document loaded_before_registration;
+  ASSERT_TRUE(loaded_before_registration.load(project / "bariera-ustawiona.xodr").has_value());
+  EXPECT_EQ(loaded_before_registration.mesh().objects.size(), 0U);
+  const auto manifest = LibraryManifest::load(project / "assets/library/manifest.json");
+  ASSERT_TRUE(manifest.has_value()) << manifest.error().message;
+  const auto diagnostics = register_project_prop_models(project, *manifest);
+  (void)diagnostics;
+  loaded_before_registration.refresh_registered_project_models();
+  EXPECT_EQ(loaded_before_registration.mesh().objects.size(), 1U);
+  ASSERT_NE(props::model("prawko_bariera_drogowa"), nullptr);
+  const auto scene = load_xodr(project / "bariera-ustawiona.xodr");
+  ASSERT_TRUE(scene.has_value()) << scene.error().message;
+  std::size_t objects = 0;
+  scene->network.for_each_object([&](ObjectId, const Object& obj) {
+    ++objects;
+    EXPECT_EQ(obj.name, "prawko_bariera_drogowa");
+    EXPECT_NEAR(obj.hdg, 1.5707963267949, 1e-4);
+  });
+  EXPECT_EQ(objects, 1U);
+  const NetworkMesh mesh = build_network_mesh(scene->network);
+  EXPECT_EQ(mesh.objects.size(), 1U);
+  if (mesh.objects.size() == 1U) {
+    EXPECT_EQ(mesh.objects.front().model_id, "prawko_bariera_drogowa");
+  }
 }
 
 } // namespace roadmaker::editor

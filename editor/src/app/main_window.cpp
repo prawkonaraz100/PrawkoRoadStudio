@@ -1570,17 +1570,35 @@ void MainWindow::build_toolbar() {
   add_button->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
   auto* library_menu = new QMenu(add_button);
   library_menu->setObjectName(QStringLiteral("menu.prawko_library"));
-  const auto focus_group = [this, library_menu](const QString& title, const QString& group) {
+  const auto focus_group = [this, library_menu](const QString& title,
+                                                const QString& group) -> QAction* {
     QAction* entry = library_menu->addAction(title);
     connect(entry, &QAction::triggered, this, [this, group] {
       library_dock_->show();
       library_dock_->raise();
       library_panel_->focus_category(group);
     });
+    return entry;
   };
   focus_group(tr("Gotowe drogi"), QStringLiteral("Prawko | Gotowe drogi"));
   focus_group(tr("Krawężniki i chodniki"), QStringLiteral("Prawko | Krawężniki i chodniki"));
   focus_group(tr("Uczestnicy ruchu"), kScenarioActorCategory);
+  QAction* models = focus_group(tr("Obiekty 3D"), QStringLiteral("Prawko | Obiekty 3D"));
+  const auto update_models_menu = [this, models] {
+    bool has_model = false;
+    for (int row = 0; row < library_model_.rowCount(); ++row) {
+      const LibraryItem* item = library_model_.item(row);
+      if (item != nullptr && item->category == QStringLiteral("Prawko | Obiekty 3D") &&
+          item->kind == LibraryItem::Kind::Tree &&
+          !item->create_raw.value(QStringLiteral("model_file")).toString().isEmpty()) {
+        has_model = true;
+        break;
+      }
+    }
+    models->setVisible(has_model);
+  };
+  connect(&library_model_, &QAbstractItemModel::modelReset, this, update_models_menu);
+  update_models_menu();
   add_button->setMenu(library_menu);
   core_toolbar_->addWidget(add_button);
 
@@ -1988,6 +2006,12 @@ void MainWindow::load_file(const std::filesystem::path& path) {
   settings_.add_recent_file(document_.file_path());
   update_recent_files_menu();
   associate_project_for(path);
+  // Document::load has already meshed the XODR before project assets were
+  // registered. Re-mesh now, or a saved GLB instance stays invisible until
+  // another edit happens to invalidate the scene mesh.
+  if (project_.has_value()) {
+    document_.refresh_registered_project_models();
+  }
   remember_last_scene(path); // after the association — it may have changed
 }
 

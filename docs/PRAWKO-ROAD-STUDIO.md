@@ -533,6 +533,44 @@ i usuniętych z katalogu aktywnych projektów. Nowa praca rozpoczyna
 się od pustej sceny, a kolejne składniki powstaną jako własne
 modele PrawkoNaRaz.
 
+### Rzeczywisty model z Blendera — bariera Prawko (14.11.2026)
+
+Model `assets/prawko/blender/prawko_bariera_drogowa.blend` został
+stworzony w Blenderze 5.3 i wyeksportowany do
+`assets/prawko/blender/prawko_bariera_drogowa.glb`.
+Projekt `projects/Prawko-Bariera-Demo/` zawiera kompletny model GLB,
+miniaturę wyrenderowaną w Blenderze, manifest biblioteki i dwa dokumenty:
+`bariera-demo.xodr` (droga bez bariery, do ręcznego upuszczenia)
+oraz `bariera-ustawiona.xodr` (przykład z umieszczoną barierą).
+
+Po otwarciu projektu pojawia się czwarta kategoria
+**Prawko | Obiekty 3D**. Jest widoczna tylko, gdy manifest projektu zawiera
+rzeczywiste importowane modele GLB; w pustym projekcie pozostają trzy
+dotychczasowe kategorie. `Dodaj → Obiekty 3D` wybiera ten sam filtr
+biblioteki. Nie przywracamy starej kategorii `Props`.
+Przeciągnięcie bariery z biblioteki tworzy obiekt drogi z jej modelem.
+Zaznaczony model można przesunąć narzędziem **Przesuń** i obrócić
+pierścieniem lub regulować dokładnie pola **s**, **t**, **Heading** i
+**Z offset** w Properties. Undo/Redo pozostaje wspólne z resztą sceny.
+
+Istotna poprawka zapisu/otwarcia: podczas otwierania istniejącego
+projektu model GLB zostaje zarejestrowany dopiero po wstępnym odczycie
+OpenDRIVE. Dlatego `MainWindow::load_file` po związaniu projektu
+wywołuje `Document::refresh_registered_project_models()`, które
+przelicza siatkę i odświeża viewport bez nowego wpisu Undo.
+Bez tego bariera była niewidoczna po ponownym uruchomieniu mimo
+istnienia w XODR. Sceny innych użytkowników nie były modyfikowane.
+
+Kontrola: `LibraryPanel.RealImportedBlenderModelAppearsAndIsDraggable`,
+`MainWindowLayoutTest.BlenderBarrierLibraryDropAndPropertiesMoveRotateSave`,
+`PropAssetImport.PrawkoBlenderBarrierDropsMovesRotatesAndSurvivesReload`
+oraz `PropAssetImport.PrawkoDemoSceneReloadsItsOwnBlenderModel`.
+Wszystkie badają *realny plik* z Blendera, nie symulowany model.
+Odbiór wizualny odbywa się w oddzielnym trybie zrzutów Qt, a
+dowody lokalne są w `archive/blender-bariera-20261114/`.
+Tworzenie dowolnych nowych komponentów i rozbudowa funkcji 3D nie
+wchodzą w zakres tego odbioru.
+
 ### Uproszczony pasek narzędzi Prawko — 14.11.2026
 
 Górny pasek zawiera **jedną, kompaktową linię poleceń** zgodną z
@@ -545,8 +583,10 @@ oznaczenia, teren i narzędzia techniczne. Wszystkie odwołują się
 do istniejących akcji i skrótów, nie mają osobnej implementacji.
 
 **Dodaj** otwiera trzy pozycje: *Gotowe drogi*, *Krawężniki i
-chodniki*, *Uczestnicy ruchu*. Wybór odsłania panel Library i ustawia
-jego filtr; właściwe upuszczanie nadal odbywa się myszą na widok 3D.
+chodniki*, *Uczestnicy ruchu*. Czwarta pozycja *Obiekty 3D*
+pojawia się tylko w projekcie zawierającym zaimportowane modele GLB.
+Wybór odsłania panel Library i ustawia jego filtr; właściwe upuszczanie
+nadal odbywa się myszą na widok 3D.
 **Droga** służy do własnoręcznego wyznaczenia przebiegu; w Scenario
 w tym miejscu dostępna jest **Trasa**. Przycisk **Symulacja** nadal
 wymaga uczestników i poprawnego przebiegu do uruchomienia.

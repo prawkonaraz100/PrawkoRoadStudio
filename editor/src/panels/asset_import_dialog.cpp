@@ -61,7 +61,13 @@ AssetImportDialog::AssetImportDialog(const std::filesystem::path& source,
   category_combo_ = new QComboBox(this);
   category_combo_->setEditable(true);
   category_combo_->addItems(categories);
-  if (categories.isEmpty()) {
+  if (asset_import_kind(source) == AssetImportKind::Prop) {
+    // New models belong to our own category, never to hidden legacy "Props",
+    // Road templates or the traffic-participants catalogue.
+    category_combo_->clear();
+    category_combo_->addItem(QStringLiteral("Prawko | Obiekty 3D"));
+    category_combo_->setEditable(false);
+  } else if (categories.isEmpty()) {
     category_combo_->addItem(tr("Materials"));
   }
   form->addRow(tr("&Category"), category_combo_);

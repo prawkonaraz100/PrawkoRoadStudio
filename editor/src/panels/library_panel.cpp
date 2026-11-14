@@ -93,6 +93,17 @@ namespace {
          category == kScenarioActorCategory;
 }
 
+// New Prawko models are real, project-imported GLB objects. Keep hiding every
+// legacy prop and its overlay; a valid model_file is proof of an actual import.
+[[nodiscard]] bool is_visible_prawko_item(const LibraryItem& item) {
+  if (is_curated_category(item.category)) {
+    return true;
+  }
+  return item.category == QStringLiteral("Prawko | Obiekty 3D") &&
+         item.kind == LibraryItem::Kind::Tree &&
+         !item.create_raw.value(QStringLiteral("model_file")).toString().isEmpty();
+}
+
 } // namespace
 
 LibraryFilterProxy::LibraryFilterProxy(QObject* parent) : QSortFilterProxyModel(parent) {
@@ -132,12 +143,15 @@ bool LibraryFilterProxy::filterAcceptsRow(int source_row, const QModelIndex& sou
   if (!QSortFilterProxyModel::filterAcceptsRow(source_row, source_parent)) {
     return false;
   }
-  const QModelIndex index = sourceModel()->index(source_row, 0, source_parent);
-  const QString category = sourceModel()->data(index, LibraryListModel::CategoryRole).toString();
-  // The "All categories" filter must NOT bypass the curated palette. This
-  // also excludes legacy project overlays and hidden items from search.
-  return is_curated_category(category) &&
-         (category_filter_.isEmpty() || category == category_filter_);
+  const auto* library = qobject_cast<const LibraryListModel*>(sourceModel());
+  if (library == nullptr) {
+    return false;
+  }
+  const LibraryItem* item = library->item(source_row);
+  // Even "All categories" and the search field cannot expose old RoadMaker
+  // props, but a genuine Prawko model imported from Blender must be visible.
+  return item != nullptr && is_visible_prawko_item(*item) &&
+         (category_filter_.isEmpty() || item->category == category_filter_);
 }
 
 LibraryPanel::LibraryPanel(LibraryListModel& model, QWidget* parent)
@@ -273,7 +287,7 @@ void LibraryPanel::populate_categories() {
   QStringList seen;
   for (int row = 0; row < model_.rowCount(); ++row) {
     const LibraryItem* item = model_.item(row);
-    if (item == nullptr || !is_curated_category(item->category) || seen.contains(item->category)) {
+    if (item == nullptr || !is_visible_prawko_item(*item) || seen.contains(item->category)) {
       continue;
     }
     seen.append(item->category);
