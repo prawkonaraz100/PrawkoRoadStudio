@@ -175,12 +175,12 @@ MainWindow::MainWindow(QWidget* parent, bool restore_saved_layout)
 
   // Layer 2 (fmt-s1, #325). Document is QtCore-only and cannot read the
   // viewport, so it calls back for the live state a save should record. By
-  // reference, seeded with what was loaded: the provider overwrites only the
-  // two fields it owns and leaves any forward-compat key the sidecar carries
-  // untouched.
+  // reference, seeded with what was loaded: the provider records the current
+  // view while retaining any unknown keys from the sidecar.
   document_.set_scene_state_provider([this](SceneState& state) {
     state.view = viewport_->view_state();
     state.textured = viewport_->textured_rendering();
+    state.driver_view_actor = simulation_panel_->driver_actor();
   });
   // The viewport restores the camera itself; the render mode is the app's to
   // apply, because the View menu has to agree with it.
@@ -3015,6 +3015,7 @@ void MainWindow::export_scenario_video() {
   }
   const SimulationPlayback recording = *simulation_panel_->playback();
   const OrbitCamera camera = viewport_->camera();
+  const QString driver_actor = simulation_panel_->driver_actor();
   ScenarioVideoExport exporter;
   const int frames = video.frame_count();
   QDialog progress(this);
@@ -3057,7 +3058,8 @@ void MainWindow::export_scenario_video() {
   });
   const QString encoder_path = encoder->text();
   const QString start_error = exporter.start(encoder_path, path, video, [&](double time) {
-    return viewport_->capture_simulation_frame(video.size, camera, recording.poses_at(time));
+    return viewport_->capture_simulation_frame(video.size, camera, recording.poses_at(time),
+                                                driver_actor);
   });
   if (!start_error.isEmpty()) {
     error = start_error;

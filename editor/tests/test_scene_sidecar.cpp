@@ -84,6 +84,17 @@ TEST(SceneSidecar, ParsesViewAndRenderMode) {
   EXPECT_TRUE(*state->textured);
 }
 
+TEST(SceneSidecar, DriverViewActorRoundTripsAndCanBeCleared) {
+  auto parsed = scene_sidecar::parse(R"({"scene_version":1,"driver_view_actor":"Auto"})");
+  ASSERT_TRUE(parsed);
+  EXPECT_EQ(parsed->driver_view_actor, QStringLiteral("Auto"));
+  auto reloaded = scene_sidecar::parse(scene_sidecar::to_json(*parsed));
+  ASSERT_TRUE(reloaded);
+  EXPECT_EQ(reloaded->driver_view_actor, parsed->driver_view_actor);
+  parsed->driver_view_actor.clear();
+  EXPECT_FALSE(scene_sidecar::to_json(*parsed).contains("driver_view_actor"));
+}
+
 TEST(SceneSidecar, MalformedJsonIsAnError) {
   const auto state = scene_sidecar::parse(QByteArrayLiteral("{ not json"));
   ASSERT_FALSE(state.has_value());

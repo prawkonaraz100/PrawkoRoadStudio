@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OpenDRIVE>
+  <header revMajor="1" revMinor="8" name="Widoczność przed przejściem dla pieszych" />
+  <road name="Ulica szkolna" length="125" id="1" junction="-1">
+    <type s="0" type="town" />
+    <planView><geometry s="0" x="0" y="0" hdg="0" length="125"><line /></geometry></planView>
+    <lanes>
+      <laneSection s="0">
+        <left>
+          <lane id="2" type="sidewalk" level="false"><width sOffset="0" a="2" b="0" c="0" d="0" /></lane>
+          <lane id="1" type="driving" level="false"><width sOffset="0" a="3.5" b="0" c="0" d="0" /></lane>
+        </left>
+        <center><lane id="0" type="none"><roadMark sOffset="0" type="broken" color="white" width="0.12" /></lane></center>
+        <right>
+          <lane id="-1" type="driving" level="false"><width sOffset="0" a="3.5" b="0" c="0" d="0" /></lane>
+          <lane id="-2" type="parking" level="false"><width sOffset="0" a="2.4" b="0" c="0" d="0" /></lane>
+          <lane id="-3" type="sidewalk" level="false"><width sOffset="0" a="2" b="0" c="0" d="0" /></lane>
+        </right>
+      </laneSection>
+    </lanes>
+    <objects>
+      <object type="crosswalk" subtype="zebra" id="1" s="58" t="-1.2" zOffset="0" orientation="none" hdg="1.5707963267948966" length="9.4" width="3">
+        <outlines>
+          <outline id="0" fillType="paint" outer="true" closed="true">
+            <cornerRoad s="56.5" t="-5.9" dz="0" height="0" id="0" />
+            <cornerRoad s="59.5" t="-5.9" dz="0" height="0" id="1" />
+            <cornerRoad s="59.5" t="3.5" dz="0" height="0" id="2" />
+            <cornerRoad s="56.5" t="3.5" dz="0" height="0" id="3" />
+          </outline>
+        </outlines>
+        <markings>
+          <marking color="white" width="0.1" zOffset="0.005" spaceLength="0.6" lineLength="0.6" startOffset="0" stopOffset="0">
+            <cornerReference id="0" /><cornerReference id="1" /><cornerReference id="2" /><cornerReference id="3" />
+          </marking>
+        </markings>
+        <userData code="rm:crosswalk" dashLength="0.6" dashGap="0.6" />
+      </object>
+    </objects>
+    <userData code="rm:waypoints" value="0,0;125,0" />
+  </road>
+</OpenDRIVE>

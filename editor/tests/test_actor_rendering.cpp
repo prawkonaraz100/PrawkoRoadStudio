@@ -148,6 +148,30 @@ TEST(ActorRendering, EveryActorSharesOneBoxBatch) {
   EXPECT_EQ(actor_batches, 1U) << "the box geometry was uploaded more than once";
 }
 
+TEST(ActorRendering, WorldPositionedActorsCanBeDrawnAndPicked) {
+  Document document;
+  author_straight_road(document);
+  auto scenario = document.scenario();
+  scenario.entities.scenario_objects.push_back(osc::make_actor(osc::ActorKind::Pedestrian, "Walker"));
+  osc::PrivateAction action;
+  action.teleport.emplace();
+  action.teleport->position = osc::WorldPosition{.x = 14.0, .y = -6.0, .z = 0.15,
+                                                 .h = std::numbers::pi / 2.0};
+  osc::Private placement;
+  placement.entity_ref = "Walker";
+  placement.actions.push_back(action);
+  scenario.storyboard.init.actions.privates.push_back(placement);
+
+  Scene scene;
+  append_scenario_actors(scenario, document.network(), scene);
+  const auto instances = actor_instances(scene);
+  ASSERT_EQ(instances.size(), 1U);
+  EXPECT_NEAR(instances.front().transform.model[12], 14.0F, 1e-5F);
+  EXPECT_NEAR(instances.front().transform.model[13], -6.0F, 1e-5F);
+  EXPECT_NEAR(instances.front().transform.model[14], 1.025F, 1e-5F);
+  EXPECT_EQ(actor_at(scenario, document.network(), 14.0, -6.0), "Walker");
+}
+
 TEST(ActorRendering, AnActorWhoseRoadIsGoneIsSkippedNotDrawnAtTheOrigin) {
   // ★ The .xosc holds STRINGS, so a scenario outlives the roads it references.
   // Drawing such an actor at (0,0,0) would put a car in the middle of the scene

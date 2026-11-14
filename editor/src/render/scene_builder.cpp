@@ -762,11 +762,7 @@ void append_scenario_actors(const osc::Scenario& scenario,
       if (!action.teleport.has_value()) {
         continue;
       }
-      const auto* lane = std::get_if<osc::LanePosition>(&action.teleport->position);
-      if (lane == nullptr) {
-        continue; // a world/road position is not drawn yet — p8-s3's
-      }
-      const std::optional<ActorPose> pose = actor_world_pose(network, *lane);
+      const auto pose = actor_world_pose(network, action.teleport->position);
       if (!pose.has_value()) {
         // The road this actor names is gone. SKIPPED, not drawn at the origin:
         // "it is not there" is honest, "it is silently somewhere wrong" is not.
@@ -783,7 +779,8 @@ void append_scenario_actors(const osc::Scenario& scenario,
                             .object = {},
                             .signal = {},
                             .actor = entry.entity_ref,
-                            .transform = actor_transform(pose->position, pose->heading, *box)});
+                            .transform = actor_transform(pose->position, pose->heading, *box,
+                                                         pose->pitch, pose->roll)});
       // Half the longest dimension is enough padding for any heading.
       const auto reach = static_cast<float>(std::max({box->width, box->length, box->height}) / 2.0);
       for (int axis = 0; axis < 3; ++axis) {
@@ -793,7 +790,7 @@ void append_scenario_actors(const osc::Scenario& scenario,
         scene.bounds.hi[static_cast<std::size_t>(axis)] =
             std::max(scene.bounds.hi[static_cast<std::size_t>(axis)], v + reach);
       }
-      break; // one box per entity, from its first lane-positioned teleport
+      break;
     }
   }
 }

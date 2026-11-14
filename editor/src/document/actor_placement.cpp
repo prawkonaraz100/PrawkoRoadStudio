@@ -279,6 +279,20 @@ std::optional<ActorPose> actor_world_pose(const RoadNetwork& network, const Lane
   return actor_world_pose(network, to_lane_position(anchor));
 }
 
+std::optional<ActorPose> actor_world_pose(const RoadNetwork& network,
+                                          const osc::Position& position) {
+  if (const auto* world = std::get_if<osc::WorldPosition>(&position)) {
+    return ActorPose{.position = {world->x, world->y, world->z},
+                     .heading = world->h.value_or(0.0),
+                     .pitch = world->p.value_or(0.0),
+                     .roll = world->r.value_or(0.0)};
+  }
+  if (const auto* lane = std::get_if<osc::LanePosition>(&position)) {
+    return actor_world_pose(network, *lane);
+  }
+  return std::nullopt;
+}
+
 std::optional<std::string> actor_at(
     const osc::Scenario& scenario, const RoadNetwork& network, double x, double y, double radius) {
   std::optional<std::string> best;
@@ -297,9 +311,7 @@ std::optional<std::string> actor_at(
         if (!action.teleport.has_value()) {
           continue;
         }
-        if (const auto* lane = std::get_if<osc::LanePosition>(&action.teleport->position)) {
-          pose = actor_world_pose(network, *lane);
-        }
+        pose = actor_world_pose(network, action.teleport->position);
         break;
       }
       break;

@@ -113,11 +113,15 @@ SimulationPanel::SimulationPanel(Document& document, Settings& settings, QWidget
       edit_(new QPushButton(tr("Return to Editing"), this)),
       export_video_(new QPushButton(tr("Export MP4…"), this)),
       timeline_(new TimelineSlider(this)), time_label_(new QLabel(this)),
-      events_(new QComboBox(this)) {
+      events_(new QComboBox(this)), camera_(new QComboBox(this)) {
   auto* buttons = new QHBoxLayout;
   buttons->addWidget(run_);
   buttons->addWidget(cancel_);
   buttons->addStretch();
+  auto* camera_label = new QLabel(tr("&Camera"), this);
+  camera_label->setBuddy(camera_);
+  buttons->addWidget(camera_label);
+  buttons->addWidget(camera_);
   buttons->addWidget(export_video_);
   auto* layout = new QVBoxLayout(this);
   layout->addLayout(buttons);
@@ -152,6 +156,11 @@ SimulationPanel::SimulationPanel(Document& document, Settings& settings, QWidget
   events_->setAccessibleName(tr("Jump to simulation event"));
   events_->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
   events_->setMinimumContentsLength(22);
+  camera_->setObjectName(QStringLiteral("simulation_camera"));
+  camera_->setAccessibleName(tr("Simulation camera"));
+  camera_->setToolTip(tr("Choose the view used for playback and video export"));
+  camera_->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+  camera_->setMinimumContentsLength(18);
   timer_.setInterval(16);
   timer_.setTimerType(Qt::PreciseTimer);
 
@@ -170,6 +179,19 @@ SimulationPanel::SimulationPanel(Document& document, Settings& settings, QWidget
       events_->setCurrentIndex(0);
     }
   });
+  connect(camera_, &QComboBox::currentIndexChanged, this, [this](int) {
+    driver_actor_ = camera_->currentData().toString();
+    document_.undo_stack()->resetClean();
+    if (playback_) {
+      pause();
+      present_frame();
+    }
+  });
+  connect(camera_, &QComboBox::activated, this, [this](int) {
+    if (playback_ && !preview_active_) {
+      present_frame();
+    }
+  });
   connect(&timer_, &QTimer::timeout, this, [this] {
     time_ms_ = static_cast<int>(std::min<qint64>(play_from_ms_ + clock_.elapsed(),
                                                  timeline_->maximum()));
@@ -178,9 +200,16 @@ SimulationPanel::SimulationPanel(Document& document, Settings& settings, QWidget
     }
     present_frame();
   });
-  connect(&document_, &Document::loaded, this, &SimulationPanel::mark_scene_changed);
+  connect(&document_, &Document::loaded, this, [this] {
+    driver_actor_ = document_.scene_state().driver_view_actor;
+    mark_scene_changed();
+    refresh_camera_choices();
+  });
   connect(&document_, &Document::mesh_changed, this, &SimulationPanel::mark_scene_changed);
-  connect(&document_, &Document::scenario_changed, this, &SimulationPanel::mark_scene_changed);
+  connect(&document_, &Document::scenario_changed, this, [this] {
+    mark_scene_changed();
+    refresh_camera_choices();
+  });
   connect(document_.undo_stack(), &QUndoStack::indexChanged, this, [this](int) {
     mark_scene_changed();
   });
@@ -190,6 +219,8 @@ SimulationPanel::SimulationPanel(Document& document, Settings& settings, QWidget
   });
   connect(&simulation_, &EsminiSimulation::finished, this, &SimulationPanel::show_result);
   reset_playback();
+  driver_actor_ = document_.scene_state().driver_view_actor;
+  refresh_camera_choices();
   update_controls();
 }
 
@@ -238,6 +269,7 @@ void SimulationPanel::update_controls() {
   edit_->setEnabled(preview_active_);
   timeline_->setEnabled(available && timeline_->maximum() > 0);
   events_->setEnabled(available && events_->count() > 1);
+  camera_->setEnabled(camera_->count() > 1 && !simulation_.running());
   const bool video_available = available && timeline_->maximum() > 0;
   if (export_video_->isEnabledTo(this) != video_available) {
     export_video_->setEnabled(video_available);
@@ -297,7 +329,25 @@ void SimulationPanel::present_frame() {
   time_label_->setText(tr("%1 / %2 s").arg(time, 0, 'f', 2).arg(playback_->duration(), 0, 'f', 2));
   preview_active_ = true;
   update_controls();
-  emit preview_frame(playback_->poses_at(time));
+  emit preview_frame(playback_->poses_at(time), driver_actor_);
+}
+
+void SimulationPanel::refresh_camera_choices() {
+  const QSignalBlocker block(camera_);
+  camera_->clear();
+  camera_->addItem(tr("Editor camera"), QString{});
+  for (const auto& object : document_.scenario().entities.scenario_objects) {
+    if (std::holds_alternative<osc::Vehicle>(object.entity_object)) {
+      const QString name = QString::fromStdString(object.name);
+      camera_->addItem(tr("Driver view — %1").arg(name), name);
+    }
+  }
+  const int index = camera_->findData(driver_actor_);
+  if (index < 0) {
+    driver_actor_.clear();
+  }
+  camera_->setCurrentIndex(std::max(0, index));
+  update_controls();
 }
 
 void SimulationPanel::leave_preview() {

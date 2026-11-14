@@ -18,8 +18,11 @@
 
 #include <array>
 #include <cmath>
+#include <numbers>
 #include <optional>
 
+#include "document/simulation_trace.hpp"
+#include "roadmaker/osc/scenario.hpp"
 #include "viewport/camera.hpp"
 #include "viewport/picking.hpp"
 
@@ -35,6 +38,22 @@ std::array<std::array<float, 3>, 3> rotation_rows(const CameraMatrices& m) {
 
 float dot(const std::array<float, 3>& a, const std::array<float, 3>& b) {
   return (a[0] * b[0]) + (a[1] * b[1]) + (a[2] * b[2]);
+}
+
+TEST(DriverCamera, FollowsHeadingPitchAndRollAtTheVehicleEye) {
+  const osc::BoundingBox box{.center_x = 2.0, .width = 2.0, .length = 5.0, .height = 1.5};
+  SimulationActorPose pose{.position = {20.0, 10.0, 2.0}, .heading = std::numbers::pi / 2.0};
+  const auto view = driver_camera(pose, box).matrices(16.0F / 9.0F);
+  EXPECT_NEAR(view.eye[0], 19.56F, 1e-5F);
+  EXPECT_NEAR(view.eye[1], 12.0F, 1e-5F);
+  EXPECT_NEAR(view.eye[2], 3.17F, 1e-5F);
+  const auto rows = rotation_rows(view);
+  EXPECT_NEAR(rows[2][1], -1.0F, 1e-5F);
+  pose.pitch = 0.2;
+  pose.roll = 0.3;
+  const auto tilted = rotation_rows(driver_camera(pose, box).matrices(1.0F));
+  EXPECT_NEAR(tilted[2][2], std::sin(0.2F), 1e-5F);
+  EXPECT_NEAR(tilted[0][2], -std::cos(0.2F) * std::sin(0.3F), 1e-5F);
 }
 
 TEST(OrbitCamera, ViewRotationIsOrthonormal) {

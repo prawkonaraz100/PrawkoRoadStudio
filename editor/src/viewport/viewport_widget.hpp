@@ -199,7 +199,7 @@ public slots:
   void clear_signal_phase_preview();
 
   /// Playback supplies transient poses. An empty frame still hides authored actors.
-  void set_simulation_frame(const QVector<SimulationActorPose>& poses);
+  void set_simulation_frame(const QVector<SimulationActorPose>& poses, const QString& driver_actor);
   void clear_simulation_frame();
 
 public:
@@ -235,7 +235,8 @@ public:
   /// the visible camera or playhead.
   [[nodiscard]] QImage capture_simulation_frame(const QSize& size,
                                                 const OrbitCamera& camera,
-                                                const QVector<SimulationActorPose>& poses);
+                                                const QVector<SimulationActorPose>& poses,
+                                                const QString& driver_actor);
 
 signals:
   void simulation_preview_exit_requested();
@@ -343,8 +344,12 @@ private:
 
   void rebuild_scene();
   void render_frame(const OrbitCamera& camera, const QSize& size);
-  [[nodiscard]] std::vector<InstanceData>
-  actor_transforms(const QVector<SimulationActorPose>& poses) const;
+  struct SimulationFrame {
+    std::vector<InstanceData> actors;
+    std::optional<DriverCamera> driver;
+  };
+  [[nodiscard]] SimulationFrame simulation_frame(const QVector<SimulationActorPose>& poses,
+                                                  const QString& driver_actor) const;
 
   /// Pushes the current render mode to the renderer: the Environment (textured
   /// vs sober lighting) and a grid-dimmed backdrop in textured mode.
@@ -522,7 +527,7 @@ private:
   /// Instanced prop/signal batches (one per model), uploaded ONCE per rebuild.
   /// Props no longer flow through items_; they draw via the GL instanced path.
   std::vector<UploadedPropBatch> prop_batches_;
-  std::optional<std::vector<InstanceData>> simulation_transforms_;
+  std::optional<SimulationFrame> simulation_frame_;
   RenderMeshHandle simulation_actor_mesh_;
 
   /// Editable text-sign faces — one uploaded textured quad per placed text sign.

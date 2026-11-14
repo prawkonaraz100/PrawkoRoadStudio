@@ -489,7 +489,8 @@ QImage ViewportWidget::capture_clean_frame() {
 
 QImage ViewportWidget::capture_simulation_frame(const QSize& size,
                                                 const OrbitCamera& camera,
-                                                const QVector<SimulationActorPose>& poses) {
+                                                const QVector<SimulationActorPose>& poses,
+                                                const QString& driver_actor) {
   if (!gl_ready_ || !isValid() || size.isEmpty()) {
     return {};
   }
@@ -505,8 +506,8 @@ QImage ViewportWidget::capture_simulation_frame(const QSize& size,
     QOpenGLFramebufferObject target(size, format);
     if (target.isValid() && target.bind()) {
       const QScopedValueRollback clean(clean_capture_, true);
-      const QScopedValueRollback preview(simulation_transforms_,
-                                        std::optional{actor_transforms(poses)});
+      const QScopedValueRollback preview(simulation_frame_,
+                                        std::optional{simulation_frame(poses, driver_actor)});
       render_frame(camera, size);
       image = target.toImage();
     }
@@ -629,35 +630,42 @@ void ViewportWidget::rebuild_reference_layers() {
   update();
 }
 
-void ViewportWidget::set_simulation_frame(const QVector<SimulationActorPose>& poses) {
-  if (!simulation_transforms_) {
+void ViewportWidget::set_simulation_frame(const QVector<SimulationActorPose>& poses,
+                                         const QString& driver_actor) {
+  if (!simulation_frame_) {
     unsetCursor();
   }
-  simulation_transforms_ = actor_transforms(poses);
+  simulation_frame_ = simulation_frame(poses, driver_actor);
   update();
 }
 
-std::vector<InstanceData>
-ViewportWidget::actor_transforms(const QVector<SimulationActorPose>& poses) const {
-  std::vector<InstanceData> transforms;
-  transforms.reserve(static_cast<std::size_t>(poses.size()));
+ViewportWidget::SimulationFrame
+ViewportWidget::simulation_frame(const QVector<SimulationActorPose>& poses,
+                                 const QString& driver_actor) const {
+  SimulationFrame frame;
+  frame.actors.reserve(static_cast<std::size_t>(poses.size()));
   const auto& objects = document_.scenario().entities.scenario_objects;
   for (const auto& pose : poses) {
     const auto object = std::ranges::find(objects, pose.actor_name.toStdString(),
                                           &osc::ScenarioObject::name);
     if (object != objects.end()) {
       if (const auto* box = actor_bounding_box(*object)) {
-        transforms.push_back(actor_transform(pose.position, pose.heading, *box, pose.pitch,
-                                             pose.roll));
+        if (pose.actor_name == driver_actor &&
+            std::holds_alternative<osc::Vehicle>(object->entity_object)) {
+          frame.driver = driver_camera(pose, *box);
+        } else {
+          frame.actors.push_back(actor_transform(pose.position, pose.heading, *box,
+                                                 pose.pitch, pose.roll));
+        }
       }
     }
   }
-  return transforms;
+  return frame;
 }
 
 void ViewportWidget::clear_simulation_frame() {
-  if (simulation_transforms_) {
-    simulation_transforms_.reset();
+  if (simulation_frame_) {
+    simulation_frame_.reset();
     update();
   }
 }
@@ -668,7 +676,8 @@ void ViewportWidget::render_frame(const OrbitCamera& camera, const QSize& size) 
   } else if (!pending_roads_.empty()) {
     apply_pending_road_updates();
   }
-  const bool show_editing = !clean_capture_ && !simulation_transforms_;
+  const bool show_editing = !clean_capture_ && !simulation_frame_;
+  const bool driver_view = simulation_frame_ && simulation_frame_->driver.has_value();
   if (show_editing) {
     upload_tool_preview();
   }
@@ -695,7 +704,7 @@ void ViewportWidget::render_frame(const OrbitCamera& camera, const QSize& size) 
   // the network, and are UNLIT because an orthophoto already contains its own
   // lighting — shading it again would make the imagery disagree with itself.
   const std::span<const UploadedReferenceLayer> reference_layers =
-      clean_capture_ ? std::span<const UploadedReferenceLayer>{}
+      (clean_capture_ || driver_view) ? std::span<const UploadedReferenceLayer>{}
                      : std::span<const UploadedReferenceLayer>{reference_layers_};
   for (const UploadedReferenceLayer& layer : reference_layers) {
     Material material;
@@ -722,16 +731,16 @@ void ViewportWidget::render_frame(const OrbitCamera& camera, const QSize& size) 
   // road via drag_target_road_, mirrored here for parity (it never lights props).
   const RoadId hovered_road = drag_target_road_.is_valid() ? drag_target_road_ : hovered_road_;
   const Material prop_material = material_for(SurfaceKind::Untextured, {});
-  if (simulation_transforms_ && !simulation_transforms_->empty()) {
+  if (simulation_frame_ && !simulation_frame_->actors.empty()) {
     if (!simulation_actor_mesh_.valid()) {
       simulation_actor_mesh_ = renderer_->upload(actor_box_mesh());
     }
     draw_items.push_back(DrawItem{.mesh = simulation_actor_mesh_,
                                   .material = prop_material,
-                                  .instances = *simulation_transforms_});
+                                  .instances = simulation_frame_->actors});
   }
   for (const UploadedPropBatch& batch : prop_batches_) {
-    if (simulation_transforms_ && batch.model_id == kActorBoxModelId) {
+    if (simulation_frame_ && batch.model_id == kActorBoxModelId) {
       continue;
     }
     if (!show_editing) {
@@ -819,14 +828,17 @@ void ViewportWidget::render_frame(const OrbitCamera& camera, const QSize& size) 
   const float aspect = size.height() > 0
                            ? static_cast<float>(size.width()) / static_cast<float>(size.height())
                            : 1.0F;
-  if (clean_capture_) {
+  if (clean_capture_ || driver_view) {
     BackdropColors backdrop = theme::current().backdrop();
     backdrop.grid_major[3] = 0.0F;
     backdrop.grid_minor[3] = 0.0F;
     renderer_->set_backdrop(backdrop);
   }
-  renderer_->render(draw_items, camera.matrices(aspect), size.width(), size.height());
-  if (clean_capture_) {
+  const auto matrices = driver_view
+                            ? simulation_frame_->driver->matrices(aspect)
+                            : camera.matrices(aspect);
+  renderer_->render(draw_items, matrices, size.width(), size.height());
+  if (clean_capture_ || driver_view) {
     apply_render_mode();
   }
 }
@@ -836,7 +848,7 @@ void ViewportWidget::paintGL() {
   const QSize size{static_cast<int>(std::lround(width() * devicePixelRatioF())),
                    static_cast<int>(std::lround(height() * devicePixelRatioF()))};
   render_frame(camera_, size);
-  if (clean_capture_ || simulation_transforms_) {
+  if (clean_capture_ || simulation_frame_) {
     return;
   }
 
@@ -1295,7 +1307,7 @@ bool ViewportWidget::has_library_mime(const QDropEvent* event) {
 }
 
 void ViewportWidget::dragEnterEvent(QDragEnterEvent* event) {
-  if (simulation_transforms_ || !has_library_mime(event)) {
+  if (simulation_frame_ || !has_library_mime(event)) {
     return;
   }
   event->acceptProposedAction();
@@ -1303,7 +1315,7 @@ void ViewportWidget::dragEnterEvent(QDragEnterEvent* event) {
 }
 
 void ViewportWidget::dragMoveEvent(QDragMoveEvent* event) {
-  if (simulation_transforms_ || !has_library_mime(event)) {
+  if (simulation_frame_ || !has_library_mime(event)) {
     return;
   }
   event->acceptProposedAction();
@@ -1319,7 +1331,7 @@ void ViewportWidget::dragLeaveEvent(QDragLeaveEvent* event) {
 void ViewportWidget::dropEvent(QDropEvent* event) {
   drop_preview_.reset();
   clear_drag_target_road();
-  if (simulation_transforms_ || !has_library_mime(event)) {
+  if (simulation_frame_ || !has_library_mime(event)) {
     update();
     return;
   }
@@ -1765,7 +1777,7 @@ void ViewportWidget::mousePressEvent(QMouseEvent* event) {
     event->accept();
     return;
   }
-  if (simulation_transforms_) {
+  if (simulation_frame_) {
     event->accept();
     return;
   }
@@ -1804,7 +1816,7 @@ void ViewportWidget::mouseMoveEvent(QMouseEvent* event) {
     event->accept();
     return;
   }
-  if (simulation_transforms_) {
+  if (simulation_frame_) {
     event->accept();
     return;
   }
@@ -1860,14 +1872,14 @@ void ViewportWidget::mouseReleaseEvent(QMouseEvent* event) {
     // The chord may have unwound onto another gesture (⌥+LMB+RMB pan →
     // ⌥+LMB orbit), so the anchor is re-synced rather than simply dropped.
     sync_pan_anchor(event->position());
-    if (context_click && !simulation_transforms_) {
+    if (context_click && !simulation_frame_) {
       emit context_menu_requested(build_menu_context(event->position()),
                                   event->globalPosition().toPoint());
     }
     event->accept();
     return;
   }
-  if (simulation_transforms_) {
+  if (simulation_frame_) {
     event->accept();
     return;
   }
@@ -1900,7 +1912,7 @@ MenuContext ViewportWidget::build_menu_context(const QPointF& pos) const {
 }
 
 void ViewportWidget::mouseDoubleClickEvent(QMouseEvent* event) {
-  if (simulation_transforms_) {
+  if (simulation_frame_) {
     event->accept();
     return;
   }
@@ -1912,7 +1924,7 @@ void ViewportWidget::mouseDoubleClickEvent(QMouseEvent* event) {
 }
 
 void ViewportWidget::keyPressEvent(QKeyEvent* event) {
-  if (simulation_transforms_) {
+  if (simulation_frame_) {
     if (event->key() == Qt::Key_Escape) {
       emit simulation_preview_exit_requested();
       event->accept();

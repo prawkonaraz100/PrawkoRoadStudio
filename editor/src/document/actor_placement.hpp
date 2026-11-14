@@ -117,10 +117,15 @@ actor_drop_hint(const RoadNetwork& network, double x, double y, double max_t = k
 struct ActorPose {
   std::array<double, 3> position{};
   double heading = 0.0;
+  double pitch = 0.0;
+  double roll = 0.0;
 };
 
 [[nodiscard]] std::optional<ActorPose> actor_world_pose(const RoadNetwork& network,
                                                         const osc::LanePosition& position);
+
+[[nodiscard]] std::optional<ActorPose> actor_world_pose(const RoadNetwork& network,
+                                                        const osc::Position& position);
 
 /// `actor_world_pose` for an anchor, without going through a `<LanePosition>`.
 [[nodiscard]] std::optional<ActorPose> actor_world_pose(const RoadNetwork& network,

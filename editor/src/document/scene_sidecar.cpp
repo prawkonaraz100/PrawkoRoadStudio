@@ -32,6 +32,7 @@ namespace {
 
 constexpr auto kVersionKey = "scene_version";
 constexpr auto kViewKey = "view";
+constexpr auto kDriverViewActorKey = "driver_view_actor";
 constexpr auto kTexturedKey = "textured";
 constexpr auto kModeKey = "mode";
 constexpr auto kWorkspaceKey = "workspace";
@@ -383,6 +384,7 @@ Expected<SceneState> parse(const QByteArray& json) {
                  kSupportedVersion);
   }
   state.view = parse_view(root.value(QLatin1String(kViewKey)));
+  state.driver_view_actor = root.value(QLatin1String(kDriverViewActorKey)).toString();
   const QJsonValue textured = root.value(QLatin1String(kTexturedKey));
   if (textured.isBool()) {
     state.textured = textured.toBool();
@@ -449,6 +451,11 @@ QByteArray to_json(const SceneState& state) {
     root.insert(QLatin1String(kTexturedKey), *state.textured);
   } else {
     root.remove(QLatin1String(kTexturedKey));
+  }
+  if (state.driver_view_actor.isEmpty()) {
+    root.remove(QLatin1String(kDriverViewActorKey));
+  } else {
+    root.insert(QLatin1String(kDriverViewActorKey), state.driver_view_actor);
   }
   if (state.mode) {
     root.insert(QLatin1String(kModeKey),

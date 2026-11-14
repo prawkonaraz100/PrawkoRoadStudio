@@ -22,6 +22,10 @@
 #include "render/projection_mode.hpp"
 #include "render/renderer.hpp"
 
+namespace roadmaker::osc {
+struct BoundingBox;
+}
+
 namespace roadmaker::editor {
 
 // ProjectionMode lives in render/projection_mode.hpp: the scene sidecar
@@ -36,6 +40,22 @@ enum class CardinalView {
   East,
   Top,
 };
+
+/// The driver's camera has an explicit basis so the view can follow roll.
+struct DriverCamera {
+  std::array<float, 3> eye;
+  std::array<float, 3> forward;
+  std::array<float, 3> right;
+  std::array<float, 3> up;
+
+  [[nodiscard]] CameraMatrices matrices(float aspect) const;
+};
+
+struct SimulationActorPose;
+
+/// Builds a forward-facing view from a vehicle reference point and its box.
+[[nodiscard]] DriverCamera driver_camera(const SimulationActorPose& pose,
+                                         const osc::BoundingBox& box);
 
 /// Orbit camera in the KERNEL frame: right-handed, Z-up, meters. The editor
 /// renders kernel coordinates directly — no Y-up conversion here (that

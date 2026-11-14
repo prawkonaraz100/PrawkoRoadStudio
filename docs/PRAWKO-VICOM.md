@@ -32,4 +32,10 @@ Macierz obejmuje funkcje pokazane publicznie przez producenta. Oś czasu, przyci
 
 Test pierwszego filmu obejmuje weryfikację rozdzielczości, FPS i czasu oraz porównanie co najmniej dwóch klatek, na których wybrany aktor faktycznie zmienia położenie. Kamera, zakres i chwila zdarzenia muszą zgadzać się z odtwarzaniem. Pomiar powtarzalności porównuje zdarzenia i pozycje, z ustaloną tolerancją zamiast wymagania identycznego pliku MP4.
 
+## Ćwiczenie z widoczności przed przejściem
+
+Na ekranie startowym wybierz jeden z dwóch przykładów **Przejście dla pieszych**. Użyj **File → Save As**, aby utworzyć kopię do edycji. Uruchom **Scenario → Run Simulation**. W panelu **Simulation** wybierz **Camera → Driver view — Auto**. W **Camera → Editor camera** zapisany widok pokazuje tę samą sytuację z góry. **Export MP4…** nagrywa wybrane ujęcie.
+
+W obu wariantach samochód zaczyna hamować po 2,45 s, a pieszy wchodzi na przejście po 2,70 s. W drugim wariancie zaparkowany dostawczak przesłania pieszego od strony kierowcy. Porównaj początek przejścia w obu ujęciach. Zatrzymanie samochodu jest zaprogramowane w scenariuszu.
+
 Założenie techniczne to wspólny model C++ i jeden widok Qt, z silnikiem oraz enkoderem zarządzanymi przez edytor. Zintegrowana symulacja zasila odtwarzanie i render tym samym zapisem przebiegu. Obraz statyczny i film korzystają ze wspólnego sposobu rysowania kadru. Powiązania z mapą i przebieg mają wersjonowane dane scenariusza, a wynikowe pliki PNG/MP4 trafiają do wskazanej lokalizacji. Interaktywna odpowiedź kursanta pozostaje rozwinięciem dydaktycznym po zamknięciu podstawowego przepływu produkcji materiałów. [Wcześniejszy audyt architektury](PRAWKO-SCENARIUSZE-DYDAKTYCZNE.md)

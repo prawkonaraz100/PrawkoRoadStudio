@@ -41,6 +41,7 @@
 
 #include <QByteArray>
 #include <QJsonObject>
+#include <QString>
 #include <array>
 #include <filesystem>
 #include <optional>
@@ -125,6 +126,9 @@ struct SceneState {
   int version = 1;
 
   std::optional<SceneViewState> view;
+
+  /// Empty uses the editable view. Otherwise follow the named vehicle in playback.
+  QString driver_view_actor;
 
   /// Per-scene render mode: true = daytime Textured, false = flat Sober.
   /// Overrides the application default for this scene only.

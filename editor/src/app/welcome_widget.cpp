@@ -309,7 +309,9 @@ void WelcomeWidget::populate_samples() {
   }
   // Curated subset with human names — the folder also holds test-oriented
   // fixtures that would read as noise here.
-  const std::array<std::pair<const char*, const char*>, 4> curated{{
+  const std::array<std::pair<const char*, const char*>, 6> curated{{
+      {"prawko_crosswalk_clear", "Przejście dla pieszych — dobra widoczność"},
+      {"prawko_crosswalk_obstructed", "Przejście dla pieszych — zasłonięty pieszy"},
       {"crossing", "4-arm crossing"},
       {"t_junction", "T-junction"},
       {"curved_road", "Curved road"},

@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OpenSCENARIO>
+  <FileHeader revMajor="1" revMinor="2" date="1970-01-01T00:00:00" description="Widoczność przed przejściem dla pieszych" author="PrawkoNaRaz" />
+  <ParameterDeclarations />
+  <CatalogLocations />
+  <RoadNetwork><LogicFile filepath="prawko_crosswalk_clear.xodr" /></RoadNetwork>
+  <Entities>
+    <ScenarioObject name="Auto">
+      <Vehicle name="Samochod" vehicleCategory="car" mass="1500">
+        <BoundingBox><Center x="1.9" y="0" z="0.725" /><Dimensions width="2.13" length="5.79" height="1.45" /></BoundingBox>
+        <Performance maxSpeed="69.4" maxAcceleration="5" maxDeceleration="10" />
+        <Axles>
+          <FrontAxle maxSteering="0.5" wheelDiameter="0.65" trackWidth="1.6" positionX="2.9" positionZ="0.325" />
+          <RearAxle maxSteering="0" wheelDiameter="0.65" trackWidth="1.6" positionX="0" positionZ="0.325" />
+        </Axles>
+        <Properties />
+      </Vehicle>
+    </ScenarioObject>
+    <ScenarioObject name="Pieszy">
+      <Pedestrian name="Pieszy" pedestrianCategory="pedestrian" mass="80" model="">
+        <BoundingBox><Center x="0" y="0" z="0.875" /><Dimensions width="0.6" length="0.4" height="1.75" /></BoundingBox>
+        <Properties />
+      </Pedestrian>
+    </ScenarioObject>
+  </Entities>
+  <Storyboard>
+    <Init>
+      <Actions>
+        <Private entityRef="Auto">
+          <PrivateAction><TeleportAction><Position><LanePosition roadId="1" laneId="-1" s="12" offset="0" /></Position></TeleportAction></PrivateAction>
+          <PrivateAction><LongitudinalAction><SpeedAction>
+            <SpeedActionDynamics dynamicsShape="step" value="0" dynamicsDimension="time" />
+            <SpeedActionTarget><AbsoluteTargetSpeed value="10" /></SpeedActionTarget>
+          </SpeedAction></LongitudinalAction></PrivateAction>
+          <PrivateAction><RoutingAction><AssignRouteAction><Route name="Dojazd_do_przejscia" closed="false">
+            <Waypoint routeStrategy="shortest"><Position><LanePosition roadId="1" laneId="-1" s="12" offset="0" /></Position></Waypoint>
+            <Waypoint routeStrategy="shortest"><Position><LanePosition roadId="1" laneId="-1" s="110" offset="0" /></Position></Waypoint>
+          </Route></AssignRouteAction></RoutingAction></PrivateAction>
+        </Private>
+        <Private entityRef="Pieszy">
+          <PrivateAction><TeleportAction><Position><WorldPosition x="58" y="-6.6" z="0.15" h="1.5707963267948966" /></Position></TeleportAction></PrivateAction>
+        </Private>
+      </Actions>
+    </Init>
+    <Story name="Widocznosc">
+      <Act name="Podejscie">
+        <ManeuverGroup name="Hamowanie" maximumExecutionCount="1">
+          <Actors selectTriggeringEntities="false"><EntityRef entityRef="Auto" /></Actors>
+          <Maneuver name="Zatrzymaj_przed_przejsciem">
+            <Event name="Hamowanie_przed_przejsciem" priority="override">
+              <Action name="Zatrzymaj">
+                <PrivateAction><LongitudinalAction><SpeedAction>
+                  <SpeedActionDynamics dynamicsShape="linear" value="2.5" dynamicsDimension="time" />
+                  <SpeedActionTarget><AbsoluteTargetSpeed value="0" /></SpeedActionTarget>
+                </SpeedAction></LongitudinalAction></PrivateAction>
+              </Action>
+              <StartTrigger><ConditionGroup><Condition name="Czas_hamowania" delay="0" conditionEdge="rising">
+                <ByValueCondition><SimulationTimeCondition value="2.4" rule="greaterThan" /></ByValueCondition>
+              </Condition></ConditionGroup></StartTrigger>
+            </Event>
+          </Maneuver>
+        </ManeuverGroup>
+        <ManeuverGroup name="Pieszy_przechodzi" maximumExecutionCount="1">
+          <Actors selectTriggeringEntities="false"><EntityRef entityRef="Pieszy" /></Actors>
+          <Maneuver name="Przejscie">
+            <Event name="Pieszy_wchodzi" priority="override">
+              <Action name="Przejdz_na_druga_strone">
+                <PrivateAction><RoutingAction><FollowTrajectoryAction>
+                  <TrajectoryRef><Trajectory name="Przez_zebre" closed="false"><Shape><Polyline>
+                    <Vertex time="0"><Position><WorldPosition x="58" y="-6.6" z="0.15" h="1.5707963267948966" /></Position></Vertex>
+                    <Vertex time="0.5"><Position><WorldPosition x="58" y="-5.7" z="0" h="1.5707963267948966" /></Position></Vertex>
+                    <Vertex time="5.6"><Position><WorldPosition x="58" y="3.35" z="0" h="1.5707963267948966" /></Position></Vertex>
+                    <Vertex time="6.3"><Position><WorldPosition x="58" y="4.6" z="0.15" h="1.5707963267948966" /></Position></Vertex>
+                  </Polyline></Shape></Trajectory></TrajectoryRef>
+                  <TimeReference><Timing domainAbsoluteRelative="relative" scale="1" offset="0" /></TimeReference>
+                  <TrajectoryFollowingMode followingMode="position" />
+                </FollowTrajectoryAction></RoutingAction></PrivateAction>
+              </Action>
+              <StartTrigger><ConditionGroup><Condition name="Czas_wejscia" delay="0" conditionEdge="rising">
+                <ByValueCondition><SimulationTimeCondition value="2.65" rule="greaterThan" /></ByValueCondition>
+              </Condition></ConditionGroup></StartTrigger>
+            </Event>
+          </Maneuver>
+        </ManeuverGroup>
+        <StartTrigger><ConditionGroup><Condition name="Start" delay="0" conditionEdge="none">
+          <ByValueCondition><SimulationTimeCondition value="0" rule="greaterOrEqual" /></ByValueCondition>
+        </Condition></ConditionGroup></StartTrigger>
+      </Act>
+    </Story>
+    <StopTrigger><ConditionGroup><Condition name="Koniec" delay="0" conditionEdge="rising">
+      <ByValueCondition><SimulationTimeCondition value="10" rule="greaterThan" /></ByValueCondition>
+    </Condition></ConditionGroup></StopTrigger>
+  </Storyboard>
+</OpenSCENARIO>

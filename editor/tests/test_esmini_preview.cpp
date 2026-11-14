@@ -332,12 +332,18 @@ TEST(SimulationPanel, PlaysAndSeeksRealTelemetryThenInvalidatesAfterAMapEdit) {
   auto* play = panel.findChild<QPushButton*>(QStringLiteral("simulation_play"));
   auto* restart = panel.findChild<QPushButton*>(QStringLiteral("simulation_restart"));
   auto* video = panel.findChild<QPushButton*>(QStringLiteral("simulation_export_video"));
+  auto* camera = panel.findChild<QComboBox*>(QStringLiteral("simulation_camera"));
   ASSERT_NE(timeline, nullptr);
   ASSERT_NE(events, nullptr);
   ASSERT_NE(play, nullptr);
   ASSERT_NE(restart, nullptr);
   ASSERT_NE(video, nullptr);
+  ASSERT_NE(camera, nullptr);
   EXPECT_TRUE(video->isEnabled());
+  ASSERT_EQ(camera->count(), 2);
+  camera->setCurrentIndex(1);
+  EXPECT_EQ(panel.driver_actor(), QStringLiteral("Ego"));
+  EXPECT_EQ(frames.last().at(1).toString(), QStringLiteral("Ego"));
   ASSERT_GE(events->count(), 3);
 
   // Activate a marker as the widget would, then compare that frame to CSV.

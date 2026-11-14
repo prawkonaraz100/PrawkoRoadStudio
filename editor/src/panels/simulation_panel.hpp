@@ -29,6 +29,7 @@ public:
   void cancel();
   void leave_preview();
   void pause();
+  [[nodiscard]] QString driver_actor() const { return driver_actor_; }
 
   [[nodiscard]] const std::optional<SimulationRun>& result() const { return simulation_.result(); }
   [[nodiscard]] const SimulationPlayback* playback() const {
@@ -36,7 +37,7 @@ public:
   }
 
 signals:
-  void preview_frame(const QVector<SimulationActorPose>& poses);
+  void preview_frame(const QVector<SimulationActorPose>& poses, const QString& driver_actor);
   void preview_closed();
   void video_availability_changed(bool available);
   void video_export_requested();
@@ -49,6 +50,7 @@ private:
   void seek(int milliseconds);
   void present_frame();
   void reset_playback();
+  void refresh_camera_choices();
 
   Document& document_;
   Settings& settings_;
@@ -64,6 +66,8 @@ private:
   QSlider* timeline_;
   QLabel* time_label_;
   QComboBox* events_;
+  QComboBox* camera_;
+  QString driver_actor_;
   std::optional<SimulationPlayback> playback_;
   QTimer timer_;
   QElapsedTimer clock_;

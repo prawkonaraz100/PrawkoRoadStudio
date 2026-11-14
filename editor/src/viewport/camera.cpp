@@ -19,6 +19,9 @@
 #include <algorithm>
 #include <cmath>
 
+#include "document/simulation_trace.hpp"
+#include "render/scene_builder.hpp"
+
 namespace roadmaker::editor {
 
 namespace {
@@ -38,7 +41,56 @@ float world_per_pixel(float distance, float viewport_height) {
   return 2.0F * distance * std::tan(kFovY / 2.0F) / std::max(viewport_height, 1.0F);
 }
 
+std::array<float, 16> view_matrix(const std::array<float, 3>& eye,
+                                 const std::array<float, 3>& forward,
+                                 const std::array<float, 3>& right,
+                                 const std::array<float, 3>& up) {
+  const auto dot = [&eye](const auto& axis) {
+    return axis[0] * eye[0] + axis[1] * eye[1] + axis[2] * eye[2];
+  };
+  return {right[0], up[0], -forward[0], 0.0F,
+          right[1], up[1], -forward[1], 0.0F,
+          right[2], up[2], -forward[2], 0.0F,
+          -dot(right), -dot(up), dot(forward), 1.0F};
+}
+
+std::array<float, 16> perspective(float aspect) {
+  constexpr float near_plane = 0.1F;
+  constexpr float far_plane = 10000.0F;
+  const float tan_half = std::tan(kFovY / 2.0F);
+  return {1.0F / (aspect * tan_half), 0.0F, 0.0F, 0.0F,
+          0.0F, 1.0F / tan_half, 0.0F, 0.0F,
+          0.0F, 0.0F, -(far_plane + near_plane) / (far_plane - near_plane), -1.0F,
+          0.0F, 0.0F, -(2.0F * far_plane * near_plane) / (far_plane - near_plane), 0.0F};
+}
+
 } // namespace
+
+DriverCamera driver_camera(const SimulationActorPose& pose, const osc::BoundingBox& box) {
+  const auto basis = actor_transform(
+      pose.position, pose.heading,
+      osc::BoundingBox{.width = 1.0, .length = 1.0, .height = 1.0}, pose.pitch, pose.roll).model;
+  DriverCamera view{
+      .eye = {basis[12], basis[13], basis[14]},
+      .forward = {basis[0], basis[1], basis[2]},
+      .right = {-basis[4], -basis[5], -basis[6]},
+      .up = {basis[8], basis[9], basis[10]},
+  };
+  const auto forward = static_cast<float>(box.center_x);
+  const auto left = static_cast<float>(box.width * 0.22);
+  const auto height = static_cast<float>(std::max(1.0, box.height * 0.78));
+  for (std::size_t axis = 0; axis < view.eye.size(); ++axis) {
+    view.eye[axis] += forward * view.forward[axis] - left * view.right[axis] +
+                      height * view.up[axis];
+  }
+  return view;
+}
+
+CameraMatrices DriverCamera::matrices(float aspect) const {
+  return {.view = view_matrix(eye, forward, right, up),
+          .projection = perspective(aspect),
+          .eye = eye};
+}
 
 void OrbitCamera::orbit(float delta_yaw, float delta_pitch) {
   yaw_ += delta_yaw;
@@ -211,25 +263,8 @@ CameraMatrices OrbitCamera::matrices(float aspect) const {
 
   CameraMatrices out;
   out.eye = eye;
-  // Column-major view matrix (world -> camera).
-  out.view = {r[0],
-              u[0],
-              -f[0],
-              0.0F,
-              r[1],
-              u[1],
-              -f[1],
-              0.0F,
-              r[2],
-              u[2],
-              -f[2],
-              0.0F,
-              -((r[0] * eye[0]) + (r[1] * eye[1]) + (r[2] * eye[2])),
-              -((u[0] * eye[0]) + (u[1] * eye[1]) + (u[2] * eye[2])),
-              ((f[0] * eye[0]) + (f[1] * eye[1]) + (f[2] * eye[2])),
-              1.0F};
+  out.view = view_matrix(eye, f, r, u);
 
-  const float near_plane = 0.1F;
   const float far_plane = 10000.0F;
   if (projection_ == ProjectionMode::Orthographic) {
     // Symmetric ortho box around the view axis. The near plane is pulled BEHIND
@@ -257,24 +292,7 @@ CameraMatrices OrbitCamera::matrices(float aspect) const {
     return out;
   }
 
-  // Perspective projection (kFovY vertical FOV).
-  const float tan_half = std::tan(kFovY / 2.0F);
-  out.projection = {1.0F / (aspect * tan_half),
-                    0.0F,
-                    0.0F,
-                    0.0F,
-                    0.0F,
-                    1.0F / tan_half,
-                    0.0F,
-                    0.0F,
-                    0.0F,
-                    0.0F,
-                    -(far_plane + near_plane) / (far_plane - near_plane),
-                    -1.0F,
-                    0.0F,
-                    0.0F,
-                    -(2.0F * far_plane * near_plane) / (far_plane - near_plane),
-                    0.0F};
+  out.projection = perspective(aspect);
   return out;
 }
 

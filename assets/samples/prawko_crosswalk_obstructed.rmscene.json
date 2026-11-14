@@ -1,0 +1,13 @@
+{
+    "driver_view_actor": "Auto",
+    "mode": "scenario",
+    "scene_version": 1,
+    "textured": true,
+    "view": {
+        "distance": 55,
+        "pitch": 1.5607963,
+        "projection": "orthographic",
+        "target": [50, -1, 0],
+        "yaw": -1.5707963
+    }
+}
