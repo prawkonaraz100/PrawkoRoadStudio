@@ -38,6 +38,7 @@
 #include <QOpenGLFramebufferObject>
 #include <QOpenGLFunctions>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPen>
 #include <QPolygonF>
 #include <QTimer>
@@ -464,6 +465,18 @@ void ViewportWidget::set_camera_preset(const QString& preset) {
     camera_.set_projection(ProjectionMode::Orthographic);
   } else if (preset == QStringLiteral("orbit")) {
     camera_.set_view(0.8F, 0.9F);
+  } else if (preset == QStringLiteral("driver-mirrors-proof")) {
+    // Screenshot-only regression pose for projects/Prawko-Bariera-Demo:
+    // the model is behind this driver (x=2 versus eye x=7). It MUST show
+    // up in the mirror render but not in the forward-facing main view.
+    // No saved scene, user settings or live simulation playhead are touched.
+    SimulationFrame frame;
+    frame.driver = DriverCamera{
+        .eye = {7.0F, -70.0F, 1.45F},
+        .forward = {1.0F, 0.0F, 0.0F},
+        .right = {0.0F, -1.0F, 0.0F},
+        .up = {0.0F, 0.0F, 1.0F}};
+    simulation_frame_ = std::move(frame);
   } else if (preset == QStringLiteral("gs1")) {
     // The GS-1 golden camera (docs/roadmap/golden_scenes/gs1_urban_intersection.md):
     // a fixed three-quarter view down one diagonal at eye (−55, −55, 35) looking
@@ -512,6 +525,11 @@ QImage ViewportWidget::capture_simulation_frame(const QSize& size,
                                         std::optional{simulation_frame(poses, driver_actor)});
       render_frame(camera, size);
       image = target.toImage();
+      if (simulation_frame_ && simulation_frame_->driver && !image.isNull()) {
+        const auto mirrors = capture_driver_mirrors(size);
+        QPainter painter(&image);
+        draw_driver_mirrors(painter, size, mirrors);
+      }
     }
   }
   context()->functions()->glBindFramebuffer(GL_FRAMEBUFFER, defaultFramebufferObject());
@@ -672,7 +690,8 @@ void ViewportWidget::clear_simulation_frame() {
   }
 }
 
-void ViewportWidget::render_frame(const OrbitCamera& camera, const QSize& size) {
+void ViewportWidget::render_frame(const OrbitCamera& camera, const QSize& size,
+                                  const DriverCamera* override_driver) {
   if (scene_dirty_) {
     rebuild_scene();
   } else if (!pending_roads_.empty()) {
@@ -843,12 +862,78 @@ void ViewportWidget::render_frame(const OrbitCamera& camera, const QSize& size) 
     backdrop.grid_minor[3] = 0.0F;
     renderer_->set_backdrop(backdrop);
   }
-  const auto matrices = driver_view
-                            ? simulation_frame_->driver->matrices(aspect)
-                            : camera.matrices(aspect);
+  const auto matrices = override_driver != nullptr
+                            ? override_driver->matrices(aspect)
+                            : driver_view ? simulation_frame_->driver->matrices(aspect)
+                                          : camera.matrices(aspect);
   renderer_->render(draw_items, matrices, size.width(), size.height());
   if (clean_capture_ || driver_view) {
     apply_render_mode();
+  }
+}
+
+std::array<QImage, 3> ViewportWidget::capture_driver_mirrors(const QSize& output_size) {
+  std::array<QImage, 3> images;
+  if (!simulation_frame_ || !simulation_frame_->driver || !gl_ready_) {
+    return images;
+  }
+  const int center_w = std::clamp(static_cast<int>(output_size.width() * 0.35), 160, 480);
+  const int side_w = std::clamp(static_cast<int>(output_size.width() * 0.19), 110, 250);
+  constexpr std::array<DriverMirror, 3> mirrors{
+      DriverMirror::Center, DriverMirror::Left, DriverMirror::Right};
+  for (std::size_t i = 0; i < mirrors.size(); ++i) {
+    const int w = i == 0 ? center_w : side_w;
+    const QSize resolution{w, i == 0 ? std::max(40, w / 4) : std::max(58, w * 3 / 5)};
+    QOpenGLFramebufferObjectFormat format;
+    format.setAttachment(QOpenGLFramebufferObject::Depth);
+    QOpenGLFramebufferObject target(resolution, format);
+    if (!target.isValid() || !target.bind()) {
+      continue;
+    }
+    const DriverCamera mirror = driver_mirror_camera(*simulation_frame_->driver, mirrors[i]);
+    render_frame(camera_, resolution, &mirror);
+    images[i] = target.toImage().mirrored(true, false);
+    target.release();
+  }
+  // QOpenGLWidget's default framebuffer is NOT 0. Restore it before using
+  // QPainter over the live viewport or returning to the exporter.
+  context()->functions()->glBindFramebuffer(GL_FRAMEBUFFER, defaultFramebufferObject());
+  context()->functions()->glViewport(0, 0, output_size.width(), output_size.height());
+  return images;
+}
+
+void ViewportWidget::draw_driver_mirrors(QPainter& painter, const QSize& output_size,
+                                        const std::array<QImage, 3>& images) {
+  if (output_size.isEmpty()) {
+    return;
+  }
+  const int w = output_size.width();
+  const int h = output_size.height();
+  const int margin = std::max(7, w / 115);
+  const int center_w = std::clamp(static_cast<int>(w * 0.35), 160, 480);
+  const int side_w = std::clamp(static_cast<int>(w * 0.19), 110, 250);
+  const int center_h = std::max(40, center_w / 4);
+  const int side_h = std::max(58, side_w * 3 / 5);
+  const std::array<QRect, 3> boxes{
+      QRect((w - center_w) / 2, margin, center_w, center_h),
+      QRect(margin, h - side_h - margin, side_w, side_h),
+      QRect(w - side_w - margin, h - side_h - margin, side_w, side_h)};
+  for (std::size_t i = 0; i < boxes.size(); ++i) {
+    if (images[i].isNull()) {
+      continue;
+    }
+    const QRectF rim = QRectF(boxes[i]).adjusted(-3, -3, 3, 3);
+    const qreal radius = i == 0 ? 17.0 : 13.0;
+    painter.save();
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.setPen(QPen(QColor(25, 28, 32), 3.0));
+    painter.setBrush(QColor(14, 17, 20));
+    painter.drawRoundedRect(rim, radius + 2.0, radius + 2.0);
+    QPainterPath shape;
+    shape.addRoundedRect(QRectF(boxes[i]), radius, radius);
+    painter.setClipPath(shape);
+    painter.drawImage(QRectF(boxes[i]), images[i]);
+    painter.restore();
   }
 }
 
@@ -857,6 +942,13 @@ void ViewportWidget::paintGL() {
   const QSize size{static_cast<int>(std::lround(width() * devicePixelRatioF())),
                    static_cast<int>(std::lround(height() * devicePixelRatioF()))};
   render_frame(camera_, size);
+  if (simulation_frame_ && simulation_frame_->driver && !clean_capture_) {
+    const auto mirrors = capture_driver_mirrors(size);
+    QPainter painter(this);
+    // QWidget uses logical pixels; the FBO renders use physical pixels.
+    draw_driver_mirrors(painter, this->size(), mirrors);
+    return;
+  }
   if (clean_capture_ || simulation_frame_) {
     return;
   }

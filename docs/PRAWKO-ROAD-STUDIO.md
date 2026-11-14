@@ -533,6 +533,12 @@ i usuniętych z katalogu aktywnych projektów. Nowa praca rozpoczyna
 się od pustej sceny, a kolejne składniki powstaną jako własne
 modele PrawkoNaRaz.
 
+### S3.3 — lusterka w aktywnej kamerze kierowcy (14.11.2026)
+
+Podgląd pierwszoosobowy pojazdu korzysta z trzech dodatkowych, niezależnych kamer: wstecznej (góra/środek), lewej bocznej (dół/lewo) i prawej bocznej (dół/prawo). Funkcja driver_mirror_camera w viewport/camera.cpp wyprowadza osie kamer z aktualnego DriverCamera wybranego pojazdu, więc uwzględnia jego obrót, pochylenie i przechył. Obrazy są prawdziwymi renderami OpenGL w trzech małych framebufferach, odbijanymi poziomo w nakładce Qt, nie dekoracjami. Zapis scen pozostaje bez zmian. W eksporcie wideo i pojedynczych klatek nakładki są składane z obrazem kierowcy przez capture_simulation_frame.
+
+Test kamery: DriverCamera.ThreeMirrorsFollowVehicleAndLookBehind; odbiór wizualny na rzeczywistym EXE: --screenshot ... --camera driver-mirrors-proof na osobnej scenie bariery Prawko. Obraz i skrypty testowe są lokalnie w archive/driver-mirrors-s33. Przetestowano kadr statyczny, nie wykonano jeszcze końcowego testu płynnego odtwarzania z trzema lusterkami i pomiaru wydajności. To tylko część zadania 5d: pogoda, dzień/noc, sezon, pełny kokpit i warianty nie są ukończone.
+
 ### Rzeczywisty model z Blendera — bariera Prawko (14.11.2026)
 
 Model `assets/prawko/blender/prawko_bariera_drogowa.blend` został

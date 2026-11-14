@@ -343,7 +343,12 @@ private:
   [[nodiscard]] TextureHandle texture_for(const std::string& resource) const;
 
   void rebuild_scene();
-  void render_frame(const OrbitCamera& camera, const QSize& size);
+  void render_frame(const OrbitCamera& camera, const QSize& size,
+                    const DriverCamera* override_driver = nullptr);
+  /// Render 3 separate views using real scene geometry. Requires current GL context.
+  [[nodiscard]] std::array<QImage, 3> capture_driver_mirrors(const QSize& output_size);
+  static void draw_driver_mirrors(QPainter& painter, const QSize& output_size,
+                                  const std::array<QImage, 3>& images);
   struct SimulationFrame {
     std::vector<InstanceData> actors;
     std::optional<DriverCamera> driver;

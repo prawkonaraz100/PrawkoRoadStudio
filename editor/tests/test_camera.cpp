@@ -56,6 +56,35 @@ TEST(DriverCamera, FollowsHeadingPitchAndRollAtTheVehicleEye) {
   EXPECT_NEAR(tilted[0][2], -std::cos(0.2F) * std::sin(0.3F), 1e-5F);
 }
 
+TEST(DriverCamera, ThreeMirrorsFollowVehicleAndLookBehind) {
+  const DriverCamera driver{.eye = {10.0F, 20.0F, 2.0F},
+                            .forward = {1.0F, 0.0F, 0.0F},
+                            .right = {0.0F, -1.0F, 0.0F},
+                            .up = {0.0F, 0.0F, 1.0F}};
+  const auto center = driver_mirror_camera(driver, DriverMirror::Center);
+  const auto left = driver_mirror_camera(driver, DriverMirror::Left);
+  const auto right = driver_mirror_camera(driver, DriverMirror::Right);
+  EXPECT_NEAR(center.forward[0], -1.0F, 1e-5F);
+  EXPECT_LT(left.forward[0], -0.7F);
+  EXPECT_LT(right.forward[0], -0.7F);
+  EXPECT_GT(left.forward[1], 0.0F);
+  EXPECT_LT(right.forward[1], 0.0F);
+  EXPECT_GT(left.eye[1], 20.0F);
+  EXPECT_LT(right.eye[1], 20.0F);
+  for (const auto& mirror : {center, left, right}) {
+    EXPECT_NEAR(dot(mirror.forward, mirror.right), 0.0F, 1e-5F);
+    EXPECT_NEAR(dot(mirror.forward, mirror.up), 0.0F, 1e-5F);
+    EXPECT_NEAR(dot(mirror.forward, mirror.forward), 1.0F, 1e-5F);
+    EXPECT_NEAR(dot(mirror.right, mirror.right), 1.0F, 1e-5F);
+  }
+  const DriverCamera yawed{.eye = driver.eye,
+                           .forward = {0.0F, 1.0F, 0.0F},
+                           .right = {1.0F, 0.0F, 0.0F},
+                           .up = driver.up};
+  const auto turned = driver_mirror_camera(yawed, DriverMirror::Center);
+  EXPECT_NEAR(turned.forward[1], -1.0F, 1e-5F);
+}
+
 TEST(OrbitCamera, ViewRotationIsOrthonormal) {
   OrbitCamera camera;
   camera.orbit(0.3F, -0.2F);

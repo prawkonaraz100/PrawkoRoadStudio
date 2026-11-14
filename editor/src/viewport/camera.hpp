@@ -53,6 +53,14 @@ struct DriverCamera {
 
 struct SimulationActorPose;
 
+/// Driver-relative rear-view cameras. Their images are horizontally flipped
+/// during composition to reproduce the reflection of a real mirror.
+enum class DriverMirror { Center, Left, Right };
+
+/// Returns an orthonormal camera following the vehicle's yaw/pitch/roll,
+/// looking backward (center) or backward/outward (side mirrors).
+[[nodiscard]] DriverCamera driver_mirror_camera(const DriverCamera& driver, DriverMirror mirror);
+
 /// Builds a forward-facing view from a vehicle reference point and its box.
 [[nodiscard]] DriverCamera driver_camera(const SimulationActorPose& pose,
                                          const osc::BoundingBox& box);

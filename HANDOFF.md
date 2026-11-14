@@ -6,6 +6,14 @@
 
 Instruktor tworzy i edytuje sytuację drogową, odtwarza ją, wybiera kamerę i eksportuje PNG lub MP4 w jednym programie Windows. Funkcjonalnym punktem odniesienia jest VICOM. Najpierw doprowadzamy cały przepływ do działania na dostępnych modelach. Wspólny model C++ oraz OpenDRIVE i OpenSCENARIO obsługują edytor i agenta. [Zakres funkcji i kryteria produktu](docs/PRAWKO-VICOM.md)
 
+## 14.11.2026 — S3.3 / 5d: rzeczywiste lusterka w widoku kierowcy
+
+**Wdrożony fragment S3.3, nie całe 5d.** Po wybraniu pojazdu w symulacji jego istniejąca kamera DriverCamera zasila trzy dodatkowe kamery: środkową wsteczną, lewą boczną i prawą boczną (driver_mirror_camera). Śledzą położenie, yaw/pitch/roll aktora, patrzą w trzy kierunki do tyłu, a obraz jest odbijany poziomo podczas kompozycji. Wszystkie są osobnymi renderami OpenGL do małych FBO z tej samej sceny (nie są statycznymi teksturami). Nakładki w ViewportWidget::paintGL() pojawiają się tylko przy aktywnym widoku kierowcy; capture_simulation_frame() dodaje je również do klatek eksportowanych PNG/MP4. Nie dodawano deski rozdzielczej.
+
+**Odbiór:** scripts/prawko-build-win.ps1 -Target all -Jobs 3 dał BUILD_PASS: all, a końcowy inkrementalny -Target editor również PASS. DriverCamera.* **2/2 PASS**, pełny Qt **1337 PASS / 6 SKIPPED / 0 FAIL** na 1343, C++ core **2072/2072 PASS** (10 disabled) i Python agent **7/7 PASS**, QUALITY_GATE_PASS. Rzeczywisty screenshot renderera Qt wykonano z --camera driver-mirrors-proof na projects/Prawko-Bariera-Demo/bariera-ustawiona.xodr; archive/driver-mirrors-s33/driver-mirrors-proof.png (866×783 px) został obejrzany: bariera jest w lusterku wstecznym i bocznym, nie w obrazie przedniej kamery. Ten specjalny preset istnieje **tylko do automatycznego odbioru** i nie zapisuje scen. **Nie wykonano ręcznego odbioru ciągłego ruchu systemową myszą ani pomiaru FPS eksportu** — nie traktować jako potwierdzone.
+
+**Pozostaje do zrobienia w S3.3/5d:** UI wyboru pory dnia/nocy, pogody i sezonu, scenariusze zdarzeń (5b), warianty szablonów (5c), pełny kokpit i presety kamer. Odbiór kolejny: rzeczywista dynamiczna symulacja z wybranym autem i ruchem za nim, oba boczne kąty, zachowanie przy pitch/roll, tempo renderowania i końcowe MP4. Nie zmieniono decyzji projektowych ani scen użytkownika.
+
 ## 14.11.2026 — pierwszy rzeczywisty model Blender → PrawkoRoadStudio
 
 **Zakres ściśle wg życzenia użytkownika:** własny model z Blendera, import do biblioteki, upuszczenie na drogę, przesuwanie, obracanie, Undo/Redo, zapis i ponowne otwarcie. Bez nowego edytora siatek i bez szerokich zmian funkcjonalnych.
@@ -122,7 +130,7 @@ Punkty wejścia to `MainWindow::export_scenario_video()`, [proces eksportu](edit
 
 **5c. Szablony i warianty.** Dodaj tworzenie niezależnej kopii szablonu z ekranu startowego i menu `File`, z zachowaniem spójnego zapisu i kontroli niezapisanych zmian. W dalszym kroku dodaj szablony miejskie, pozamiejskie i autostradowe, podmianę otoczenia, przypisywanie ról pasów i stref oraz raport odwołań do korekty.
 
-**5d. Warunki i nagrania.** Dodaj pogodę, porę dnia i sezon, dodatkowe ujęcia, kokpit, presety oraz eksport wielu wariantów. Do dopracowania modeli i materiałów wróć po potwierdzeniu przepływu pracy.
+**5d. Warunki i nagrania (częściowo).** Działające lusterka w aktywnej kamerze kierowcy oraz w zrzutach PNG/MP4 wdrożono i statycznie odebrano (sekcja S3.3 powyżej). Nadal dodaj pogodę, porę dnia i sezon, dodatkowe ujęcia, pełny kokpit, presety oraz eksport wielu wariantów. Do dopracowania modeli i materiałów wróć po potwierdzeniu przepływu pracy.
 
 ## Gotowe polecenie do nowej rozmowy
 

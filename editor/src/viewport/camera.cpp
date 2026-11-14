@@ -92,6 +92,32 @@ CameraMatrices DriverCamera::matrices(float aspect) const {
           .eye = eye};
 }
 
+DriverCamera driver_mirror_camera(const DriverCamera& driver, DriverMirror mirror) {
+  float back = -1.0F;
+  float side = 0.0F;
+  if (mirror == DriverMirror::Left) {
+    back = -0.78F;
+    side = -0.63F;
+  } else if (mirror == DriverMirror::Right) {
+    back = -0.78F;
+    side = 0.63F;
+  }
+  const float length = std::hypot(back, side);
+  DriverCamera result = driver;
+  for (std::size_t i = 0; i < 3; ++i) {
+    // Camera right = forward x vehicle-up; preserves vehicle roll and pitch.
+    result.forward[i] = (back * driver.forward[i] + side * driver.right[i]) / length;
+    result.right[i] = (back * driver.right[i] - side * driver.forward[i]) / length;
+  }
+  const float lateral = mirror == DriverMirror::Left ? -0.80F
+                       : mirror == DriverMirror::Right ? 0.80F : 0.0F;
+  const float ahead = mirror == DriverMirror::Center ? -0.12F : 0.45F;
+  for (std::size_t i = 0; i < 3; ++i) {
+    result.eye[i] += ahead * driver.forward[i] + lateral * driver.right[i];
+  }
+  return result;
+}
+
 void OrbitCamera::orbit(float delta_yaw, float delta_pitch) {
   yaw_ += delta_yaw;
   pitch_ = std::clamp(pitch_ + delta_pitch, 0.05F, kPi / 2.0F - 0.01F);
