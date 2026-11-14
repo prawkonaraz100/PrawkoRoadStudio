@@ -32,6 +32,7 @@
 #include <string>
 #include <vector>
 
+#include "tools/actor_tool.hpp"
 #include "tools/node_drag.hpp"
 #include "tools/tool.hpp"
 
@@ -110,10 +111,10 @@ private:
     RoadId signal_road;             // owning road: signs must stay road-relative
 
     /// The scenario actor under the press (#246), by `<ScenarioObject @name>`.
-    /// Non-empty suppresses every other arm: an actor is a leaf like a signal,
-    /// so a press on one selects on release and never starts a body move of the
-    /// road beneath it.
+    /// Non-empty suppresses road/prop drag and rubber band: the existing
+    /// ActorTool receives an unmodified press and owns the actual movement.
     std::string actor;
+    bool actor_drag_enabled = false; // Ctrl/Shift still perform selection only
   };
 
   /// An in-flight whole-road move: the set being translated together, the press
@@ -217,6 +218,9 @@ private:
   std::optional<MoveDragState> move_;
   std::optional<ObjectMoveState> object_move_;
   std::optional<SignalMoveState> signal_move_;
+  // Reuse the already-tested actor placement/drag funnel. Select/Move must not
+  // silently ignore actors while only the separate Actor tool can move them.
+  ActorTool actor_drag_tool_;
   std::optional<PressState> press_;
   std::optional<Waypoint> band_current_;
   bool move_mode_ = false;

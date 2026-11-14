@@ -51,7 +51,8 @@ SelectMode mode_from(Qt::KeyboardModifiers modifiers) {
 } // namespace
 
 SelectTool::SelectTool(Document& document, SelectionModel& selection, QObject* parent)
-    : Tool(parent), document_(document), selection_(selection) {}
+    : Tool(parent), document_(document), selection_(selection),
+      actor_drag_tool_(document, selection, this) {}
 
 void SelectTool::activate() {
   // No status_message here: the guidance for "what does this tool do" is
@@ -61,6 +62,7 @@ void SelectTool::activate() {
 }
 
 void SelectTool::deactivate() {
+  actor_drag_tool_.deactivate();
   abort_drag();
   abort_move();
   abort_object_move();
@@ -137,7 +139,15 @@ bool SelectTool::mouse_press(const ToolEvent& event) {
                  .object_road = on_object ? hit->road : RoadId{},
                  .signal = on_signal ? std::optional<SignalId>(hit->signal) : std::nullopt,
                  .signal_road = on_signal ? hit->road : RoadId{},
-                 .actor = actor.value_or(std::string{})};
+                 .actor = actor.value_or(std::string{}),
+                 .actor_drag_enabled = actor.has_value() &&
+                                       event.modifiers == Qt::NoModifier};
+  if (actor && event.modifiers == Qt::NoModifier) {
+    // This is the same drag implementation as the Actor placement tool.
+    // It only receives a press that was positively picked as an actor;
+    // no empty-scene click can accidentally place a new participant.
+    (void)actor_drag_tool_.mouse_press(event);
+  }
   return true;
 }
 
@@ -204,11 +214,10 @@ bool SelectTool::mouse_move(const ToolEvent& event) {
       return true;
     }
     if (!press_->actor.empty()) {
-      // An actor press is a leaf press like a signal's: it selects on release
-      // and does nothing in between. Without this it would fall through to the
-      // rubber band below — a press on an actor carries no road id and no
-      // object id, so every arm above is false and "empty space" is exactly
-      // what the band branch would conclude.
+      // Let the existing ActorTool snap, show a ghost and commit ONE Undo;
+      // the actor never becomes a whole-road drag or a rubber band.
+      if (press_->actor_drag_enabled) (void)actor_drag_tool_.mouse_move(event);
+      emit preview_changed();
       return true;
     }
     if (!move_mode_ && (band_current_.has_value() || beyond_tolerance)) {
@@ -220,9 +229,10 @@ bool SelectTool::mouse_move(const ToolEvent& event) {
 
   // Plain hover (no gesture): in move mode show the 4-arrow over a movable
   // entity. Return false so the viewport's hover readout still runs.
-  update_move_cursor(event.pick.has_value() &&
-                     (event.pick->object.is_valid() || event.pick->signal.is_valid() ||
-                      event.pick->road.is_valid()));
+  update_move_cursor(event.actor_hit.has_value() ||
+                     (event.pick.has_value() &&
+                      (event.pick->object.is_valid() || event.pick->signal.is_valid() ||
+                       event.pick->road.is_valid())));
   return false;
 }
 
@@ -280,6 +290,15 @@ bool SelectTool::mouse_release(const ToolEvent& event) {
   }
 
   if (press_.has_value()) {
+    if (!press_->actor.empty() && press_->actor_drag_enabled) {
+      // ActorTool distinguishes click from drag, uses lane snapping, and
+      // reports refused drops. No reinterpretation of the road hit on release.
+      (void)actor_drag_tool_.mouse_release(event);
+      press_.reset();
+      band_current_.reset();
+      emit preview_changed();
+      return true;
+    }
     if (band_current_.has_value()) {
       apply_band_selection(*band_current_, event.modifiers);
     } else {
@@ -376,6 +395,7 @@ bool SelectTool::key_press(int key, Qt::KeyboardModifiers modifiers) {
     return true;
   }
   if (press_.has_value()) {
+    actor_drag_tool_.deactivate();
     press_.reset();
     band_current_.reset();
     emit preview_changed();
@@ -851,6 +871,10 @@ void SelectTool::update_move_cursor(bool over_movable) {
 
 PreviewGeometry SelectTool::preview() const {
   PreviewGeometry geometry;
+  if (press_ && press_->actor_drag_enabled) {
+    // The placement ghost uses the same projection as the committed actor.
+    geometry = actor_drag_tool_.preview();
+  }
 
   // Node handles on every selected road; during a drag the network already
   // holds the live-previewed waypoints, so the moving handle tracks.

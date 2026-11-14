@@ -17,6 +17,7 @@
 #include "tools/actor_tool.hpp"
 
 #include "roadmaker/osc/edit.hpp"
+#include "roadmaker/osc/route.hpp"
 
 #include <QString>
 #include <algorithm>
@@ -162,22 +163,103 @@ osc::ActorKind ActorTool::placement_kind() const {
 }
 
 void ActorTool::commit_move(const std::string& actor, osc::Position position) {
-  // A walking path's start is the first vertex. Keep it attached to the actor
-  // by directing changes to its start handle in the Route tool.
-  if (std::holds_alternative<osc::WorldPosition>(position)) {
+  const osc::Position* previous = actor_init_position(document_.scenario(), actor);
+  if (!previous) return;
+  // A gesture that snaps back onto the original anchor must not add an Undo.
+  if (const auto* old_lane = std::get_if<osc::LanePosition>(previous)) {
+    if (const auto* next = std::get_if<osc::LanePosition>(&position);
+        next && next->road_id == old_lane->road_id && next->lane_id == old_lane->lane_id &&
+        std::abs(next->s - old_lane->s) < 1e-6 &&
+        std::abs(next->offset - old_lane->offset) < 1e-6) return;
+  } else if (const auto* old_world = std::get_if<osc::WorldPosition>(previous)) {
+    if (const auto* next = std::get_if<osc::WorldPosition>(&position);
+        next && std::hypot(next->x - old_world->x, next->y - old_world->y) < 1e-6 &&
+        std::abs(next->z - old_world->z) < 1e-6) return;
+  }
+
+  // set_init_polyline updates BOTH the walking path and the teleport in one
+  // scenario command. Moving the visible pedestrian must not leave its path
+  // starting at the former position (or require another hidden tool).
+  if (const auto* world = std::get_if<osc::WorldPosition>(&position)) {
     for (const auto& entry : document_.scenario().storyboard.init.actions.privates) {
-      if (entry.entity_ref == actor && std::ranges::any_of(entry.actions, [](const auto& action) {
-            return action.routing && action.routing->timed_polyline;
-          })) {
-        emit toast_requested(tr("Przenieś punkt startowy w narzędziu Trasa."), ToastSeverity::Info);
+      if (entry.entity_ref != actor) continue;
+      for (const auto& action : entry.actions) {
+        if (!action.routing || !action.routing->timed_polyline) continue;
+        osc::TimedPolyline path = *action.routing->timed_polyline;
+        if (path.vertices.size() < 2) break;
+        const auto old = path.vertices.front().position;
+        const auto& second = path.vertices[1].position;
+        const double old_distance = std::hypot(second.x - old.x, second.y - old.y);
+        const double new_distance = std::hypot(second.x - world->x, second.y - world->y);
+        const double old_duration = path.vertices[1].time - path.vertices[0].time;
+        if (old_distance < 0.05 || new_distance < 0.05 || old_duration <= 0.0) {
+          emit toast_requested(tr("Przesuń pieszego dalej od kolejnego punktu trasy."),
+                               ToastSeverity::Warning);
+          return;
+        }
+        // Keep the authored walking speed of the first leg and preserve every
+        // later leg's relative timing (including the final hold interval).
+        const double time_delta = (new_distance - old_distance) *
+                                  (old_duration / old_distance);
+        path.vertices[0].position = *world;
+        path.vertices[0].position.h = std::atan2(second.y - world->y,
+                                                second.x - world->x);
+        for (std::size_t i = 1; i < path.vertices.size(); ++i) {
+          path.vertices[i].time += time_delta;
+        }
+        const auto moved = document_.push_scenario_command(
+            osc::edit::set_init_polyline(document_.scenario(), actor, std::move(path)));
+        if (!moved) {
+          emit toast_requested(QString::fromStdString(moved.error().message), ToastSeverity::Error);
+        } else {
+          selection_.select(SelectionEntry{.actor = actor});
+          emit toast_requested(tr("Pieszy i początek trasy przeniesione — Ctrl+Z cofa."),
+                               ToastSeverity::Info);
+        }
         return;
       }
     }
   }
-  const auto moved = document_.push_scenario_command(osc::edit::set_entity_init_pose(
-      document_.scenario(), actor, std::move(position)));
-  if (!moved.has_value()) {
+
+  // A route drawn from a vehicle's current position should follow that
+  // position on subsequent drags. Do not rewrite foreign or intentionally
+  // detached route starts: only reanchor an exact matching first waypoint.
+  bool move_first_waypoint = false;
+  if (const auto* old_lane = std::get_if<osc::LanePosition>(previous)) {
+    for (const auto& assigned : osc::assigned_routes(document_.scenario())) {
+      if (assigned.entity_ref != actor || assigned.route->waypoints.empty()) continue;
+      const auto* start = std::get_if<osc::LanePosition>(
+          &assigned.route->waypoints.front().position);
+      if (!start) continue;
+      const auto& preserved = start->preserved;
+      if (!preserved.attributes.empty() || !preserved.children.empty()) continue;
+      move_first_waypoint = start->road_id == old_lane->road_id &&
+                            start->lane_id == old_lane->lane_id &&
+                            std::abs(start->s - old_lane->s) < 1e-5 &&
+                            std::abs(start->offset - old_lane->offset) < 1e-5;
+      break;
+    }
+  }
+  if (move_first_waypoint) {
+    // Both document changes share the existing QUndoStack: one gesture, one
+    // Undo/Redo even though the model stores teleport and route separately.
+    document_.undo_stack()->beginMacro(tr("Przenieś uczestnika i początek trasy"));
+  }
+  const auto moved = document_.push_scenario_command(
+      osc::edit::set_entity_init_pose(document_.scenario(), actor, position));
+  if (moved && move_first_waypoint) {
+    const auto route = document_.push_scenario_command(
+        osc::edit::set_route_waypoint(document_.scenario(), actor, 0, std::move(position)));
+    if (!route) {
+      emit toast_requested(QString::fromStdString(route.error().message), ToastSeverity::Error);
+    }
+  }
+  if (move_first_waypoint) document_.undo_stack()->endMacro();
+  if (!moved) {
     emit toast_requested(QString::fromStdString(moved.error().message), ToastSeverity::Error);
+  } else {
+    selection_.select(SelectionEntry{.actor = actor});
+    emit toast_requested(tr("Uczestnik przeniesiony — Ctrl+Z cofa."), ToastSeverity::Info);
   }
 }
 

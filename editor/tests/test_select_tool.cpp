@@ -1273,37 +1273,124 @@ TEST(SelectTool, AClickAwayFromAnyActorStillSelectsTheRoad) {
   EXPECT_EQ(scene.selection.primary().road, scene.dragged);
 }
 
-// A press on an actor is a LEAF press: it must not drag the road under it, and
-// it must not rubber-band either — an actor press carries no road id and no
-// object id, so "empty space" is what the band branch would otherwise conclude.
-TEST(SelectTool, DraggingFromAnActorMovesNothingAndBandsNothing) {
+// This used to assert the opposite: Select consumed LMB drags on actors
+// without moving anything. One must be able to drag an already placed car
+// without leaving the Select (or Move) tool, even with the road under its body.
+TEST(SelectTool, DraggingCarAcrossLaneMovesOnlyActorWithOneUndoAndRedo) {
+  for (bool move_mode : {false, true}) {
+    Scene scene;
+    place_actor(scene.document, scene.dragged, "Car1");
+    SelectTool tool(scene.document, scene.selection);
+    tool.set_move_mode(move_mode);
+    const roadmaker::osc::Position* start =
+        roadmaker::editor::actor_init_position(scene.document.scenario(), "Car1");
+    ASSERT_NE(start, nullptr);
+    const auto* source = std::get_if<roadmaker::osc::LanePosition>(start);
+    ASSERT_NE(source, nullptr);
+    const roadmaker::osc::LanePosition original = *source;
+    auto target = original;
+    target.s = 45.0;
+    const auto start_pose = roadmaker::editor::actor_world_pose(scene.document.network(), original);
+    const auto end_pose = roadmaker::editor::actor_world_pose(scene.document.network(), target);
+    ASSERT_TRUE(start_pose.has_value());
+    ASSERT_TRUE(end_pose.has_value());
+
+    const PickHit road_under_actor = scene.hit(scene.dragged);
+    const int before = scene.document.undo_stack()->count();
+    EXPECT_EQ(roadmaker::editor::actor_at(scene.document.scenario(), scene.document.network(),
+              start_pose->position[0], start_pose->position[1]), "Car1");
+    EXPECT_TRUE(roadmaker::editor::nearest_lane_anchor(scene.document.network(),
+              end_pose->position[0], end_pose->position[1])) << "Final lane anchor is invalid";
+    ASSERT_TRUE(tool.mouse_press(at(start_pose->position[0], start_pose->position[1],
+                                    Qt::LeftButton, Qt::NoModifier, road_under_actor)));
+    ASSERT_TRUE(tool.mouse_move(at(end_pose->position[0], end_pose->position[1],
+                                   Qt::LeftButton, Qt::NoModifier)));
+    EXPECT_EQ(scene.document.undo_stack()->count(), before)
+        << "The drag should preview, never push one command per mouse frame";
+    EXPECT_FALSE(tool.banding()) << "Actor drag must not rubber-band the road";
+    EXPECT_FALSE(tool.preview().handles.empty()) << "Actor needs an on-screen drop preview";
+    ASSERT_TRUE(tool.mouse_release(at(end_pose->position[0], end_pose->position[1],
+                                      Qt::NoButton, Qt::NoModifier)));
+
+    const auto* moved = std::get_if<roadmaker::osc::LanePosition>(
+        roadmaker::editor::actor_init_position(scene.document.scenario(), "Car1"));
+    ASSERT_NE(moved, nullptr);
+    EXPECT_NEAR(moved->s, 45.0, 0.5);
+    EXPECT_EQ(moved->road_id, original.road_id);
+    EXPECT_EQ(moved->lane_id, original.lane_id);
+    EXPECT_EQ(scene.document.undo_stack()->count(), before + 1);
+    EXPECT_EQ(scene.selection.primary().actor, "Car1");
+    EXPECT_TRUE(scene.selection.selected_roads().empty());
+    EXPECT_EQ(xodr(scene.document), scene.base_xodr)
+        << "Moving an actor must never move or modify its road";
+
+    scene.document.undo_stack()->undo();
+    const auto* undone = std::get_if<roadmaker::osc::LanePosition>(
+        roadmaker::editor::actor_init_position(scene.document.scenario(), "Car1"));
+    ASSERT_NE(undone, nullptr);
+    EXPECT_EQ(undone->s, original.s);
+    scene.document.undo_stack()->redo();
+    const auto* redone = std::get_if<roadmaker::osc::LanePosition>(
+        roadmaker::editor::actor_init_position(scene.document.scenario(), "Car1"));
+    ASSERT_NE(redone, nullptr);
+    EXPECT_NEAR(redone->s, 45.0, 0.5);
+  }
+}
+
+TEST(SelectTool, CarCanBeDraggedOntoAnotherRoadWithoutMovingEitherRoad) {
   Scene scene;
   place_actor(scene.document, scene.dragged, "Car1");
   SelectTool tool(scene.document, scene.selection);
-
-  const roadmaker::osc::LanePosition* lane = nullptr;
-  for (const roadmaker::osc::Private& entry :
-       scene.document.scenario().storyboard.init.actions.privates) {
-    if (entry.entity_ref == "Car1") {
-      lane = std::get_if<roadmaker::osc::LanePosition>(&entry.actions[0].teleport->position);
-    }
-  }
-  ASSERT_NE(lane, nullptr);
-  const auto pose = roadmaker::editor::actor_world_pose(scene.document.network(), *lane);
-  ASSERT_TRUE(pose.has_value());
-
-  const PickHit hit = scene.hit(scene.dragged);
-  const int before = scene.document.undo_stack()->count();
-  ASSERT_TRUE(tool.mouse_press(
-      at(pose->position[0], pose->position[1], Qt::LeftButton, Qt::NoModifier, hit)));
-  (void)tool.mouse_move(
-      at(pose->position[0] + 25.0, pose->position[1] + 25.0, Qt::LeftButton, Qt::NoModifier, hit));
-  ASSERT_TRUE(tool.mouse_release(
-      at(pose->position[0] + 25.0, pose->position[1] + 25.0, Qt::NoButton, Qt::NoModifier, hit)));
-
-  EXPECT_EQ(scene.document.undo_stack()->count(), before) << "the drag moved something";
+  const auto* before = roadmaker::editor::actor_init_position(scene.document.scenario(), "Car1");
+  ASSERT_NE(before, nullptr);
+  const auto start = roadmaker::editor::actor_world_pose(scene.document.network(), *before);
+  ASSERT_TRUE(start);
+  const auto* other_road = scene.document.network().road(scene.other);
+  ASSERT_NE(other_road, nullptr);
+  const auto anchor = roadmaker::editor::nearest_lane_anchor(scene.document.network(),
+                                                               150.0, -1.75);
+  ASSERT_TRUE(anchor) << "Target road has no traffic lane to accept the actor";
+  EXPECT_EQ(anchor->road, scene.other);
+  const int count = scene.document.undo_stack()->count();
+  ASSERT_TRUE(tool.mouse_press(at(start->position[0], start->position[1],
+                                  Qt::LeftButton, Qt::NoModifier, scene.hit(scene.dragged))));
+  ASSERT_TRUE(tool.mouse_move(at(150.0, -1.75, Qt::LeftButton)));
+  ASSERT_TRUE(tool.mouse_release(at(150.0, -1.75)));
+  const auto* moved = std::get_if<roadmaker::osc::LanePosition>(
+      roadmaker::editor::actor_init_position(scene.document.scenario(), "Car1"));
+  ASSERT_NE(moved, nullptr);
+  EXPECT_EQ(moved->road_id, other_road->odr_id);
+  EXPECT_EQ(moved->lane_id, anchor->lane_odr_id);
+  EXPECT_EQ(scene.document.undo_stack()->count(), count + 1);
   EXPECT_EQ(xodr(scene.document), scene.base_xodr);
-  EXPECT_TRUE(tool.preview().line_positions.empty()) << "a rubber band was drawn from the actor";
-  // The press still resolves to the actor on release.
-  EXPECT_EQ(scene.selection.primary().actor, "Car1");
+  scene.document.undo_stack()->undo();
+  const auto* undone = std::get_if<roadmaker::osc::LanePosition>(
+      roadmaker::editor::actor_init_position(scene.document.scenario(), "Car1"));
+  ASSERT_NE(undone, nullptr);
+  EXPECT_NE(undone->road_id, other_road->odr_id);
+}
+
+TEST(SelectTool, ActorInvalidDropAndEscapeLeaveRoadAndActorUntouched) {
+  Scene scene;
+  place_actor(scene.document, scene.dragged, "Car1");
+  SelectTool tool(scene.document, scene.selection);
+  const auto* original = roadmaker::editor::actor_init_position(scene.document.scenario(), "Car1");
+  ASSERT_NE(original, nullptr);
+  const auto start_pose = roadmaker::editor::actor_world_pose(scene.document.network(), *original);
+  ASSERT_TRUE(start_pose);
+  const PickHit hit = scene.hit(scene.dragged);
+  const int count = scene.document.undo_stack()->count();
+  const auto start = at(start_pose->position[0], start_pose->position[1],
+                        Qt::LeftButton, Qt::NoModifier, hit);
+  ASSERT_TRUE(tool.mouse_press(start));
+  ASSERT_TRUE(tool.mouse_move(at(999.0, 999.0, Qt::LeftButton)));
+  ASSERT_TRUE(tool.mouse_release(at(999.0, 999.0)));
+  EXPECT_EQ(scene.document.undo_stack()->count(), count);
+  EXPECT_EQ(xodr(scene.document), scene.base_xodr);
+
+  ASSERT_TRUE(tool.mouse_press(start));
+  ASSERT_TRUE(tool.mouse_move(at(50.0, 7.0, Qt::LeftButton)));
+  EXPECT_TRUE(tool.key_press(Qt::Key_Escape, Qt::NoModifier));
+  EXPECT_EQ(scene.document.undo_stack()->count(), count);
+  EXPECT_EQ(xodr(scene.document), scene.base_xodr);
 }

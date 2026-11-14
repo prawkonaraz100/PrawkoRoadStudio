@@ -1973,7 +1973,10 @@ ToolEvent ViewportWidget::make_tool_event(const QMouseEvent* event) const {
     tool_event.ground_valid = false;
   }
   tool_event.pick = pick(document_.mesh(), road_aabbs_, ray);
-  if (event->type() == QEvent::MouseButtonPress) {
+  if (event->type() == QEvent::MouseButtonPress ||
+      (event->type() == QEvent::MouseMove && event->buttons() == Qt::NoButton)) {
+    // A hover needs the same hit test as a press so the Move cursor works
+    // over visible participants, not only over the road beneath them.
     tool_event.actor_hit = pick_actor(document_.scenario(), document_.network(), ray,
         tool_event.pick ? tool_event.pick->distance : std::numeric_limits<double>::infinity());
   }

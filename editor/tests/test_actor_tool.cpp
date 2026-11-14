@@ -26,6 +26,7 @@
 
 #include "roadmaker/edit/operations.hpp"
 #include "roadmaker/osc/edit.hpp"
+#include "roadmaker/osc/route.hpp"
 #include "roadmaker/osc/writer.hpp"
 
 #include <gtest/gtest.h>
@@ -222,6 +223,104 @@ TEST(ActorTool, DraggingAPlacedActorMovesItAsOneUndoEntry) {
   const auto* lane = std::get_if<osc::LanePosition>(&action.teleport->position);
   ASSERT_NE(lane, nullptr);
   EXPECT_NEAR(lane->s, 70.0, 0.5) << "the actor did not follow the drag";
+}
+
+TEST(ActorTool, MovingVehicleMovesMatchingRouteStartInOneUndo) {
+  Document document;
+  author_straight_road(document);
+  SelectionModel selection(document);
+  ActorTool tool(document, selection);
+  click(tool, 20.0, -1.75);
+  const auto* original = std::get_if<osc::LanePosition>(
+      actor_init_position(document.scenario(), "Car1"));
+  ASSERT_NE(original, nullptr);
+  const osc::LanePosition before = *original;
+  auto destination = before;
+  destination.s = 70.0;
+  osc::Route route;
+  route.name = "Drive";
+  route.waypoints = {
+      osc::RouteWaypoint{.route_strategy = "shortest", .position = before},
+      osc::RouteWaypoint{.route_strategy = "shortest", .position = destination}};
+  ASSERT_TRUE(document.push_scenario_command(
+      osc::edit::assign_route(document.scenario(), "Car1", std::move(route))));
+  const int before_drag = document.undo_stack()->count();
+  (void)tool.mouse_press(at(20.0, -1.75));
+  (void)tool.mouse_move(at(45.0, -1.75));
+  (void)tool.mouse_release(at(45.0, -1.75));
+  EXPECT_EQ(document.undo_stack()->count(), before_drag + 1);
+  const auto* moved = std::get_if<osc::LanePosition>(
+      actor_init_position(document.scenario(), "Car1"));
+  ASSERT_NE(moved, nullptr);
+  EXPECT_NEAR(moved->s, 45.0, 0.1);
+  const auto assigned = osc::assigned_routes(document.scenario());
+  ASSERT_EQ(assigned.size(), 1u);
+  const auto* start = std::get_if<osc::LanePosition>(
+      &assigned[0].route->waypoints.front().position);
+  ASSERT_NE(start, nullptr);
+  EXPECT_NEAR(start->s, 45.0, 0.1);
+  document.undo_stack()->undo();
+  const auto* undone = std::get_if<osc::LanePosition>(
+      actor_init_position(document.scenario(), "Car1"));
+  ASSERT_NE(undone, nullptr);
+  EXPECT_DOUBLE_EQ(undone->s, 20.0);
+  const auto after_undo = osc::assigned_routes(document.scenario());
+  ASSERT_EQ(after_undo.size(), 1u);
+  EXPECT_DOUBLE_EQ(std::get<osc::LanePosition>(
+      after_undo[0].route->waypoints.front().position).s, 20.0);
+  document.undo_stack()->redo();
+  const auto after_redo = osc::assigned_routes(document.scenario());
+  ASSERT_EQ(after_redo.size(), 1u);
+  EXPECT_NEAR(std::get<osc::LanePosition>(
+      after_redo[0].route->waypoints.front().position).s, 45.0, 0.1);
+}
+
+TEST(ActorTool, MovingPedestrianAlsoMovesAuthoredWalkingStartAndTiming) {
+  Document document;
+  author_straight_road(document);
+  SelectionModel selection(document);
+  ActorTool tool(document, selection);
+  tool.set_kind(osc::ActorKind::Pedestrian);
+  click(tool, 20.0, -6.0);
+  osc::TimedPolyline walk;
+  walk.name = "Walk";
+  walk.vertices = {
+      {0.0, osc::WorldPosition{.x = 20.0, .y = -6.0}},
+      {6.0 / 1.4, osc::WorldPosition{.x = 20.0, .y = 0.0}},
+      {6.0 / 1.4 + 0.5, osc::WorldPosition{.x = 20.0, .y = 0.0}}};
+  ASSERT_TRUE(document.push_scenario_command(
+      osc::edit::set_init_polyline(document.scenario(), "Pedestrian1", std::move(walk))));
+  const int before_drag = document.undo_stack()->count();
+  (void)tool.mouse_press(at(20.0, -6.0));
+  (void)tool.mouse_move(at(21.0, -5.0));
+  (void)tool.mouse_release(at(21.0, -5.0));
+  EXPECT_EQ(document.undo_stack()->count(), before_drag + 1);
+  const auto* pose = std::get_if<osc::WorldPosition>(
+      actor_init_position(document.scenario(), "Pedestrian1"));
+  ASSERT_NE(pose, nullptr);
+  EXPECT_DOUBLE_EQ(pose->x, 21.0);
+  EXPECT_DOUBLE_EQ(pose->y, -5.0);
+  const auto& actions = document.scenario().storyboard.init.actions.privates[0].actions;
+  const auto routed = std::find_if(actions.begin(), actions.end(), [](const auto& action) {
+    return action.routing && action.routing->timed_polyline;
+  });
+  ASSERT_NE(routed, actions.end());
+  const auto& vertices = routed->routing->timed_polyline->vertices;
+  ASSERT_EQ(vertices.size(), 3u);
+  EXPECT_DOUBLE_EQ(vertices.front().position.x, 21.0);
+  EXPECT_DOUBLE_EQ(vertices[1].position.x, 20.0);
+  EXPECT_LT(vertices[1].time, 6.0 / 1.4);
+  EXPECT_NEAR(vertices[2].time - vertices[1].time, 0.5, 1e-6);
+  document.undo_stack()->undo();
+  const auto* undone = std::get_if<osc::WorldPosition>(
+      actor_init_position(document.scenario(), "Pedestrian1"));
+  ASSERT_NE(undone, nullptr);
+  EXPECT_DOUBLE_EQ(undone->x, 20.0);
+  document.undo_stack()->redo();
+  const auto* redone = std::get_if<osc::WorldPosition>(
+      actor_init_position(document.scenario(), "Pedestrian1"));
+  ASSERT_NE(redone, nullptr);
+  EXPECT_DOUBLE_EQ(redone->x, 21.0);
 }
 
 TEST(ActorTool, AClickThatJittersIsStillAClickAndNotADrag) {
