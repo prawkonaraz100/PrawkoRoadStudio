@@ -596,6 +596,7 @@ LibraryDropAction resolve_library_drop(const LibraryItem& item,
       action.toast = QStringLiteral("This prop set has no usable models");
     }
     break;
+  case LibraryItem::Kind::ScenarioActor: // MainWindow routes these to the scenario model.
   case LibraryItem::Kind::Unknown:
     break;
   }

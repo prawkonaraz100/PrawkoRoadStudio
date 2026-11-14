@@ -56,6 +56,8 @@ public:
 
   void activate() override;
   void deactivate() override;
+  void begin_from_actor(const std::string& actor);
+  void finish();
 
   [[nodiscard]] bool mouse_press(const ToolEvent& event) override;
   [[nodiscard]] bool mouse_move(const ToolEvent& event) override;
@@ -84,6 +86,9 @@ private:
   /// is gone). Resolved fresh on every use — the scenario may have changed
   /// under the tool through undo or another panel.
   [[nodiscard]] const osc::Route* current_route() const;
+  [[nodiscard]] const osc::TimedPolyline* walking_path() const;
+  [[nodiscard]] bool pedestrian() const;
+  void edit_walking_path(int waypoint, const std::array<double, 3>& point);
 
   /// The waypoint of the current route within grab range of (x, y), or -1.
   [[nodiscard]] int waypoint_at(double x, double y) const;
@@ -101,6 +106,9 @@ private:
   std::optional<LaneAnchor> pending_;
 
   std::optional<LaneAnchor> hovered_;
+  std::optional<std::array<double, 3>> walking_hover_;
+  std::optional<ScreenContext> screen_;
+  bool start_at_actor_ = false;
   std::string hover_hint_;
 
   /// Raw cursor position from the last move — what waypoint_at() hit-tests

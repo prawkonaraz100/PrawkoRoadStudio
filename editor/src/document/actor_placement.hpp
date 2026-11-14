@@ -30,6 +30,7 @@
 // sits on — prop placement's snap lives here too, for the same reason.
 
 #include "roadmaker/osc/scenario.hpp"
+#include "roadmaker/osc/catalog.hpp"
 #include "roadmaker/road/id.hpp"
 
 #include <array>
@@ -133,6 +134,12 @@ struct ActorPose {
 
 /// The `<LanePosition>` an anchor authors.
 [[nodiscard]] osc::LanePosition to_lane_position(const LaneAnchor& anchor);
+
+[[nodiscard]] const osc::Position* actor_init_position(const osc::Scenario& scenario,
+                                                        std::string_view actor);
+
+[[nodiscard]] std::optional<osc::Position> actor_drop_position(
+    const RoadNetwork& network, osc::ActorKind kind, const std::array<double, 3>& cursor);
 
 /// How near the cursor must be to a placed actor for a press to hit it [m].
 ///

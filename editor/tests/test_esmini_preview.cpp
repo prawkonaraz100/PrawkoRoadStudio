@@ -307,6 +307,42 @@ TEST(EsminiSimulation, RealEngineCanBeCancelledAndRunAgain) {
   EXPECT_TRUE(simulation.result());
 }
 
+TEST(EsminiSimulation, RealEngineWalksToTheAuthoredEndAndStops) {
+  const QString engine = resolve_esmini({});
+  if (engine.isEmpty() || EsminiSimulation::find_converter(engine).isEmpty()) {
+    GTEST_SKIP() << "Set ESMINI_PATH to test the real engine.";
+  }
+  Document document;
+  author_scene(document);
+  const osc::WorldPosition start{.x = 70.0, .y = -6.0, .h = 1.5707963267948966};
+  const osc::WorldPosition end{.x = 70.0, .y = 6.0, .h = start.h};
+  ASSERT_TRUE(document.push_scenario_command(osc::edit::place_scenario_object(
+      document.scenario(), osc::make_actor(osc::ActorKind::Pedestrian, "Walker"), start)));
+  ASSERT_TRUE(document.push_scenario_command(osc::edit::set_init_polyline(
+      document.scenario(), "Walker",
+      osc::TimedPolyline{.name = "Cross", .vertices = {{0.0, start}, {8.0, end}, {8.5, end}}})));
+  EsminiSimulation simulation;
+  QSignalSpy finished(&simulation, &EsminiSimulation::finished);
+  ASSERT_TRUE(simulation.start(document, engine));
+  ASSERT_TRUE(!finished.isEmpty() || finished.wait(15'000));
+  const QString error = finished.takeFirst().at(0).toString();
+  ASSERT_TRUE(error.isEmpty()) << error.toStdString();
+  ASSERT_TRUE(simulation.result());
+  const auto& samples = simulation.result()->trace.samples;
+  const auto first = std::ranges::find_if(samples, [](const auto& sample) {
+    return sample.actor_name == QStringLiteral("Walker");
+  });
+  const auto last = std::find_if(samples.crbegin(), samples.crend(), [](const auto& sample) {
+    return sample.actor_name == QStringLiteral("Walker");
+  });
+  ASSERT_NE(first, samples.end());
+  ASSERT_NE(last, samples.crend());
+  EXPECT_NEAR(first->y, -6.0, 0.1);
+  EXPECT_NEAR(last->y, 6.0, 0.1);
+  EXPECT_NEAR(last->x, 70.0, 0.1);
+  EXPECT_GT(last->time, 8.5);
+}
+
 TEST(SimulationPanel, PlaysAndSeeksRealTelemetryThenInvalidatesAfterAMapEdit) {
   const QString engine = resolve_esmini({});
   if (engine.isEmpty() || EsminiSimulation::find_converter(engine).isEmpty()) {

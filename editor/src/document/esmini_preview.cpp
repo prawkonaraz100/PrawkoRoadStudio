@@ -24,6 +24,7 @@
 #include <QProcess>
 #include <QStandardPaths>
 #include <QStringLiteral>
+#include <algorithm>
 #include <string>
 
 #include "document/document.hpp"
@@ -65,6 +66,23 @@ Expected<void> write_esmini_snapshot(const Document& document,
     return tl::unexpected<Error>(pointed.error());
   }
 
+  auto& stop = scenario.storyboard.stop_trigger;
+  if (stop.condition_groups.empty() && stop.preserved.empty()) {
+    // Provide an end for a newly drawn scene while respecting authored stops.
+    double seconds = 30.0;
+    for (const auto& entry : scenario.storyboard.init.actions.privates) {
+      for (const auto& action : entry.actions) {
+        if (action.routing && action.routing->timed_polyline) {
+          const auto& points = action.routing->timed_polyline->vertices;
+          if (!points.empty()) seconds = std::max(seconds, points.back().time + 1.0);
+        }
+      }
+    }
+    osc::Condition end;
+    end.name = "PreviewEnd";
+    end.simulation_time = osc::SimulationTimeCondition{.value = seconds};
+    stop.condition_groups.push_back(osc::ConditionGroup{.conditions = {std::move(end)}});
+  }
   return osc::save_xosc(scenario, scenario_path);
 }
 

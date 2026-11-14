@@ -76,14 +76,15 @@ private:
   /// never per motion step: a drag is a preview session plus one command
   /// (docs/design/m2/01_editing_framework.md §3), and a scenario command per
   /// mouse-move would fill the undo stack with the path of the cursor.
-  void commit_move(const std::string& actor, const LaneAnchor& anchor);
+  void commit_move(const std::string& actor, osc::Position position);
+  [[nodiscard]] osc::ActorKind placement_kind() const;
 
   Document& document_;
   SelectionModel& selection_;
   osc::ActorKind kind_ = osc::ActorKind::Car;
 
   /// The anchor under the cursor, refreshed on every move. Drives the ghost.
-  std::optional<LaneAnchor> hovered_;
+  std::optional<osc::Position> hovered_;
 
   /// Why the cursor cannot take an actor, when it cannot. Shown as the
   /// instruction so the refusal is visible BEFORE the click, not after it.

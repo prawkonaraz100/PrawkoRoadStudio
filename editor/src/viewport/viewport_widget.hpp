@@ -173,7 +173,7 @@ public slots:
   /// resolve_library_drop the drop commit uses, so the ghost marks exactly where
   /// the element lands (ghost==commit); `valid` false tints it as a rejected drop.
   void set_drop_preview(double world_x, double world_y, bool valid,
-                        const QString& instruction = {});
+                        const QString& instruction = {}, double world_z = 0.0);
 
   /// Clears the drop ghost (drag left the viewport or completed).
   void clear_drop_preview();
@@ -252,13 +252,13 @@ signals:
   /// A library item was dropped on the viewport at the ground point
   /// (world_x, world_y). MainWindow resolves the key and creates the geometry
   /// (it owns the library model, document, and tools).
-  void library_item_dropped(const QString& key, double world_x, double world_y);
+  void library_item_dropped(const QString& key, double world_x, double world_y, double world_z);
 
   /// A library item is being dragged over the viewport; its resolved world
   /// point (surface raycast, falling back to the ground plane) is
   /// (world_x, world_y). MainWindow resolves the key and pushes back a drop
   /// preview (set_drop_preview) so the ghost shows where it will land.
-  void library_item_drag_moved(const QString& key, double world_x, double world_y);
+  void library_item_drag_moved(const QString& key, double world_x, double world_y, double world_z);
 
 protected:
   void initializeGL() override;
@@ -615,6 +615,7 @@ private:
   struct DropPreview {
     double x = 0.0;
     double y = 0.0;
+    double z = 0.0;
     bool valid = false;
     QString instruction;
   };

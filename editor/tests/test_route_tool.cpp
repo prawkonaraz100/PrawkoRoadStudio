@@ -30,7 +30,9 @@
 #include "roadmaker/edit/operations.hpp"
 #include "roadmaker/osc/catalog.hpp"
 #include "roadmaker/osc/edit.hpp"
+#include "roadmaker/osc/reader.hpp"
 #include "roadmaker/osc/route.hpp"
+#include "roadmaker/osc/writer.hpp"
 
 #include <gtest/gtest.h>
 
@@ -187,6 +189,66 @@ TEST(RouteTool, ActivateAdoptsTheSelectedActorAsTheTarget) {
   RouteTool tool(document, selection);
   tool.activate();
   EXPECT_EQ(tool.target(), "Ego");
+}
+
+TEST(RouteTool, DroppedVehicleRoutesFromItsSpawnInOneUndoEntry) {
+  Document document;
+  author_straight_road(document);
+  place_ego(document);
+  SelectionModel selection(document);
+  RouteTool tool(document, selection);
+  tool.begin_from_actor("Ego");
+  const int count = document.undo_stack()->count();
+  click(tool, 75.0, -1.75);
+  const auto* route = ego_route(document);
+  ASSERT_NE(route, nullptr);
+  EXPECT_DOUBLE_EQ(waypoint_s(*route, 0), 50.0);
+  EXPECT_DOUBLE_EQ(waypoint_s(*route, 1), 75.0);
+  EXPECT_EQ(document.undo_stack()->count(), count + 1);
+  const auto& actions = document.scenario().storyboard.init.actions.privates.front().actions;
+  ASSERT_EQ(actions.size(), 3U);
+  ASSERT_TRUE(actions[1].longitudinal);
+  EXPECT_NEAR(actions[1].longitudinal->speed->absolute_target->value, 30.0 / 3.6, 1e-6);
+  document.undo_stack()->undo();
+  EXPECT_EQ(ego_route(document), nullptr);
+  EXPECT_EQ(document.scenario().storyboard.init.actions.privates.front().actions.size(), 1U);
+}
+
+TEST(RouteTool, WalkingPathOffDrivingLanesSurvivesSaveUndoAndReopen) {
+  Document document;
+  author_straight_road(document);
+  ASSERT_TRUE(document.push_scenario_command(osc::edit::place_scenario_object(
+      document.scenario(), osc::make_actor(osc::ActorKind::Pedestrian, "Walker"),
+      osc::WorldPosition{.x = 40.0, .y = -6.0})));
+  SelectionModel selection(document);
+  RouteTool tool(document, selection);
+  tool.begin_from_actor("Walker");
+  const int count = document.undo_stack()->count();
+  click(tool, 40.0, 6.0);
+  ASSERT_EQ(document.undo_stack()->count(), count + 1);
+  click(tool, 45.0, 6.0);
+  ASSERT_EQ(document.undo_stack()->count(), count + 2);
+  const auto encoded = osc::write_xosc(document.scenario());
+  ASSERT_TRUE(encoded);
+  const auto read = osc::parse_xosc(*encoded);
+  ASSERT_TRUE(read);
+  const auto& action = read->scenario.storyboard.init.actions.privates.front().actions.back();
+  ASSERT_TRUE(action.routing && action.routing->timed_polyline);
+  const auto& vertices = action.routing->timed_polyline->vertices;
+  ASSERT_EQ(vertices.size(), 4U);
+  EXPECT_DOUBLE_EQ(vertices[0].position.y, -6.0);
+  EXPECT_DOUBLE_EQ(vertices[1].position.y, 6.0);
+  EXPECT_DOUBLE_EQ(vertices[2].position.x, 45.0);
+  EXPECT_DOUBLE_EQ(vertices[3].position.x, 45.0);
+  EXPECT_NEAR(vertices[3].time - vertices[2].time, 0.5, 1e-6);
+  const auto rewritten = osc::write_xosc(read->scenario);
+  ASSERT_TRUE(rewritten);
+  EXPECT_EQ(*rewritten, *encoded);
+  document.undo_stack()->undo();
+  EXPECT_EQ(document.scenario().storyboard.init.actions.privates.front()
+                .actions.back().routing->timed_polyline->vertices.size(), 3U);
+  document.undo_stack()->undo();
+  EXPECT_EQ(document.scenario().storyboard.init.actions.privates.front().actions.size(), 1U);
 }
 
 TEST(RouteTool, BackspaceRemovesTheLastWaypointAndRefusesBelowTwo) {

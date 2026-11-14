@@ -82,6 +82,13 @@ struct ToolEvent {
   std::optional<ScreenContext> screen;
   Qt::MouseButtons buttons = Qt::NoButton;
   Qt::KeyboardModifiers modifiers = Qt::NoModifier;
+
+  [[nodiscard]] std::optional<std::array<double, 3>> surface_point() const {
+    if (pick && !pick->object.is_valid() && !pick->signal.is_valid()) return pick->position;
+    if (ground_valid) return std::array<double, 3>{world_x, world_y, 0.0};
+    return std::nullopt;
+  }
+  bool ground_valid = true;
 };
 
 // A draggable/interactive handle knob, positioned in the kernel frame. The

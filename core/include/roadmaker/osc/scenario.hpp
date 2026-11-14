@@ -619,13 +619,22 @@ struct AssignRouteAction {
   RawXml preserved;
 };
 
-/// `<RoutingAction>` — §7.7, a five-way choice of which this version models one
-/// arm: `<AssignRouteAction>`. `<FollowTrajectoryAction>`,
-/// `<AcquirePositionAction>`, `<RandomRouteAction>` and
-/// `<PreferredLaneLayerAction>` ride `preserved.children`.
+/// A timed, open polyline in world coordinates with relative timing and
+/// followingMode="position". Other trajectory forms round-trip as raw XML.
+struct TimedPolyline {
+  struct Vertex {
+    double time = 0.0;
+    WorldPosition position;
+  };
+  std::string name;
+  std::vector<Vertex> vertices;
+};
+
+/// `<RoutingAction>` holds one route or trajectory.
 struct RoutingAction {
   std::optional<AssignRouteAction> assign_route;
   RawXml preserved;
+  std::optional<TimedPolyline> timed_polyline;
 };
 
 /// `<AbsoluteTargetLane>` — §7.4.1, a `<LaneChangeTarget>` arm.

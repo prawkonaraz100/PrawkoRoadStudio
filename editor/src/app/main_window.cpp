@@ -621,7 +621,16 @@ MainWindow::MainWindow(QWidget* parent, bool restore_saved_layout)
 
   // Route: lay lane-anchored waypoints for a scenario actor (p8-s3, #247).
   auto route_tool = std::make_unique<RouteTool>(document_, selection_);
+  route_tool_ = route_tool.get();
   wire_status(route_tool.get());
+  connect(route_tool_, &Tool::preview_changed, this, [this] {
+    if (tool_manager_.active() == route_tool_ && status_instruction_) {
+      const auto instruction = route_tool_->instruction();
+      status_instruction_->set_full_text(instruction);
+      viewport_->set_hint(instruction);
+    }
+  });
+  connect(&document_, &Document::loaded, route_tool_, &RouteTool::deactivate);
   tool_manager_.register_tool(ToolId::Route, std::move(route_tool));
 
   connect(actions_->tool_corner, &QAction::triggered, this, [this] {
@@ -647,6 +656,9 @@ MainWindow::MainWindow(QWidget* parent, bool restore_saved_layout)
   });
   connect(actions_->tool_route, &QAction::triggered, this, [this] {
     tool_manager_.set_active(ToolId::Route);
+    const auto actors = selection_.selected_actors();
+    if (!actors.empty()) route_tool_->begin_from_actor(actors.front());
+    viewport_->setFocus();
   });
   connect(actions_->scenario_mode, &QAction::toggled, this, [this](bool on) {
     mode_ = on ? EditorMode::Scenario : EditorMode::Map;
@@ -1442,11 +1454,18 @@ void MainWindow::build_menus() {
   view_menu->addAction(actions_->reset_layout);
 
   QMenu* scenario_menu = menuBar()->addMenu(tr("&Scenario"));
+  scenario_menu->setObjectName(QStringLiteral("scenario_menu"));
   auto* run_simulation = scenario_menu->addAction(tr("&Run Simulation"));
   connect(run_simulation, &QAction::triggered, this, [this] {
     simulation_dock_->show();
     simulation_dock_->raise();
     simulation_panel_->run();
+  });
+  auto* storyboard = scenario_menu->addAction(tr("Storyboard…"));
+  connect(storyboard, &QAction::triggered, this, [this] {
+    editor2d_host_->show_page(QObject::tr("Storyboard"));
+    editor2d_dock_->show();
+    editor2d_dock_->raise();
   });
 
   QMenu* help_menu = menuBar()->addMenu(tr("&Help"));
@@ -1607,6 +1626,11 @@ void MainWindow::build_tool_options_bar() {
   actor_kind_combo_->setCurrentIndex(
       actor_kind_combo_->findData(static_cast<int>(osc::ActorKind::Car)));
   actor_kind_action_ = options_bar_->addWidget(actor_kind_combo_);
+  auto* finish_route = new QPushButton(tr("Zakończ trasę"), options_bar_);
+  finish_route->setObjectName(QStringLiteral("finish_actor_route"));
+  finish_route->setToolTip(tr("Zakończ dodawanie punktów trasy (Enter)"));
+  connect(finish_route, &QPushButton::clicked, this, [this] { route_tool_->finish(); });
+  finish_route_action_ = options_bar_->addWidget(finish_route);
 
   // Terrain Brush options (p5-s4, #234): mode/radius/strength. Fixed-width
   // controls added once and shown only while the brush is active (a variable
@@ -1738,6 +1762,7 @@ static shortcuts::Id shortcut_for_tool(ToolId tool) {
 
 void MainWindow::apply_editor_mode() {
   const bool scenario = mode_ == EditorMode::Scenario;
+  library_model_.set_scenario_actors_visible(scenario);
 
   // ★ GATED BY THE REGISTRY'S OWN CLASSIFICATION, not by a hand-written list.
   // Every tool already declares its toolbar group, and toolbar_violations()
@@ -1800,9 +1825,9 @@ void MainWindow::apply_editor_mode() {
 
   actions_->scenario_mode->setChecked(scenario);
   if (scenario) {
-    editor2d_host_->show_page(QObject::tr("Storyboard"));
-    editor2d_dock_->show();
-    editor2d_dock_->raise();
+    library_dock_->show();
+    library_dock_->raise();
+    library_panel_->focus_category(kScenarioActorCategory);
   }
 
   // Layer 2: the mode rides the next save, like the camera. It is framing, not
@@ -1824,6 +1849,7 @@ void MainWindow::update_tool_options() {
   options_caption_action_->setVisible(create_road);
   template_action_->setVisible(create_road);
   actor_kind_action_->setVisible(active == actions_->tool_actor_place);
+  finish_route_action_->setVisible(tool_manager_.active_id() == ToolId::Route);
 
   const bool terrain_brush = active == actions_->tool_terrain_brush;
   for (QAction* option : brush_option_actions_) {
@@ -2618,9 +2644,31 @@ void MainWindow::preview_library_drag_for_capture(const QString& key,
   on_library_drag_moved(key, world_x, world_y);
 }
 
-void MainWindow::on_library_drop(const QString& key, double world_x, double world_y) {
+void MainWindow::on_library_drop(const QString& key, double world_x, double world_y,
+                                 double world_z) {
   const LibraryItem* item = library_model_.item_for_key(key);
   if (item == nullptr) {
+    return;
+  }
+  if (item->kind == LibraryItem::Kind::ScenarioActor) {
+    auto position = actor_drop_position(document_.network(), item->actor_kind,
+                                        {world_x, world_y, world_z});
+    if (!position) {
+      viewport_->show_toast(tr("Upuść pojazd na pas ruchu."), ToastSeverity::Warning);
+      return;
+    }
+    const auto& archetype = osc::actor_archetype(item->actor_kind);
+    const auto name = next_actor_name(document_.scenario(), archetype.key);
+    const auto placed = document_.push_scenario_command(osc::edit::place_scenario_object(
+        document_.scenario(), osc::make_actor(item->actor_kind, name), std::move(*position)));
+    if (!placed) {
+      viewport_->show_toast(QString::fromStdString(placed.error().message), ToastSeverity::Warning);
+      return;
+    }
+    selection_.select(SelectionEntry{.actor = name});
+    if (!actions_->tool_route->isChecked()) actions_->tool_route->trigger();
+    route_tool_->begin_from_actor(name);
+    viewport_->setFocus();
     return;
   }
   LibraryDropAction action = resolve_library_drop(*item, document_.network(), world_x, world_y);
@@ -2730,10 +2778,23 @@ void MainWindow::on_library_drop(const QString& key, double world_x, double worl
   }
 }
 
-void MainWindow::on_library_drag_moved(const QString& key, double world_x, double world_y) {
+void MainWindow::on_library_drag_moved(const QString& key, double world_x, double world_y,
+                                       double world_z) {
   const LibraryItem* item = library_model_.item_for_key(key);
   if (item == nullptr) {
     viewport_->clear_drop_preview();
+    return;
+  }
+  if (item->kind == LibraryItem::Kind::ScenarioActor) {
+    const auto position = actor_drop_position(document_.network(), item->actor_kind,
+                                              {world_x, world_y, world_z});
+    const auto pose = position ? actor_world_pose(document_.network(), *position) : std::nullopt;
+    const auto point = pose ? pose->position : std::array{world_x, world_y, world_z};
+    viewport_->clear_drag_target_road();
+    viewport_->set_drop_preview(point[0], point[1], pose.has_value(),
+                                pose ? tr("Upuść i kliknij punkt trasy")
+                                     : tr("Upuść pojazd na pas ruchu"),
+                                point[2]);
     return;
   }
   // Resolve through the SAME path the drop commit uses, so the ghost marks

@@ -302,20 +302,8 @@ std::optional<std::string> actor_at(
     // been declared but never placed — or placed with a position this version
     // does not draw — resolves to no pose and is therefore not pickable. What is
     // not drawn must not be selectable.
-    std::optional<ActorPose> pose;
-    for (const osc::Private& entry : scenario.storyboard.init.actions.privates) {
-      if (entry.entity_ref != object.name) {
-        continue;
-      }
-      for (const osc::PrivateAction& action : entry.actions) {
-        if (!action.teleport.has_value()) {
-          continue;
-        }
-        pose = actor_world_pose(network, action.teleport->position);
-        break;
-      }
-      break;
-    }
+    const auto* initial = actor_init_position(scenario, object.name);
+    const auto pose = initial ? actor_world_pose(network, *initial) : std::nullopt;
     if (!pose.has_value()) {
       continue;
     }
@@ -326,6 +314,28 @@ std::optional<std::string> actor_at(
     }
   }
   return best;
+}
+
+const osc::Position* actor_init_position(const osc::Scenario& scenario, std::string_view actor) {
+  for (const osc::Private& entry : scenario.storyboard.init.actions.privates) {
+    if (entry.entity_ref == actor) {
+      for (const osc::PrivateAction& action : entry.actions) {
+        if (action.teleport) return &action.teleport->position;
+      }
+    }
+  }
+  return nullptr;
+}
+
+std::optional<osc::Position> actor_drop_position(
+    const RoadNetwork& network, osc::ActorKind kind, const std::array<double, 3>& cursor) {
+  if (osc::actor_archetype(kind).pedestrian) {
+    return osc::WorldPosition{.x = cursor[0], .y = cursor[1], .z = cursor[2]};
+  }
+  if (const auto lane = nearest_lane_anchor(network, cursor[0], cursor[1])) {
+    return to_lane_position(*lane);
+  }
+  return std::nullopt;
 }
 
 osc::LanePosition to_lane_position(const LaneAnchor& anchor) {

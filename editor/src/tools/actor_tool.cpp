@@ -19,6 +19,7 @@
 #include "roadmaker/osc/edit.hpp"
 
 #include <QString>
+#include <algorithm>
 #include <cmath>
 #include <string>
 #include <utility>
@@ -74,10 +75,11 @@ bool ActorTool::mouse_press(const ToolEvent& event) {
 }
 
 bool ActorTool::mouse_move(const ToolEvent& event) {
-  hovered_ = nearest_lane_anchor(document_.network(), event.world_x, event.world_y);
-  hover_hint_ = hovered_.has_value()
-                    ? std::string{}
-                    : actor_drop_hint(document_.network(), event.world_x, event.world_y);
+  const auto point = event.surface_point();
+  hovered_ = point ? actor_drop_position(document_.network(), placement_kind(), *point)
+                   : std::nullopt;
+  hover_hint_ = point && !hovered_ ? actor_drop_hint(document_.network(), (*point)[0], (*point)[1])
+                                  : std::string{};
 
   if (press_.has_value() && !press_->actor.empty()) {
     const double moved =
@@ -96,31 +98,29 @@ bool ActorTool::mouse_release(const ToolEvent& event) {
     return false;
   }
   const PressState state = *press_;
+  const auto kind = placement_kind();
   press_.reset();
 
-  const std::optional<LaneAnchor> anchor =
-      nearest_lane_anchor(document_.network(), event.world_x, event.world_y);
-  if (!anchor.has_value()) {
-    // ★ REFUSED WITH A HINT, never placed in space. An actor with no lane is an
-    // actor a simulator has to reject later, and refusing at the click is the
-    // point (GW-6 step 2).
-    emit toast_requested(
-        QString::fromStdString(actor_drop_hint(document_.network(), event.world_x, event.world_y)),
-        ToastSeverity::Warning);
-    emit preview_changed();
-    return true;
-  }
-
-  if (state.dragging && !state.actor.empty()) {
-    commit_move(state.actor, *anchor);
-    emit preview_changed();
-    return true;
-  }
-  if (!state.actor.empty()) {
+  if (!state.actor.empty() && !state.dragging) {
     // A press on an actor that never became a drag is a SELECT, not a
     // placement — clicking an actor to select it must not stack a second one
     // on top of it.
     selection_.select(SelectionEntry{.actor = state.actor});
+    emit preview_changed();
+    return true;
+  }
+  const auto point = event.surface_point();
+  auto position = point ? actor_drop_position(document_.network(), kind, *point) : std::nullopt;
+  if (!position) {
+    emit toast_requested(point ? QString::fromStdString(
+                                    actor_drop_hint(document_.network(), (*point)[0], (*point)[1]))
+                               : tr("Wskaż powierzchnię sceny."),
+                         ToastSeverity::Warning);
+    emit preview_changed();
+    return true;
+  }
+  if (state.dragging && !state.actor.empty()) {
+    commit_move(state.actor, std::move(*position));
     emit preview_changed();
     return true;
   }
@@ -131,7 +131,7 @@ bool ActorTool::mouse_release(const ToolEvent& event) {
   // ONE command: the entity and its placement, so one Ctrl+Z undoes the whole
   // gesture (osc::edit::place_scenario_object).
   const auto placed = document_.push_scenario_command(osc::edit::place_scenario_object(
-      document_.scenario(), osc::make_actor(kind_, name), to_lane_position(*anchor)));
+      document_.scenario(), osc::make_actor(kind_, name), std::move(*position)));
   if (!placed.has_value()) {
     emit toast_requested(QString::fromStdString(placed.error().message), ToastSeverity::Error);
     emit preview_changed();
@@ -152,9 +152,30 @@ bool ActorTool::key_press(int key, Qt::KeyboardModifiers /*modifiers*/) {
   return false;
 }
 
-void ActorTool::commit_move(const std::string& actor, const LaneAnchor& anchor) {
+osc::ActorKind ActorTool::placement_kind() const {
+  if (!press_ || press_->actor.empty()) return kind_;
+  const auto& objects = document_.scenario().entities.scenario_objects;
+  const auto object = std::ranges::find(objects, press_->actor, &osc::ScenarioObject::name);
+  return object != objects.end() && std::holds_alternative<osc::Pedestrian>(object->entity_object)
+             ? osc::ActorKind::Pedestrian
+             : osc::ActorKind::Car;
+}
+
+void ActorTool::commit_move(const std::string& actor, osc::Position position) {
+  // A walking path's start is the first vertex. Keep it attached to the actor
+  // by directing changes to its start handle in the Route tool.
+  if (std::holds_alternative<osc::WorldPosition>(position)) {
+    for (const auto& entry : document_.scenario().storyboard.init.actions.privates) {
+      if (entry.entity_ref == actor && std::ranges::any_of(entry.actions, [](const auto& action) {
+            return action.routing && action.routing->timed_polyline;
+          })) {
+        emit toast_requested(tr("Przenieś punkt startowy w narzędziu Trasa."), ToastSeverity::Info);
+        return;
+      }
+    }
+  }
   const auto moved = document_.push_scenario_command(osc::edit::set_entity_init_pose(
-      document_.scenario(), actor, osc::Position{to_lane_position(anchor)}));
+      document_.scenario(), actor, std::move(position)));
   if (!moved.has_value()) {
     emit toast_requested(QString::fromStdString(moved.error().message), ToastSeverity::Error);
   }
@@ -181,6 +202,7 @@ QString ActorTool::instruction() const {
     return QString::fromStdString(hover_hint_);
   }
   const osc::ActorArchetype& archetype = osc::actor_archetype(kind_);
+  if (archetype.pedestrian) return tr("Kliknij scenę, aby ustawić pieszego.");
   return tr("Click a driving lane to place a %1; drag a placed actor to move it.")
       .arg(QString::fromUtf8(archetype.label.data(),
                              static_cast<qsizetype>(archetype.label.size())));

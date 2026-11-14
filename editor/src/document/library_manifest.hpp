@@ -25,6 +25,7 @@
 // newer manifest (Phase 3 props) never breaks an older editor.
 
 #include "roadmaker/error.hpp"
+#include "roadmaker/osc/catalog.hpp"
 #include "roadmaker/road/defaults.hpp"
 
 #include <QByteArray>
@@ -69,6 +70,7 @@ struct LibraryItem {
     /// (a weighted RANDOM scatter — one model drawn per instance, where an
     /// assembly places every part, every time, at its authored offset).
     PropAssembly,
+    ScenarioActor,
     Unknown
   };
 
@@ -90,6 +92,7 @@ struct LibraryItem {
   QString thumbnail; ///< manifest-relative image path (may be empty/absent on disk)
 
   Kind kind = Kind::Unknown;
+  osc::ActorKind actor_kind = osc::ActorKind::Car; ///< Built-in scenario palette
   QString profile;  ///< RoadTemplate: "freeway" | "arterial" | "collector" | "local"
   QString style;    ///< RoadStyle: "freeway" | "arterial" | "collector" | "local"
   QString assembly; ///< Assembly: "t" | "x" — a road junction shape, not a prop

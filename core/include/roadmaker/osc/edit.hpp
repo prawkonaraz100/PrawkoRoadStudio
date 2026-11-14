@@ -301,6 +301,15 @@ rename_scenario_object(const Scenario& scenario, std::string_view from, std::str
 [[nodiscard]] RM_API std::unique_ptr<Command>
 assign_route(const Scenario& scenario, std::string_view entity_name, Route route);
 
+/// Sets a new vehicle route and supplies a speed only when none is authored.
+[[nodiscard]] RM_API std::unique_ptr<Command>
+start_vehicle_route(const Scenario& scenario, std::string_view entity_name, Route route,
+                    double default_speed);
+
+/// Creates or replaces a timed polyline in the actor's Init actions.
+[[nodiscard]] RM_API std::unique_ptr<Command>
+set_init_polyline(const Scenario& scenario, std::string_view entity_name, TimedPolyline path);
+
 /// Removes `entity_name`'s `<RoutingAction>` entirely.
 ///
 /// The whole action rather than its waypoints: a route with no waypoints is not

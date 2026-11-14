@@ -29,15 +29,19 @@
 #include <QApplication>
 #include <QComboBox>
 #include <QDockWidget>
+#include <QDragEnterEvent>
 #include <QLabel>
 #include <QMenu>
 #include <QMenuBar>
+#include <QMimeData>
+#include <QPushButton>
 #include <QResizeEvent>
 #include <QSettings>
 #include <QStatusBar>
 #include <QStringList>
 #include <QTabBar>
 #include <QTemporaryDir>
+#include <QTest>
 #include <QToolBar>
 #include <QWidget>
 #include <QWidgetAction>
@@ -51,11 +55,13 @@
 #include "app/settings.hpp"
 #include "app/shortcut_registry.hpp"
 #include "app/welcome_widget.hpp"
+#include "document/library_list_model.hpp"
 #include "document/project.hpp"
 #include "document/scene_sidecar.hpp"
 #include "panels/editor2d_host.hpp"
 #include "roadmaker/xodr/writer.hpp"
 #include "viewport/viewport_widget.hpp"
+#include "viewport/projection.hpp"
 
 namespace roadmaker::editor {
 namespace {
@@ -89,7 +95,7 @@ TEST_F(MainWindowLayoutTest, ToolbarsHoldNoVariableWidthLabels) {
   }
 }
 
-TEST_F(MainWindowLayoutTest, ScenarioModeIsReachableAndShowsScenarioToolsAndStoryboard) {
+TEST_F(MainWindowLayoutTest, ScenarioModeShowsActorLibraryAndRouteTools) {
   auto* mode = window_.findChild<QAction*>(QStringLiteral("scenario_mode"));
   auto* main = window_.findChild<QToolBar*>(QStringLiteral("toolbar.main"));
   auto* tools = window_.findChild<QToolBar*>(QStringLiteral("toolbar.tools"));
@@ -126,7 +132,7 @@ TEST_F(MainWindowLayoutTest, ScenarioModeIsReachableAndShowsScenarioToolsAndStor
     return found == actions.end() ? nullptr : *found;
   };
   auto* actor = tool_named(QStringLiteral("Actor"));
-  auto* route = tool_named(QStringLiteral("Route"));
+  auto* route = tool_named(QStringLiteral("Trasa"));
   auto* road = tool_named(QStringLiteral("Road"));
   ASSERT_NE(actor, nullptr);
   ASSERT_NE(route, nullptr);
@@ -142,6 +148,17 @@ TEST_F(MainWindowLayoutTest, ScenarioModeIsReachableAndShowsScenarioToolsAndStor
   EXPECT_TRUE(route->isVisible());
   EXPECT_TRUE(route->isEnabled());
   EXPECT_FALSE(road->isVisible());
+  auto* category = window_.findChild<QComboBox*>(QStringLiteral("library_category"));
+  ASSERT_NE(category, nullptr);
+  EXPECT_EQ(category->currentData().toString(), QStringLiteral("Uczestnicy ruchu"));
+  auto* storyboard = window_.menuBar()->findChild<QMenu*>(QStringLiteral("scenario_menu"));
+  ASSERT_NE(storyboard, nullptr);
+  const auto entries = storyboard->actions();
+  auto entry = std::ranges::find_if(entries, [](QAction* action) {
+    return action->text() == QStringLiteral("Storyboard…");
+  });
+  ASSERT_NE(entry, entries.end());
+  (*entry)->trigger();
   EXPECT_FALSE(storyboard_dock->isHidden());
   EXPECT_EQ(editor->current_title(), QStringLiteral("Storyboard"));
   actor->trigger();
@@ -155,6 +172,79 @@ TEST_F(MainWindowLayoutTest, ScenarioModeIsReachableAndShowsScenarioToolsAndStor
   EXPECT_FALSE(actor->isVisible());
   EXPECT_FALSE(route->isVisible());
   EXPECT_FALSE(actor_kind_action->isVisible());
+}
+
+TEST_F(MainWindowLayoutTest, LibraryMimeDropAndViewportClicksWriteBothKindsOfRoute) {
+  QTemporaryDir directory;
+  ASSERT_TRUE(directory.isValid());
+  const auto scene = std::filesystem::path(directory.path().toStdU16String()) / "practice.xodr";
+  std::filesystem::copy_file(std::filesystem::path(RM_SAMPLES_DIR) / "prawko_crosswalk_clear.xodr",
+                             scene);
+  const auto state_path = directory.filePath(QStringLiteral("practice.rmscene.json"));
+  {
+    std::ofstream state(std::filesystem::path(state_path.toStdU16String()));
+    state << R"({"scene_version":1,"view":{"distance":60,"pitch":1.56,"projection":"orthographic","target":[50,0,0],"yaw":-1.57}})";
+  }
+  window_.load_file(scene);
+  auto* mode = window_.findChild<QAction*>(QStringLiteral("scenario_mode"));
+  ASSERT_NE(mode, nullptr);
+  mode->setChecked(true);
+  auto* viewport = window_.viewport();
+  viewport->resize(800, 500);
+  viewport->set_camera_preset(QStringLiteral("ortho"));
+  const auto pixel = [viewport](double x, double y) {
+    const double w = viewport->width();
+    const double h = viewport->height();
+    const auto projected = project_to_screen(viewport->camera().matrices(float(w / h)),
+                                              x, y, 0.0, w, h);
+    return projected ? QPointF((*projected)[0], (*projected)[1]).toPoint() : QPoint(-1, -1);
+  };
+  const auto drop = [viewport, &pixel](const QByteArray& key, double x, double y) {
+    const QPoint pos = pixel(x, y);
+    ASSERT_TRUE(viewport->rect().contains(pos)) << pos.x() << ", " << pos.y();
+    QMimeData mime;
+    mime.setData(QString::fromLatin1(kLibraryItemMimeType), key);
+    QDragEnterEvent enter(pos, Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(viewport, &enter);
+    ASSERT_TRUE(enter.isAccepted());
+    QDropEvent event(QPointF(pos), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(viewport, &event);
+    ASSERT_TRUE(event.isAccepted());
+  };
+  auto* finish = window_.findChild<QPushButton*>(QStringLiteral("finish_actor_route"));
+  ASSERT_NE(finish, nullptr);
+  auto* toolbar = window_.findChild<QToolBar*>(QStringLiteral("toolbar.options"));
+  ASSERT_NE(toolbar, nullptr);
+  const auto actions = toolbar->actions();
+  const auto finish_action = std::ranges::find_if(actions, [finish](QAction* action) {
+    const auto* widget = qobject_cast<QWidgetAction*>(action);
+    return widget && widget->defaultWidget() == finish;
+  });
+  ASSERT_NE(finish_action, actions.end());
+  EXPECT_FALSE((*finish_action)->isVisible());
+  drop("actor.car", 42.0, -1.75);
+  ASSERT_TRUE((*finish_action)->isVisible());
+  QTest::mouseClick(viewport, Qt::LeftButton, Qt::NoModifier, pixel(65.0, -1.75));
+  finish->click();
+  drop("actor.pedestrian", 58.0, -6.1);
+  ASSERT_TRUE((*finish_action)->isVisible());
+  QTest::mouseClick(viewport, Qt::LeftButton, Qt::NoModifier, pixel(58.0, 5.1));
+  finish->click();
+  EXPECT_FALSE((*finish_action)->isVisible());
+  const auto menus = window_.menuBar()->actions();
+  const auto save = menus.front()->menu()->actions();
+  const auto save_action = std::ranges::find_if(save, [](QAction* action) {
+    return action->text() == QStringLiteral("&Save");
+  });
+  ASSERT_NE(save_action, save.end());
+  (*save_action)->trigger();
+  auto xosc = scene;
+  xosc.replace_extension(".xosc");
+  std::ifstream stream(xosc, std::ios::binary);
+  ASSERT_TRUE(stream);
+  const std::string xml{std::istreambuf_iterator<char>(stream), {}};
+  EXPECT_NE(xml.find("<AssignRouteAction>"), std::string::npos);
+  EXPECT_NE(xml.find("<FollowTrajectoryAction>"), std::string::npos);
 }
 
 TEST_F(MainWindowLayoutTest, ImageExportIsEnabledWhenASceneOpens) {

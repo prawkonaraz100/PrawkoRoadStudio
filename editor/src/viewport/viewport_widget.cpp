@@ -1342,25 +1342,30 @@ void ViewportWidget::dropEvent(QDropEvent* event) {
   // fallback) — the same projection the drag preview used, so the element lands
   // where the ghost showed it (ghost==commit).
   const auto world = drop_world_point(event->position());
-  const double world_x = world ? (*world)[0] : 0.0;
-  const double world_y = world ? (*world)[1] : 0.0;
   update();
-  emit library_item_dropped(key, world_x, world_y);
+  if (world) emit library_item_dropped(key, (*world)[0], (*world)[1], (*world)[2]);
 }
 
 void ViewportWidget::emit_drag_preview_request(const QDropEvent* event) {
   const QString key =
       QString::fromUtf8(event->mimeData()->data(QString::fromLatin1(kLibraryItemMimeType)));
   const auto world = drop_world_point(event->position());
-  emit library_item_drag_moved(key, world ? (*world)[0] : 0.0, world ? (*world)[1] : 0.0);
+  if (world) {
+    emit library_item_drag_moved(key, (*world)[0], (*world)[1], (*world)[2]);
+  } else {
+    clear_drop_preview();
+    clear_drag_target_road();
+  }
 }
 
 void ViewportWidget::set_drop_preview(double world_x,
                                       double world_y,
                                       bool valid,
-                                      const QString& instruction) {
+                                      const QString& instruction,
+                                      double world_z) {
   drop_preview_ = DropPreview{.x = world_x,
                               .y = world_y,
+                              .z = world_z,
                               .valid = valid,
                               .instruction = instruction};
   update();
@@ -1397,7 +1402,7 @@ void ViewportWidget::draw_drag_ghost(QPainter& painter) const {
   const auto screen = project_to_screen(camera_.matrices(aspect),
                                         drop_preview_->x,
                                         drop_preview_->y,
-                                        0.0,
+                                        drop_preview_->z,
                                         static_cast<double>(width()),
                                         static_cast<double>(height()));
   if (!screen.has_value()) {
@@ -1955,6 +1960,8 @@ ToolEvent ViewportWidget::make_tool_event(const QMouseEvent* event) const {
   if (const auto ground = ground_point_at(event->position())) {
     tool_event.world_x = (*ground)[0];
     tool_event.world_y = (*ground)[1];
+  } else {
+    tool_event.ground_valid = false;
   }
   tool_event.pick = pick(document_.mesh(), road_aabbs_, ray);
   // Station of the cursor along the picked road's reference line — only when a

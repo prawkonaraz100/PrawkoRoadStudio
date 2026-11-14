@@ -35,6 +35,7 @@ namespace roadmaker::editor {
 /// MIME type of a dragged library item; the payload is the item's `key`
 /// (UTF-8). The panel is the drag source, the viewport the drop target.
 inline constexpr char kLibraryItemMimeType[] = "application/x-roadmaker-library-item";
+inline const QString kScenarioActorCategory = QStringLiteral("Uczestnicy ruchu");
 
 class LibraryListModel : public QAbstractListModel {
   Q_OBJECT
@@ -48,6 +49,7 @@ public:
   };
 
   explicit LibraryListModel(QObject* parent = nullptr);
+  void set_scenario_actors_visible(bool visible);
 
   /// Replaces the built-in catalogue (full model reset). The panel calls this
   /// once the manifest is loaded; passing an empty manifest clears the base
@@ -106,6 +108,7 @@ private:
   std::vector<LibraryItem> base_items_;
   std::vector<LibraryItem> overlay_items_;
   std::vector<LibraryItem> items_; ///< the merged rows the view sees
+  bool scenario_actors_visible_ = false;
 
   /// Lazy path -> QIcon cache for DecorationRole, including a NEGATIVE cache (a
   /// null QIcon for a path that failed to load) so a missing thumbnail is not

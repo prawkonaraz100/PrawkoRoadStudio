@@ -54,6 +54,12 @@ QString resolve_overlay_thumbnail(const QString& manifest_path, const QString& b
 
 LibraryListModel::LibraryListModel(QObject* parent) : QAbstractListModel(parent) {}
 
+void LibraryListModel::set_scenario_actors_visible(bool visible) {
+  if (scenario_actors_visible_ == visible) return;
+  scenario_actors_visible_ = visible;
+  rebuild();
+}
+
 void LibraryListModel::set_manifest(LibraryManifest manifest) {
   base_items_ = manifest.items();
   for (LibraryItem& item : base_items_) {
@@ -94,6 +100,26 @@ void LibraryListModel::rebuild() {
     } else {
       items_.push_back(overlay); // new keys (and categories) append
     }
+  }
+  const auto actors = scenario_actors_visible_ ? osc::actor_catalog()
+                                              : std::span<const osc::ActorArchetype>{};
+  for (const auto& actor : actors) {
+    const QString key = QString::fromStdString(std::string(actor.key));
+    const QString label = [&] {
+      switch (actor.kind) {
+      case osc::ActorKind::Car: return tr("Samochód");
+      case osc::ActorKind::Truck: return tr("Ciężarówka");
+      case osc::ActorKind::Bus: return tr("Autobus");
+      case osc::ActorKind::Motorbike: return tr("Motocykl");
+      case osc::ActorKind::Bicycle: return tr("Rower");
+      case osc::ActorKind::Pedestrian: return tr("Pieszy");
+      }
+      return QString::fromStdString(std::string(actor.label));
+    }();
+    items_.push_back(LibraryItem{.key = QStringLiteral("actor.") + key, .label = label,
+                                  .category = kScenarioActorCategory,
+                                  .kind = LibraryItem::Kind::ScenarioActor,
+                                  .actor_kind = actor.kind});
   }
   endResetModel();
 }

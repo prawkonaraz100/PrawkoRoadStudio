@@ -301,18 +301,16 @@ Actions::Actions(QUndoStack& undo_stack, QObject* parent) : QObject(parent) {
   tool_actor_place->setShortcuts(shortcuts::sequences(shortcuts::Id::ToolActorPlace));
   tool_actor_place->setIconText(tr("Actor"));
   tool_actor_place->setToolTip(
-      tr("Actor — click a driving lane to place a scenario actor; drag a placed actor to "
-         "move it. Actors anchor to the lane, so they follow the road when it moves"));
+      tr("Ustaw uczestnika kliknięciem. Wybierz pas dla pojazdu lub dowolny punkt dla pieszego."));
   tool_group->addAction(tool_actor_place);
 
   // p8-s3 (#247). Toolbar-only, like the Actor tool.
-  tool_route = new QAction(tr("&Route"), this);
+  tool_route = new QAction(tr("&Trasa"), this);
   tool_route->setCheckable(true);
   tool_route->setShortcuts(shortcuts::sequences(shortcuts::Id::ToolRoute));
-  tool_route->setIconText(tr("Route"));
+  tool_route->setIconText(tr("Trasa"));
   tool_route->setToolTip(
-      tr("Route — click an actor, then click driving lanes to lay its waypoints. The route "
-         "anchors to lanes, so it follows the roads when they move"));
+      tr("Wybierz uczestnika i klikaj kolejne punkty jego ruchu."));
   tool_group->addAction(tool_route);
 
   tool_maneuver = new QAction(tr("&Maneuver"), this);

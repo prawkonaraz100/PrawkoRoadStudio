@@ -523,6 +523,25 @@ void write_routing(pugi::xml_node action_node, const RoutingAction& routing) {
     write_preserved_children(assign_node, assign.preserved);
   }
 
+  if (routing.timed_polyline.has_value()) {
+    const TimedPolyline& path = *routing.timed_polyline;
+    auto follow = node.append_child("FollowTrajectoryAction");
+    auto trajectory = follow.append_child("TrajectoryRef").append_child("Trajectory");
+    trajectory.append_attribute("name").set_value(path.name.c_str());
+    trajectory.append_attribute("closed").set_value("false");
+    auto polyline = trajectory.append_child("Shape").append_child("Polyline");
+    for (const auto& point : path.vertices) {
+      auto vertex = polyline.append_child("Vertex");
+      set_num(vertex, "time", point.time);
+      write_position(vertex, Position{point.position});
+    }
+    auto timing = follow.append_child("TimeReference").append_child("Timing");
+    timing.append_attribute("domainAbsoluteRelative").set_value("relative");
+    set_num(timing, "scale", 1.0);
+    set_num(timing, "offset", 0.0);
+    follow.append_child("TrajectoryFollowingMode")
+        .append_attribute("followingMode").set_value("position");
+  }
   write_preserved_children(node, routing.preserved);
 }
 

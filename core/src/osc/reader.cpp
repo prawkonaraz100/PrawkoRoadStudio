@@ -1109,15 +1109,79 @@ private:
     return out;
   }
 
-  /// `<RoutingAction>` — §7.7. Returns nullopt when the action holds an arm this
-  /// version does not model (`<FollowTrajectoryAction>`,
-  /// `<AcquirePositionAction>`, `<RandomRouteAction>`,
-  /// `<PreferredLaneLayerAction>`), so the caller preserves the WHOLE action
-  /// rather than writing back an empty `<RoutingAction>` the file never had.
+  std::optional<TimedPolyline> parse_timed_polyline(const pugi::xml_node& node,
+                                                   const std::string& location) {
+    // Only claim the form we can write back in full. Foreign shapes, timing
+    // profiles and extension elements stay together in the preserved XML.
+    const auto matches = [](const pugi::xml_node& element,
+                            std::initializer_list<std::string_view> attributes,
+                            std::initializer_list<std::string_view> children) {
+      return element &&
+             std::ranges::distance(element.attributes()) ==
+                 static_cast<std::ptrdiff_t>(attributes.size()) &&
+             std::ranges::all_of(element.attributes(), [&](const auto& attribute) {
+               return std::ranges::find(attributes, attribute.name()) != attributes.end();
+             }) &&
+             std::ranges::equal(element.children(), children,
+                                [](const auto& child, auto name) { return child.name() == name; });
+    };
+    const auto reference = node.child("TrajectoryRef");
+    const auto trajectory = reference.child("Trajectory");
+    const auto shape = trajectory.child("Shape");
+    const auto polyline = shape.child("Polyline");
+    const auto time_reference = node.child("TimeReference");
+    const auto timing = time_reference.child("Timing");
+    const auto mode = node.child("TrajectoryFollowingMode");
+    if (!matches(node, {}, {"TrajectoryRef", "TimeReference", "TrajectoryFollowingMode"}) ||
+        !matches(reference, {}, {"Trajectory"}) ||
+        !matches(trajectory, {"name", "closed"}, {"Shape"}) ||
+        std::string_view(trajectory.attribute("closed").value()) != "false" ||
+        !matches(shape, {}, {"Polyline"}) || polyline.first_attribute() ||
+        !matches(time_reference, {}, {"Timing"}) ||
+        !matches(timing, {"domainAbsoluteRelative", "scale", "offset"}, {}) ||
+        std::string_view(timing.attribute("domainAbsoluteRelative").value()) != "relative" ||
+        timing.attribute("scale").as_double(-1.0) != 1.0 ||
+        timing.attribute("offset").as_double(-1.0) != 0.0 ||
+        !matches(mode, {"followingMode"}, {}) ||
+        std::string_view(mode.attribute("followingMode").value()) != "position") {
+      return std::nullopt;
+    }
+    TimedPolyline result;
+    result.name = trajectory.attribute("name").value();
+    for (const auto& vertex : polyline.children()) {
+      const auto position = vertex.child("Position");
+      const auto world = position.child("WorldPosition");
+      if (std::string_view(vertex.name()) != "Vertex" ||
+          !matches(vertex, {"time"}, {"Position"}) ||
+          !matches(position, {}, {"WorldPosition"}) ||
+          !world.attribute("x") || !world.attribute("y") || !world.attribute("z")) {
+        return std::nullopt;
+      }
+      const auto time = attr_optional_double(vertex, "time", location);
+      if (!time || *time < 0.0 || (!result.vertices.empty() && *time <= result.vertices.back().time)) {
+        return std::nullopt;
+      }
+      result.vertices.push_back({*time, parse_world_position(world, location)});
+    }
+    if (result.name.empty() || result.vertices.size() < 2) {
+      return std::nullopt;
+    }
+    return result;
+  }
+
+  /// Unsupported routing forms are preserved as a whole by the caller.
   std::optional<RoutingAction> parse_routing_action(const pugi::xml_node& node,
                                                     const std::string& location) {
     const pugi::xml_node assign_node = node.child("AssignRouteAction");
     if (!assign_node) {
+      if (const auto follow = node.child("FollowTrajectoryAction");
+          follow && !follow.next_sibling() && !follow.previous_sibling() && !node.first_attribute()) {
+        if (auto polyline = parse_timed_polyline(follow, location + "/FollowTrajectoryAction")) {
+          RoutingAction out;
+          out.timed_polyline = std::move(polyline);
+          return out;
+        }
+      }
       return std::nullopt;
     }
 
@@ -1297,7 +1361,7 @@ private:
           const pugi::xml_node arm = child.first_child();
           diag(Severity::Warning,
                location,
-               fmt::format("<RoutingAction> uses <{}>, and only <AssignRouteAction> is modeled; "
+               fmt::format("<RoutingAction> uses unsupported <{}> content; "
                            "the whole action was preserved verbatim",
                            arm ? arm.name() : "RoutingAction"));
           out.preserved.children.push_back(node_to_string(child));

@@ -34,6 +34,7 @@
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <cmath>
 #include <optional>
 #include <type_traits>
 #include <utility>
@@ -945,7 +946,7 @@ RoutingAction* find_routing(Scenario& scenario, const std::string& entity) {
       continue;
     }
     for (PrivateAction& action : entry.actions) {
-      if (action.routing.has_value()) {
+      if (action.routing.has_value() && action.routing->assign_route.has_value()) {
         return &*action.routing;
       }
     }
@@ -1017,11 +1018,27 @@ private:
 
 class AssignRouteCommand final : public RouteCommand {
 public:
-  AssignRouteCommand(std::string entity, Route route)
-      : RouteCommand("Assign Route", std::move(entity)), route_(std::move(route)) {}
+  AssignRouteCommand(std::string entity, Route route, std::optional<double> default_speed = {})
+      : RouteCommand("Assign Route", std::move(entity)), route_(std::move(route)),
+        default_speed_(default_speed) {}
 
 protected:
   Expected<void> mutate(Scenario& scenario) override {
+    if (default_speed_) {
+      bool has_speed = false;
+      for (const Private& entry : scenario.storyboard.init.actions.privates) {
+        if (entry.entity_ref == entity()) {
+          has_speed = std::ranges::any_of(entry.actions, [](const PrivateAction& action) {
+            return action.longitudinal && action.longitudinal->speed;
+          });
+          if (has_speed) break;
+        }
+      }
+      if (!has_speed) {
+        SetEntityInitSpeedCommand speed(entity(), *default_speed_);
+        if (auto result = speed.apply(scenario); !result) return result;
+      }
+    }
     if (RoutingAction* existing = find_routing(scenario, entity())) {
       existing->assign_route = AssignRouteAction{.route = route_, .preserved = {}};
       return {};
@@ -1045,6 +1062,43 @@ protected:
 
 private:
   Route route_;
+  std::optional<double> default_speed_;
+};
+
+class SetInitPolylineCommand final : public RouteCommand {
+public:
+  SetInitPolylineCommand(std::string entity, TimedPolyline path)
+      : RouteCommand("Edit Walking Path", std::move(entity)), path_(std::move(path)) {}
+
+protected:
+  Expected<void> mutate(Scenario& scenario) override {
+    auto& entries = scenario.storyboard.init.actions.privates;
+    auto entry = std::ranges::find(entries, entity(), &Private::entity_ref);
+    if (entry == entries.end()) {
+      return make_error(ErrorCode::InvalidArgument, "Place the actor before drawing its path.");
+    }
+    const auto teleport = std::ranges::find_if(entry->actions, [](const PrivateAction& action) {
+      return action.teleport.has_value();
+    });
+    if (teleport == entry->actions.end()) {
+      return make_error(ErrorCode::InvalidArgument, "Place the actor before drawing its path.");
+    }
+    teleport->teleport->position = path_.vertices.front().position;
+    for (PrivateAction& action : entry->actions) {
+      if (action.routing && action.routing->timed_polyline) {
+        action.routing->timed_polyline = path_;
+        return {};
+      }
+    }
+    PrivateAction action;
+    action.routing.emplace();
+    action.routing->timed_polyline = path_;
+    entry->actions.push_back(std::move(action));
+    return {};
+  }
+
+private:
+  TimedPolyline path_;
 };
 
 class ClearRouteCommand final : public RouteCommand {
@@ -1061,7 +1115,7 @@ protected:
       // the arm otherwise — leaving an armless action behind would emit an empty
       // <PrivateAction>, which no schema accepts.
       for (auto action = entry.actions.begin(); action != entry.actions.end(); ++action) {
-        if (!action->routing.has_value()) {
+        if (!action->routing.has_value() || !action->routing->assign_route.has_value()) {
           continue;
         }
         if (action->teleport.has_value() || action->longitudinal.has_value()) {
@@ -1315,8 +1369,9 @@ rename_scenario_object(const Scenario& scenario, std::string_view from, std::str
 
 // --- routes (p8-s3, issue #247) ----------------------------------------------
 
-std::unique_ptr<Command>
-assign_route(const Scenario& scenario, std::string_view entity_name, Route route) {
+static std::unique_ptr<Command> make_assign_route(const Scenario& scenario,
+                                                 std::string_view entity_name, Route route,
+                                                 std::optional<double> speed = {}) {
   if (!has_entity(scenario, entity_name)) {
     return refuse("Assign Route",
                   fmt::format("no entity named '{}'", entity_name),
@@ -1336,7 +1391,36 @@ assign_route(const Scenario& scenario, std::string_view entity_name, Route route
                               route.waypoints.size()),
                   "RoutingAction/AssignRouteAction/Route/Waypoint");
   }
-  return std::make_unique<AssignRouteCommand>(std::string{entity_name}, std::move(route));
+  return std::make_unique<AssignRouteCommand>(std::string{entity_name}, std::move(route), speed);
+}
+
+std::unique_ptr<Command>
+assign_route(const Scenario& scenario, std::string_view entity_name, Route route) {
+  return make_assign_route(scenario, entity_name, std::move(route));
+}
+
+std::unique_ptr<Command> start_vehicle_route(const Scenario& scenario, std::string_view entity_name,
+                                             Route route, double default_speed) {
+  if (!std::isfinite(default_speed) || default_speed <= 0.0) {
+    return refuse("Assign Route", "The default driving speed must be positive.", "Init/SpeedAction");
+  }
+  return make_assign_route(scenario, entity_name, std::move(route), default_speed);
+}
+
+std::unique_ptr<Command> set_init_polyline(const Scenario& scenario, std::string_view entity_name,
+                                          TimedPolyline path) {
+  if (!has_entity(scenario, entity_name) || path.name.empty() || path.vertices.size() < 2) {
+    return refuse("Edit Walking Path", "A named path needs a placed actor and at least two points.",
+                  "Init/FollowTrajectoryAction");
+  }
+  double previous = -1.0;
+  for (const auto& vertex : path.vertices) {
+    if (!std::isfinite(vertex.time) || vertex.time < 0.0 || vertex.time <= previous) {
+      return refuse("Edit Walking Path", "Path times must increase.", "Init/FollowTrajectoryAction");
+    }
+    previous = vertex.time;
+  }
+  return std::make_unique<SetInitPolylineCommand>(std::string(entity_name), std::move(path));
 }
 
 std::unique_ptr<Command> clear_route(const Scenario& scenario, std::string_view entity_name) {

@@ -45,6 +45,8 @@ namespace {
 /// palette). Reuses the Create-Road template glyphs and the junction glyph;
 /// unknown keys fall back to a generic box.
 [[nodiscard]] QString icon_name_for(const QString& key) {
+  if (key == QStringLiteral("actor.pedestrian")) return QStringLiteral("crosswalk");
+  if (key.startsWith(QStringLiteral("actor."))) return QStringLiteral("maneuver");
   if (key == QStringLiteral("road.rural")) {
     return QStringLiteral("template-rural");
   }
@@ -274,6 +276,9 @@ void LibraryPanel::handle_current_changed(const QModelIndex& index) {
     return;
   }
   switch (item->kind) {
+  case LibraryItem::Kind::ScenarioActor:
+    drag_instructions_->setText(tr("Przeciągnij uczestnika na scenę. Potem klikaj punkty trasy."));
+    break;
   case LibraryItem::Kind::RoadTemplate:
     drag_instructions_->setText(tr("Przeciągnij na teren, dodaj punkty. Enter kończy, Esc anuluje."));
     break;
