@@ -371,6 +371,53 @@ accessor_span(const tinygltf::Model& gltf, int accessor_index, std::size_t eleme
   return out;
 }
 
+/// glTF UV0 supports FLOAT or normalised unsigned integer accessors.
+/// Keep its authored V axis and sample the unflipped glTF image bytes: both
+/// have top-left origin, so GL sampler coordinates remain consistent.
+[[nodiscard]] Expected<std::vector<std::array<double, 2>>>
+read_vec2_uv(const tinygltf::Model& gltf, int accessor_index) {
+  if (accessor_index < 0 || static_cast<std::size_t>(accessor_index) >= gltf.accessors.size()) {
+    return make_error(ErrorCode::InvalidDocument, "TEXCOORD_0 index is out of range");
+  }
+  const auto& a = gltf.accessors[static_cast<std::size_t>(accessor_index)];
+  if (a.type != TINYGLTF_TYPE_VEC2) {
+    return make_error(ErrorCode::InvalidDocument, "TEXCOORD_0 is not VEC2");
+  }
+  std::size_t scalar_bytes = 0;
+  if (a.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT) scalar_bytes = 4;
+  else if (a.normalized && a.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT)
+    scalar_bytes = 2;
+  else if (a.normalized && a.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE)
+    scalar_bytes = 1;
+  else return make_error(ErrorCode::InvalidDocument, "unsupported TEXCOORD_0 component encoding");
+  auto span = accessor_span(gltf, accessor_index, scalar_bytes * 2);
+  if (!span.has_value()) return make_error(span.error().code, span.error().message);
+  std::vector<std::array<double, 2>> out;
+  out.reserve(span->count);
+  for (std::size_t i = 0; i < span->count; ++i) {
+    std::array<double, 2> xy{};
+    for (std::size_t j = 0; j < 2; ++j) {
+      const unsigned char* src = span->base + i * span->stride + j * scalar_bytes;
+      if (scalar_bytes == 4) {
+        float v = 0;
+        std::memcpy(&v, src, 4);
+        xy[j] = v;
+      } else if (scalar_bytes == 2) {
+        std::uint16_t v = 0;
+        std::memcpy(&v, src, 2);
+        xy[j] = static_cast<double>(v) / 65535.0;
+      } else {
+        xy[j] = static_cast<double>(*src) / 255.0;
+      }
+      if (!std::isfinite(xy[j])) {
+        return make_error(ErrorCode::InvalidDocument, "TEXCOORD_0 has non-finite value");
+      }
+    }
+    out.push_back(xy);
+  }
+  return out;
+}
+
 /// Reads an index accessor in any of the three unsigned encodings glTF allows.
 [[nodiscard]] Expected<std::vector<std::uint32_t>> read_indices(const tinygltf::Model& gltf,
                                                                 int accessor_index) {
@@ -424,6 +471,8 @@ struct FlatPrimitive {
   std::string name;
   float opacity = 1.0F;
   float roughness = 1.0F;
+  std::vector<double> texcoords;
+  int base_color_texture = -1;
 };
 
 /// Per-face normals for a primitive that shipped without any, area-weighted at
@@ -481,6 +530,7 @@ public:
   [[nodiscard]] std::vector<Diagnostic>& diagnostics() { return diagnostics_; }
 
   [[nodiscard]] std::vector<FlatPrimitive>& parts() { return parts_; }
+  [[nodiscard]] std::vector<PropTexture>& textures() { return textures_; }
 
   void warn(std::string location, std::string message) {
     diagnostics_.push_back(Diagnostic{.severity = Severity::Warning,
@@ -740,7 +790,32 @@ private:
 
     FlatPrimitive part;
     part.name = primitive_name(primitive);
-    part.color = resolve_color(primitive, where);
+    const int base_index =
+        primitive.material >= 0 &&
+                static_cast<std::size_t>(primitive.material) < model_.materials.size()
+            ? model_.materials[static_cast<std::size_t>(primitive.material)]
+                  .pbrMetallicRoughness.baseColorTexture.index
+            : -1;
+    if (base_index >= 0) {
+      const auto uv_at = primitive.attributes.find("TEXCOORD_0");
+      if (uv_at == primitive.attributes.end()) {
+        warn(where, "baseColorTexture has no TEXCOORD_0; averaged colour fallback");
+      } else {
+        auto uv = read_vec2_uv(model_, uv_at->second);
+        if (!uv.has_value() || uv->size() != positions->size()) {
+          warn(where, "TEXCOORD_0 invalid or count differs from POSITION; averaged colour fallback");
+        } else if (const int texture = import_texture(base_index, where); texture >= 0) {
+          part.base_color_texture = texture;
+          part.texcoords.reserve(uv->size() * 2);
+          for (const auto& pair : *uv) {
+            part.texcoords.push_back(pair[0]);
+            part.texcoords.push_back(pair[1]);
+          }
+        }
+      }
+    }
+    part.name = primitive_name(primitive);
+    part.color = resolve_color(primitive, where, part.base_color_texture >= 0);
     if (primitive.material >= 0 &&
         static_cast<std::size_t>(primitive.material) < model_.materials.size()) {
       const tinygltf::Material& material =
@@ -824,7 +899,8 @@ private:
   /// baseColorFactor, multiplied by the mean of baseColorTexture when there is
   /// one — the flattening ADR-0013 records, warned per primitive with #507 named.
   [[nodiscard]] std::array<float, 3> resolve_color(const tinygltf::Primitive& primitive,
-                                                   const std::string& where) {
+                                                   const std::string& where,
+                                                   bool texture_preserved) {
     std::array<double, 3> color = {0.7, 0.7, 0.7};
     if (primitive.material < 0 ||
         static_cast<std::size_t>(primitive.material) >= model_.materials.size()) {
@@ -843,7 +919,7 @@ private:
       }
     }
     const int texture_index = material.pbrMetallicRoughness.baseColorTexture.index;
-    if (texture_index >= 0) {
+    if (texture_index >= 0 && !texture_preserved) {
       const std::optional<std::array<double, 3>> mean = texture_mean(texture_index, where);
       if (mean.has_value()) {
         for (std::size_t c = 0; c < 3; ++c) {
@@ -866,6 +942,91 @@ private:
         static_cast<float>(color[0]), static_cast<float>(color[1]), static_cast<float>(color[2])};
   }
 
+
+  /// Texture import is IMAGE-index deduplicated (not primitive deduplicated).
+  /// Copies embedded RGBA bytes or decodes a directory-scoped .gltf image,
+  /// applying the same URI traversal rules as legacy averaged-color fallback.
+  [[nodiscard]] int import_texture(int gltf_texture_index, const std::string& where) {
+    if (gltf_texture_index < 0 ||
+        static_cast<std::size_t>(gltf_texture_index) >= model_.textures.size()) {
+      warn(where, "baseColorTexture index invalid; flat fallback");
+      return -1;
+    }
+    const auto& texture = model_.textures[static_cast<std::size_t>(gltf_texture_index)];
+    const int image_index = texture.source;
+    if (image_index < 0 || static_cast<std::size_t>(image_index) >= model_.images.size()) {
+      warn(where, "baseColorTexture image missing; flat fallback");
+      return -1;
+    }
+    if (const auto it = imported_images_.find(image_index); it != imported_images_.end())
+      return it->second;
+    const auto& image = model_.images[static_cast<std::size_t>(image_index)];
+    PropTexture result;
+    if (image.width > 0 && image.height > 0 && image.component == 4 &&
+        image.image.size() == static_cast<std::size_t>(image.width) *
+                                  static_cast<std::size_t>(image.height) * 4U) {
+      result.width = image.width;
+      result.height = image.height;
+      result.rgba = image.image;
+    } else {
+      auto external = external_image_rgba(image, where);
+      if (!external.has_value()) return -1;
+      result.width = external->width;
+      result.height = external->height;
+      result.rgba = std::move(external->rgba);
+    }
+    if (result.rgba.size() > kMaxPropTextureBytes - texture_bytes_) {
+      warn(where, "total decoded texture data exceeds the 64 MiB model limit; flat fallback");
+      return -1;
+    }
+    texture_bytes_ += result.rgba.size();
+    if (texture.sampler >= 0 &&
+        static_cast<std::size_t>(texture.sampler) < model_.samplers.size()) {
+      const auto& sampler = model_.samplers[static_cast<std::size_t>(texture.sampler)];
+      result.clamp_to_edge = sampler.wrapS == TINYGLTF_TEXTURE_WRAP_CLAMP_TO_EDGE &&
+                             sampler.wrapT == TINYGLTF_TEXTURE_WRAP_CLAMP_TO_EDGE;
+    }
+    const int index = static_cast<int>(textures_.size());
+    imported_images_.emplace(image_index, index);
+    textures_.push_back(std::move(result));
+    note(where, fmt::format("baseColorTexture preserved as {}x{} RGBA8, original UV0",
+                            textures_.back().width, textures_.back().height));
+    return index;
+  }
+
+  [[nodiscard]] std::optional<DecodedImage>
+  external_image_rgba(const tinygltf::Image& image, const std::string& where) {
+    if (image.uri.empty() || image.uri.find("://") != std::string::npos) {
+      warn(where, "external image URI is empty or remote; rejected");
+      return std::nullopt;
+    }
+    const std::filesystem::path relative(image.uri);
+    if (relative.is_absolute()) {
+      warn(where, "absolute image URI refused");
+      return std::nullopt;
+    }
+    std::error_code ec;
+    const auto root = std::filesystem::weakly_canonical(base_dir_, ec);
+    if (ec) return std::nullopt;
+    const auto resolved = std::filesystem::weakly_canonical(base_dir_ / relative, ec);
+    if (ec) return std::nullopt;
+    const auto rel = resolved.lexically_relative(root);
+    if (rel.empty() || *rel.begin() == "..") {
+      warn(where, "image uri resolves outside the model's own directory; refused");
+      return std::nullopt;
+    }
+    const auto bytes = read_bytes(resolved);
+    if (!bytes.has_value()) {
+      warn(where, "external image could not be opened");
+      return std::nullopt;
+    }
+    auto decoded = decode_image(bytes->data(), bytes->size());
+    if (!decoded.has_value()) {
+      warn(where, decoded.error().message);
+      return std::nullopt;
+    }
+    return std::move(*decoded);
+  }
   /// The mean colour of a texture, decoding an external image ourselves because
   /// TINYGLTF_NO_EXTERNAL_IMAGE means tinygltf left it alone.
   [[nodiscard]] std::optional<std::array<double, 3>> texture_mean(int texture_index,
@@ -957,6 +1118,9 @@ private:
   PropImportOptions options_;
   std::vector<Diagnostic> diagnostics_;
   std::vector<FlatPrimitive> parts_;
+  std::vector<PropTexture> textures_;
+  std::map<int, int> imported_images_;
+  std::size_t texture_bytes_ = 0;
   std::map<std::size_t, std::optional<std::array<double, 3>>> image_means_;
   std::vector<std::string> skipped_;
   std::size_t total_vertices_ = 0;
@@ -1102,8 +1266,11 @@ Expected<PropImportResult> import_prop_model(const std::filesystem::path& path,
                                  .color = flat.color,
                                  .name = std::move(flat.name),
                                  .opacity = flat.opacity,
-                                 .roughness = flat.roughness});
+                                 .roughness = flat.roughness,
+                                 .texcoords = std::move(flat.texcoords),
+                                 .base_color_texture = flat.base_color_texture});
   }
+  out.textures = std::move(reader.textures());
   const std::optional<std::pair<double, double>> extent = normalise_to_base_centre(out.parts);
   if (!extent.has_value()) {
     return make_error(ErrorCode::InvalidDocument,

@@ -47,6 +47,20 @@ struct PropPart {
   // existing generated/positional built-in props keep their opaque defaults.
   float opacity = 1.0F;
   float roughness = 1.0F;
+  // Imported glTF TEXCOORD_0, in exact authored coordinates. Empty for
+  // legacy props and malformed or unsupported UV accessors.
+  std::vector<double> texcoords;
+  int base_color_texture = -1; // index into PropModel::textures; -1 = flat
+};
+
+/// Decoded once per imported model and shared across every placed instance.
+/// The renderer uploads these RGBA8 bytes once per model per scene rebuild;
+/// they are not duplicated per PropPart or per placed OpenDRIVE object.
+struct PropTexture {
+  int width = 0;
+  int height = 0;
+  std::vector<std::uint8_t> rgba;
+  bool clamp_to_edge = false;
 };
 
 /// A normalised sub-rectangle of a sign face: {left, top, width, height} in
@@ -102,6 +116,7 @@ struct PropModel {
   /// the sign's artwork and fixed legend, plus whatever the signal itself
   /// carries (@text, or a speed limit's @value).
   std::optional<FacePlate> face_plate;
+  std::vector<PropTexture> textures; // glTF images: one copy per model
 };
 
 /// Stable ids of every available prop model, in catalogue order: the bundled

@@ -25,15 +25,16 @@
 // `.obj` needs tinyobjloader pinned on its own terms (#511), USD read is out for
 // v0.1.0, and `.fbx` is permanently excluded by the licensing rules.
 //
-// ★ A TEXTURED MODEL IMPORTS FLAT, AND SAYS SO. `props::PropPart` carries one
-// flat colour and no UVs, and so does every consumer of it — the viewport draws
-// all props with a single untextured material, and both exporters emit flat
-// colour per part. So a primitive's baseColorTexture is DECODED, AVERAGED, and
-// multiplied into baseColorFactor, with a warning naming the primitive and
-// #507, which owns carrying real textures through. The obvious cheaper answer —
-// use baseColorFactor and ignore the image — is not a compromise but a bug: a
-// real-world GLB usually leaves the factor white and puts all its colour in the
-// texture, so it would import a brown chair as a white one and report nothing.
+// GLB TEXTURES (A1/R1). Valid TEXCOORD_0 and baseColorTexture preserve
+// their original per-vertex UVs and decoded RGBA8 image in a model-wide
+// deduplicated texture pool. The Windows renderer uploads a pool entry once per
+// prop model per scene rebuild, regardless of how many instances are placed.
+// Images from external .gltf are resolved only within the containing directory.
+// Without valid UV/image, the previous *explicitly diagnosed* average linear
+// colour fallback remains, so legacy props are never replaced with white.
+// The stand-alone kernel glTF/USD exporters still use a flat per-part colour:
+// writing full textured material exports is tracked separately from viewport
+// rendering and must not be described as done.
 //
 // UNTRUSTED INPUT. These files come from somewhere else, so every limit below is
 // stated rather than discovered, and an external image `uri` in a `.gltf` is
@@ -72,9 +73,13 @@ inline constexpr std::size_t kMaxPropVertices = 200'000;
 /// model split into thousands of primitives is a performance cliff, not detail.
 inline constexpr std::size_t kMaxPropParts = 256;
 
-/// Upper bound on the texels decoded from one embedded image (4096 x 4096). The
-/// image is read only to average it, so nothing is gained by decoding more.
+/// Upper bound on the texels decoded from one embedded image (4096 x 4096).
+/// Images are also used as original RGBA textures when TEXCOORD_0 is present.
 inline constexpr std::size_t kMaxPropImageTexels = 16'777'216;
+
+/// Total GPU-uploadable texture bytes from one imported model. Avoid 156
+/// repeated glTF meshes allocating their own copies; reject oversized sets.
+inline constexpr std::size_t kMaxPropTextureBytes = 64U * 1024U * 1024U;
 
 /// How to read a model.
 struct PropImportOptions {

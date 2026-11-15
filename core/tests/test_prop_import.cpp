@@ -212,44 +212,44 @@ TEST(PropImportColor, AFactorOnlyMaterialKeepsItsColourExactly) {
   EXPECT_FALSE(any_message_contains(imported.diagnostics, "flattened"));
 }
 
-TEST(PropImportColor, ATexturedMaterialFlattensToItsAverageLinearColourAndCitesTheFollowUp) {
+TEST(PropImportColor, AuthoredBaseColorTextureRetainsOriginalPixelsAndUV0) {
   const PropImportResult imported = import_or_fail("textured_box.glb");
   ASSERT_EQ(imported.model.parts.size(), 1U);
-  const std::array<float, 3>& color = imported.model.parts.front().color;
-
-  // The fixture's texture is a flat sRGB (204, 102, 51) = (0.8, 0.4, 0.2), and
-  // PropPart::color is documented LINEAR. These are the sRGB EOTF applied to
-  // each channel, from the glTF spec — not numbers this reader produced.
-  const auto srgb_to_linear = [](double c) {
-    return c <= 0.04045 ? c / 12.92 : std::pow((c + 0.055) / 1.055, 2.4);
-  };
-  EXPECT_NEAR(color[0], static_cast<float>(srgb_to_linear(0.8)), 1e-4);
-  EXPECT_NEAR(color[1], static_cast<float>(srgb_to_linear(0.4)), 1e-4);
-  EXPECT_NEAR(color[2], static_cast<float>(srgb_to_linear(0.2)), 1e-4);
-
-  // NON-VACUITY GUARD. Without the transfer function the average of the encoded
-  // bytes would be (0.8, 0.4, 0.2) — every channel visibly brighter. If this
-  // ever passes, the assertions above have stopped testing the decode.
-  EXPECT_LT(color[0], 0.75F);
-  EXPECT_LT(color[1], 0.30F);
-  EXPECT_LT(color[2], 0.10F);
-
-  // The user is told what they lost and where it is tracked.
-  ASSERT_TRUE(any_message_contains(imported.diagnostics, "flattened"));
-  EXPECT_TRUE(any_message_contains(imported.diagnostics, "#507"));
-  EXPECT_TRUE(any_message_contains(imported.diagnostics, "crate_paint"));
+  ASSERT_EQ(imported.model.textures.size(), 1U);
+  const auto& part = imported.model.parts.front();
+  EXPECT_NEAR(part.color[0], 1.0F, 1e-6);
+  EXPECT_NEAR(part.color[1], 1.0F, 1e-6);
+  EXPECT_NEAR(part.color[2], 1.0F, 1e-6);
+  EXPECT_EQ(part.base_color_texture, 0);
+  EXPECT_EQ(part.texcoords.size(), part.positions.size() / 3U * 2U);
+  EXPECT_GT(part.texcoords.size(), 0U);
+  const auto& image = imported.model.textures.front();
+  EXPECT_EQ(image.rgba.size(), static_cast<std::size_t>(image.width) *
+                               static_cast<std::size_t>(image.height) * 4U);
+  ASSERT_GE(image.rgba.size(), 4U);
+  EXPECT_EQ(image.rgba[0], 204);
+  EXPECT_EQ(image.rgba[1], 102);
+  EXPECT_EQ(image.rgba[2], 51);
+  EXPECT_EQ(image.rgba[3], 255);
+  EXPECT_FALSE(any_message_contains(imported.diagnostics, "flattened"));
+  EXPECT_TRUE(any_message_contains(imported.diagnostics, "original UV0"));
 }
 
-TEST(PropImportColor, AnImageBesideTheGltfIsReadAndAveragedTheSameWay) {
-  // TINYGLTF_NO_EXTERNAL_IMAGE means tinygltf keeps the uri and loads nothing,
-  // so this path is entirely the importer's own.
+TEST(PropImportColor, TextureBesideGltfIsKeptWithTheSameBytesAsEmbeddedGlb) {
   const PropImportResult external = import_or_fail("external_box.gltf");
   const PropImportResult embedded = import_or_fail("textured_box.glb");
   ASSERT_EQ(external.model.parts.size(), 1U);
-  for (std::size_t c = 0; c < 3; ++c) {
-    EXPECT_NEAR(external.model.parts.front().color[c], embedded.model.parts.front().color[c], 1e-6)
-        << "channel " << c;
+  ASSERT_EQ(external.model.textures.size(), 1U);
+  ASSERT_EQ(embedded.model.textures.size(), 1U);
+  // The two authored fixtures have different image dimensions, but both
+  // preserve the same original color samples and vertex UV coordinates.
+  ASSERT_GE(external.model.textures.front().rgba.size(), 4U);
+  ASSERT_GE(embedded.model.textures.front().rgba.size(), 4U);
+  for (std::size_t channel = 0; channel < 4; ++channel) {
+    EXPECT_EQ(external.model.textures.front().rgba[channel],
+              embedded.model.textures.front().rgba[channel]);
   }
+  EXPECT_EQ(external.model.parts.front().texcoords, embedded.model.parts.front().texcoords);
 }
 
 TEST(PropImportColor, AnImageUriEscapingTheModelDirectoryIsRefusedByName) {

@@ -268,6 +268,9 @@ void append_model_items(std::string_view model_id,
           part.positions, part.normals, part.indices,
           {part.color[0], part.color[1], part.color[2], part.opacity});
       mesh.roughness = part.roughness;
+      mesh.base_color_texture = part.base_color_texture;
+      mesh.uvs.reserve(part.texcoords.size());
+      for (double v : part.texcoords) mesh.uvs.push_back(static_cast<float>(v));
       created.parts.push_back(std::move(mesh));
     }
     scene.prop_batches.push_back(std::move(created));

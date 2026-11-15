@@ -250,6 +250,13 @@ Material ViewportWidget::material_for(SurfaceKind surface, const std::string& ma
 }
 
 void ViewportWidget::rebuild_scene() {
+  // clear_meshes does not release texture handles; these belong to the old
+  // project models. Free them before rebuilding to avoid leaking GPU images.
+  for (const UploadedPropBatch& batch : prop_batches_) {
+    for (TextureHandle texture : batch.imported_textures) {
+      if (texture.valid()) renderer_->remove(texture);
+    }
+  }
   renderer_->clear_meshes();
   simulation_actor_mesh_ = {};
   for (auto& handles : cockpit_gpu_) handles.clear();
@@ -283,8 +290,30 @@ void ViewportWidget::rebuild_scene() {
     UploadedPropBatch uploaded;
     uploaded.model_id = batch.model_id;
     uploaded.parts.reserve(batch.parts.size());
+    const props::PropModel* prop_model = props::model(batch.model_id);
+    if (prop_model != nullptr) {
+      uploaded.imported_textures.reserve(prop_model->textures.size());
+      for (const props::PropTexture& image : prop_model->textures) {
+        TextureData rgba;
+        rgba.width = image.width;
+        rgba.height = image.height;
+        rgba.rgba = image.rgba;
+        rgba.wrap = image.clamp_to_edge ? TextureWrap::ClampToEdge : TextureWrap::Repeat;
+        rgba.srgb = true; // glTF baseColor textures are sRGB, roughness/normal are not
+        uploaded.imported_textures.push_back(renderer_->upload(rgba));
+      }
+    }
     for (const RenderMeshData& part : batch.parts) {
       uploaded.parts.push_back(renderer_->upload(part));
+      Material part_material;
+      if (part.base_color_texture >= 0 &&
+          static_cast<std::size_t>(part.base_color_texture) < uploaded.imported_textures.size()) {
+        part_material.base_color =
+            uploaded.imported_textures[static_cast<std::size_t>(part.base_color_texture)];
+        part_material.uv_scale = 1.0F; // glTF author UV, not metric road texture tiling
+        part_material.tint = part.color; // glTF baseColorFactor, including alpha
+      }
+      uploaded.part_materials.push_back(part_material);
     }
     if (batch.model_id == kActorBoxModelId) {
       simulation_actor_mesh_ = uploaded.parts.front();
@@ -792,14 +821,22 @@ void ViewportWidget::render_frame(const OrbitCamera& camera, const QSize& size,
                                   .material = prop_material,
                                   .instances = simulation_frame_->actors});
   }
+  const auto imported_material = [&](const UploadedPropBatch& batch, std::size_t index) {
+    // Sober intentionally remains flat (legacy); Textured uses the GLB's
+    // actual authored UV0 + baseColor texture, shared by all model instances.
+    if (textured_rendering_ && index < batch.part_materials.size() &&
+        batch.part_materials[index].base_color.valid())
+      return batch.part_materials[index];
+    return prop_material;
+  };
   for (const UploadedPropBatch& batch : prop_batches_) {
     if (simulation_frame_ && batch.model_id == kActorBoxModelId) {
       continue;
     }
     if (!show_editing) {
-      for (const RenderMeshHandle handle : batch.parts) {
-        draw_items.push_back(DrawItem{.mesh = handle,
-                                      .material = prop_material,
+      for (std::size_t i = 0; i < batch.parts.size(); ++i) {
+        draw_items.push_back(DrawItem{.mesh = batch.parts[i],
+                                      .material = imported_material(batch, i),
                                       .instances = batch.transforms});
       }
       continue;
@@ -834,10 +871,10 @@ void ViewportWidget::render_frame(const OrbitCamera& camera, const QSize& size,
     kept_transforms.push_back(std::move(split.kept));
     const std::span<const InstanceData> kept_span{kept_transforms.back()};
     if (!kept_span.empty()) {
-      for (const RenderMeshHandle handle : batch.parts) {
-        draw_items.push_back(DrawItem{.mesh = handle,
+      for (std::size_t i = 0; i < batch.parts.size(); ++i) {
+        draw_items.push_back(DrawItem{.mesh = batch.parts[i],
                                       .state = HighlightState::None,
-                                      .material = prop_material,
+                                      .material = imported_material(batch, i),
                                       .instances = kept_span});
       }
     }
@@ -845,9 +882,9 @@ void ViewportWidget::render_frame(const OrbitCamera& camera, const QSize& size,
       highlight_scratch.push_back(batch.transforms[idx]);
       const std::span<const InstanceData> one{&highlight_scratch.back(), 1};
       const HighlightState state = states[idx];
-      for (const RenderMeshHandle handle : batch.parts) {
-        draw_items.push_back(
-            DrawItem{.mesh = handle, .state = state, .material = prop_material, .instances = one});
+      for (std::size_t i = 0; i < batch.parts.size(); ++i) {
+        draw_items.push_back(DrawItem{.mesh = batch.parts[i], .state = state,
+                                      .material = imported_material(batch, i), .instances = one});
       }
     }
   }

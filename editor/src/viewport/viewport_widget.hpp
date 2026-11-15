@@ -305,6 +305,8 @@ private:
     std::vector<RenderMeshHandle> parts;
     std::vector<ScenePropInstance> instances;
     std::vector<InstanceData> transforms; ///< index-parallel to `instances`
+    std::vector<TextureHandle> imported_textures; // one GL upload per glTF image, not part
+    std::vector<Material> part_materials; // part-index parallel, stable through partial edits
   };
 
   /// One uploaded editable text-sign face: a world-space textured quad plus the

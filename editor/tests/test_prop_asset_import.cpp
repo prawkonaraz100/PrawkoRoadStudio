@@ -120,12 +120,12 @@ TEST_F(PropAssetImport, CopiesTheModelIntoTheProjectAndDescribesTheAsset) {
             QStringLiteral("CC0 / own work"));
   EXPECT_FALSE(item.create_raw.value(QStringLiteral("source")).toString().isEmpty());
 
-  // The flatten warning reaches the caller rather than being swallowed.
-  const bool flattened =
+  // UV and the actual pixel bytes survive rather than being averaged.
+  const bool preserved =
       std::any_of(diagnostics.begin(), diagnostics.end(), [](const Diagnostic& d) {
-        return d.message.find("flattened") != std::string::npos;
+        return d.message.find("original UV0") != std::string::npos;
       });
-  EXPECT_TRUE(flattened) << "the textured fixture must report its flattening";
+  EXPECT_TRUE(preserved) << "the textured fixture must retain its authored image";
 }
 
 TEST_F(PropAssetImport, AModelIsReadBeforeItIsCopied) {
@@ -179,9 +179,11 @@ TEST_F(PropAssetImport, AProjectsModelsAreRegisteredFromItsManifest) {
   EXPECT_GT(model->height, 0.0);
   // The bundled catalogue is untouched.
   EXPECT_NE(props::model("tree_pine"), nullptr);
-  // The reader's warnings are re-reported on every project open, so a user who
-  // reopens a project still learns why their crate is flat.
-  EXPECT_FALSE(diagnostics.empty());
+  // Valid UV0 and decoded baseColor image are preserved on every project
+  // reopen: no legacy "flattened" warning is expected for this asset.
+  EXPECT_EQ(model->textures.size(), 1U);
+  EXPECT_EQ(model->parts.front().base_color_texture, 0);
+  EXPECT_TRUE(diagnostics.empty());
 }
 
 TEST_F(PropAssetImport, AMissingModelFileIsReportedAndSkippedRatherThanFatal) {
@@ -361,9 +363,24 @@ TEST_F(PropAssetImport, PrawkoA1BlenderShelterKeepsAlphaAndRoughnessWhileReporti
   bool glass_found = false;
   bool textured_found = false;
   bool metal_found = false;
+  std::size_t uv_meshes = 0;
+  EXPECT_EQ(imported->model.textures.size(), 2U)
+      << "One RGBA image for each authored albedo map, not per wood/concrete piece";
+  for (const auto& texture : imported->model.textures) {
+    EXPECT_EQ(texture.width, 256);
+    EXPECT_EQ(texture.height, 256);
+    EXPECT_EQ(texture.rgba.size(), 256U * 256U * 4U);
+  }
   for (const props::PropPart& part : imported->model.parts) {
     triangle_count += part.indices.size() / 3;
     EXPECT_FALSE(part.positions.empty());
+    if (part.base_color_texture >= 0) {
+      ++uv_meshes;
+      EXPECT_EQ(part.texcoords.size(), (part.positions.size() / 3U) * 2U)
+          << "glTF UV0 must follow the same vertices as geometry";
+      EXPECT_LT(static_cast<std::size_t>(part.base_color_texture),
+                imported->model.textures.size());
+    }
     if (part.name.find("Clear safety glass") != std::string::npos) {
       glass_found = true;
       EXPECT_NEAR(part.opacity, 0.23, 0.04);
@@ -379,7 +396,8 @@ TEST_F(PropAssetImport, PrawkoA1BlenderShelterKeepsAlphaAndRoughnessWhileReporti
   }
   EXPECT_TRUE(glass_found);
   EXPECT_TRUE(metal_found);
-  EXPECT_TRUE(textured_found) << "Real UV textures must be flagged as not yet faithfully rendered";
+  EXPECT_FALSE(textured_found) << "Real UV materials must no longer be flattened";
+  EXPECT_GT(uv_meshes, 6U) << "Textured wood and concrete must retain UV0";
   EXPECT_GT(triangle_count, 5000U);
   EXPECT_LT(triangle_count, props::kMaxPropTriangles);
 }

@@ -60,6 +60,7 @@ struct TextureData {
   /// Wrap mode. Default Repeat keeps existing (tiled surface) behaviour byte
   /// for byte; sign faces upload ClampToEdge.
   TextureWrap wrap = TextureWrap::Repeat;
+  bool srgb = false; // true for glTF sRGB baseColor; old material cache unchanged
 };
 
 /// A material references an optional base-color texture plus scalar factors.
@@ -125,6 +126,7 @@ struct RenderMeshData {
   std::array<float, 4> color{0.8F, 0.8F, 0.8F, 1.0F};
   PrimitiveKind kind = PrimitiveKind::Triangles;
   float roughness = 1.0F; // imported glTF factor; default preserves legacy props
+  int base_color_texture = -1; // index into imported PropModel::textures
 };
 
 /// Per-item feedback state. Drives the accent emphasis in the mesh shader:

@@ -73,6 +73,7 @@ inline constexpr GLenum kTexture1 = 0x84C1; // normal map (PBR-lite)
 inline constexpr GLenum kTexture2 = 0x84C2; // roughness map (PBR-lite)
 inline constexpr GLenum kRgba = 0x1908;
 inline constexpr GLenum kRgba8 = 0x8058;
+inline constexpr GLenum kSrgb8Alpha8 = 0x8C43;
 inline constexpr GLenum kUnsignedByte = 0x1401;
 inline constexpr GLenum kTextureMinFilter = 0x2801;
 inline constexpr GLenum kTextureMagFilter = 0x2800;

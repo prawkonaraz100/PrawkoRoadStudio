@@ -585,7 +585,7 @@ TextureHandle GLRenderer::upload(const TextureData& data) {
   gl::BindTexture(gl::kTexture2D, tex);
   gl::TexImage2D(gl::kTexture2D,
                  0,
-                 static_cast<gl::GLint>(gl::kRgba8),
+                 static_cast<gl::GLint>(data.srgb ? gl::kSrgb8Alpha8 : gl::kRgba8),
                  data.width,
                  data.height,
                  0,
