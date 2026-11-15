@@ -252,6 +252,7 @@ Material ViewportWidget::material_for(SurfaceKind surface, const std::string& ma
 void ViewportWidget::rebuild_scene() {
   renderer_->clear_meshes();
   simulation_actor_mesh_ = {};
+  for (auto& handles : cockpit_gpu_) handles.clear();
   items_.clear();
   prop_batches_.clear(); // clear_meshes() dropped their GL meshes; re-upload below
   sign_faces_.clear();   // ditto — face quad meshes re-upload below
@@ -466,6 +467,20 @@ void ViewportWidget::set_camera_preset(const QString& preset) {
     camera_.set_projection(ProjectionMode::Orthographic);
   } else if (preset == QStringLiteral("orbit")) {
     camera_.set_view(0.8F, 0.9F);
+  } else if (preset == QStringLiteral("driver-cockpit-forward-proof")) {
+    // Self-contained screenshot proof: driver faces DOWN the example road,
+    // which makes an occluded windshield immediately visible to an inspector.
+    // This never writes the scene or changes the production camera defaults.
+    SimulationFrame frame;
+    frame.driver = DriverCamera{
+        .eye = {7.0F, -70.0F, 1.45F},
+        .forward = {-1.0F, 0.0F, 0.0F},
+        .right = {0.0F, 1.0F, 0.0F},
+        .up = {0.0F, 0.0F, 1.0F}};
+    frame.driver_speed_kmh = 45.0F;
+    frame.steering_wheel_rad = 0.55F;
+    frame.time_seconds = 0.63;
+    simulation_frame_ = std::move(frame);
   } else if (preset == QStringLiteral("driver-mirrors-proof")) {
     // Screenshot-only regression pose for projects/Prawko-Bariera-Demo:
     // the model is behind this driver (x=2 versus eye x=7). It MUST show
@@ -506,7 +521,8 @@ QImage ViewportWidget::capture_clean_frame() {
 QImage ViewportWidget::capture_simulation_frame(const QSize& size,
                                                 const OrbitCamera& camera,
                                                 const QVector<SimulationActorPose>& poses,
-                                                const QString& driver_actor) {
+                                                const QString& driver_actor,
+                                                double time_seconds) {
   if (!gl_ready_ || !isValid() || size.isEmpty()) {
     return {};
   }
@@ -523,14 +539,16 @@ QImage ViewportWidget::capture_simulation_frame(const QSize& size,
     if (target.isValid() && target.bind()) {
       const QScopedValueRollback clean(clean_capture_, true);
       const QScopedValueRollback preview(simulation_frame_,
-                                        std::optional{simulation_frame(poses, driver_actor)});
+                                        std::optional{simulation_frame(poses, driver_actor, time_seconds)});
       render_frame(camera, size);
       image = target.toImage();
       if (!image.isNull()) {
         if (simulation_frame_ && simulation_frame_->driver) {
           const auto mirrors = capture_driver_mirrors(size);
           QPainter painter(&image);
-          draw_precipitation(painter, size, weather_, clock_.elapsed() / 60);
+          draw_precipitation(painter, size, weather_,
+                             static_cast<qint64>(simulation_frame_->time_seconds * 1000.0 / 60.0),
+                             true);
           draw_driver_dashboard(painter, size, simulation_frame_->driver_speed_kmh);
           draw_driver_mirrors(painter, size, mirrors);
         } else {
@@ -659,18 +677,19 @@ void ViewportWidget::rebuild_reference_layers() {
 }
 
 void ViewportWidget::set_simulation_frame(const QVector<SimulationActorPose>& poses,
-                                         const QString& driver_actor) {
+                                         const QString& driver_actor, double time_seconds) {
   if (!simulation_frame_) {
     unsetCursor();
   }
-  simulation_frame_ = simulation_frame(poses, driver_actor);
+  simulation_frame_ = simulation_frame(poses, driver_actor, time_seconds);
   update();
 }
 
 ViewportWidget::SimulationFrame
 ViewportWidget::simulation_frame(const QVector<SimulationActorPose>& poses,
-                                 const QString& driver_actor) const {
+                                 const QString& driver_actor, double time_seconds) const {
   SimulationFrame frame;
+  frame.time_seconds = time_seconds;
   frame.actors.reserve(static_cast<std::size_t>(poses.size()));
   const auto& objects = document_.scenario().entities.scenario_objects;
   for (const auto& pose : poses) {
@@ -683,6 +702,8 @@ ViewportWidget::simulation_frame(const QVector<SimulationActorPose>& poses,
           frame.driver = driver_camera(pose, *box);
           frame.driver_speed_kmh =
               static_cast<float>(std::clamp(pose.speed_mps * 3.6, 0.0, 250.0));
+          frame.steering_wheel_rad = static_cast<float>(
+              std::clamp(pose.steering_angle_rad, -2.6, 2.6));
         } else {
           frame.actors.push_back(actor_transform(pose.position, pose.heading, *box,
                                                  pose.pitch, pose.roll));
@@ -729,7 +750,8 @@ void ViewportWidget::render_frame(const OrbitCamera& camera, const QSize& size,
 
   std::vector<DrawItem> draw_items;
   draw_items.reserve(items_.size() + prop_part_count + instance_count + sign_faces_.size() +
-                     preview_handles_.size() + reference_layers_.size());
+                     preview_handles_.size() + reference_layers_.size() + 200);
+  std::array<InstanceData, 4> cockpit_transforms{};
 
   // Reference layers first: they sit just above the procedural ground and below
   // the network, and are UNLIT because an orthophoto already contains its own
@@ -863,6 +885,53 @@ void ViewportWidget::render_frame(const OrbitCamera& camera, const QSize& size,
     }
   }
 
+  // Only the forward-facing driver camera receives the physical cockpit.
+  // Mirrors must still show the ROAD BEHIND, not a second dashboard; editor
+  // and overhead cameras stay geometrically unchanged.
+  if (driver_view && override_driver == nullptr) {
+    if (!cockpit_load_attempted_) {
+      cockpit_cpu_ = load_cockpit_meshes();
+      cockpit_load_attempted_ = true;
+    }
+    if (cockpit_cpu_ && cockpit_cpu_->valid()) {
+      if (cockpit_gpu_[0].empty()) {
+        const std::array<const std::vector<RenderMeshData>*,3> models{
+            &cockpit_cpu_->shell, &cockpit_cpu_->wheel, &cockpit_cpu_->wiper};
+        for (std::size_t i=0; i<models.size(); ++i) {
+          cockpit_gpu_[i].reserve(models[i]->size());
+          for (const RenderMeshData& part: *models[i]) {
+            cockpit_gpu_[i].push_back(renderer_->upload(part));
+          }
+        }
+      }
+      const DriverCamera& driver = *simulation_frame_->driver;
+      cockpit_transforms[0] = cockpit_pose(driver);
+      // Exactly the same real Blender steering-wheel mesh is used in playback
+      // and exported frames; the rotation comes from measured course curvature.
+      cockpit_transforms[1] = cockpit_pose(
+          driver, {-0.18F, 1.23F, -0.45F}, simulation_frame_->steering_wheel_rad);
+      const bool wiping = weather_ == WeatherPreset::Rain ||
+                          weather_ == WeatherPreset::Snow;
+      const float sweep = cockpit_wiper_sweep(simulation_frame_->time_seconds, wiping);
+      cockpit_transforms[2] = cockpit_pose(driver, {-0.54F, 2.05F, -0.31F}, sweep);
+      cockpit_transforms[3] = cockpit_pose(driver, { 1.05F, 2.05F, -0.31F}, -sweep, true);
+      Material cabin;
+      cabin.unlit = true; // the dashboard remains readable on night drives
+      for (const RenderMeshHandle part : cockpit_gpu_[0])
+        draw_items.push_back({.mesh = part, .material = cabin,
+                              .instances = std::span<const InstanceData>(&cockpit_transforms[0], 1)});
+      for (const RenderMeshHandle part : cockpit_gpu_[1])
+        draw_items.push_back({.mesh = part, .material = cabin,
+                              .instances = std::span<const InstanceData>(&cockpit_transforms[1], 1)});
+      for (const RenderMeshHandle part : cockpit_gpu_[2]) {
+        draw_items.push_back({.mesh = part, .material = cabin,
+                              .instances = std::span<const InstanceData>(&cockpit_transforms[2], 1)});
+        draw_items.push_back({.mesh = part, .material = cabin,
+                              .instances = std::span<const InstanceData>(&cockpit_transforms[3], 1)});
+      }
+    }
+  }
+
   const float aspect = size.height() > 0
                            ? static_cast<float>(size.width()) / static_cast<float>(size.height())
                            : 1.0F;
@@ -908,7 +977,8 @@ std::array<QImage, 3> ViewportWidget::capture_driver_mirrors(const QSize& output
     images[i] = target.toImage().mirrored(true, false);
     if (!images[i].isNull()) {
       QPainter painter(&images[i]);
-      draw_precipitation(painter, resolution, weather_, clock_.elapsed() / 60);
+      draw_precipitation(painter, resolution, weather_,
+                         static_cast<qint64>(simulation_frame_->time_seconds * 1000.0 / 60.0));
     }
     target.release();
   }
@@ -957,88 +1027,44 @@ void ViewportWidget::draw_driver_mirrors(QPainter& painter, const QSize& output_
 void ViewportWidget::draw_driver_dashboard(QPainter& painter, const QSize& size,
                                           float speed_kmh) {
   if (size.isEmpty()) return;
+  // Dynamic dial lettering ONLY. The dashboard, steering wheel, glass frames,
+  // dials and wipers are independent Blender-made THREE-DIMENSIONAL meshes.
+  // This Qt text is kept crisp at any exported resolution and maps to the
+  // recessed physical instrument display in the cockpit.
   painter.save();
-  painter.setRenderHint(QPainter::Antialiasing);
   painter.setRenderHint(QPainter::TextAntialiasing);
-  const qreal w = size.width();
-  const qreal h = size.height();
-  const qreal top = h * 0.805;
-  // Vector cockpit is intentionally contained within the bottom of the
-  // first-person view. Side mirrors stay above it; it never obscures the road
-  // centre or changes the three separately rendered mirror cameras.
-  QPainterPath dashboard;
-  dashboard.moveTo(0, h);
-  dashboard.lineTo(0, top + h * 0.025);
-  dashboard.quadTo(w * 0.5, top - h * 0.055, w, top + h * 0.025);
-  dashboard.lineTo(w, h);
-  dashboard.closeSubpath();
-  painter.fillPath(dashboard, QColor(18, 23, 30, 246));
-  painter.setPen(QPen(QColor(87, 99, 110), std::max<qreal>(1.0, h * 0.002)));
-  painter.drawPath(dashboard);
-
-  const QPointF center(w * 0.51, h * 0.905);
-  const qreal radius = std::min(w * 0.070, h * 0.085);
-  painter.setBrush(QColor(7, 11, 17));
-  painter.setPen(QPen(QColor(118, 128, 141), std::max<qreal>(1.8, radius * 0.065)));
-  painter.drawEllipse(center, radius, radius);
-  painter.setPen(QPen(QColor(176, 188, 198), std::max<qreal>(1.0, radius * 0.025)));
-  for (int i = 0; i <= 8; ++i) {
-    const double angle = (215.0 - i * 32.5) * std::numbers::pi / 180.0;
-    const QPointF inside(center.x() + radius * 0.77 * std::cos(angle),
-                         center.y() - radius * 0.77 * std::sin(angle));
-    const QPointF outside(center.x() + radius * 0.90 * std::cos(angle),
-                          center.y() - radius * 0.90 * std::sin(angle));
-    painter.drawLine(inside, outside);
-  }
-  const float speed = std::clamp(speed_kmh, 0.0F, 200.0F);
-  const double angle = (215.0 - speed / 200.0 * 260.0) * std::numbers::pi / 180.0;
-  painter.setPen(QPen(QColor(231, 190, 70), std::max<qreal>(1.3, radius * 0.047)));
-  painter.drawLine(center,
-                   QPointF(center.x() + radius * 0.72 * std::cos(angle),
-                           center.y() - radius * 0.72 * std::sin(angle)));
-  painter.setBrush(QColor(231, 190, 70));
-  painter.drawEllipse(center, radius * 0.067, radius * 0.067);
-  QFont speed_font = painter.font();
-  speed_font.setBold(true);
-  speed_font.setPixelSize(std::max(12, static_cast<int>(radius * 0.39)));
-  painter.setFont(speed_font);
-  painter.setPen(QColor(233, 238, 244));
-  painter.drawText(QRectF(center.x() - radius * 0.55, center.y() + radius * 0.11,
-                          radius * 1.1, radius * 0.46),
-                   Qt::AlignCenter, QString::number(static_cast<int>(std::lround(speed))));
-  QFont unit_font = painter.font();
-  unit_font.setBold(false);
-  unit_font.setPixelSize(std::max(8, static_cast<int>(radius * 0.16)));
-  painter.setFont(unit_font);
-  painter.setPen(QColor(154, 169, 180));
-  painter.drawText(QRectF(center.x() - radius * 0.5, center.y() + radius * 0.53,
-                          radius, radius * 0.24), Qt::AlignCenter,
+  const qreal w = size.width(), h = size.height();
+  const qreal unit = std::min(w / 1100.0, h / 900.0);
+  QFont display = painter.font();
+  display.setBold(true);
+  display.setPixelSize(std::max(15, static_cast<int>(24.0 * unit)));
+  painter.setFont(display);
+  painter.setPen(QColor(204, 236, 230));
+  const QRectF speed_rect(w * 0.14, h * 0.83, w * 0.15, h * 0.052);
+  painter.drawText(speed_rect, Qt::AlignCenter,
+                   QString::number(static_cast<int>(std::lround(
+                       std::clamp(speed_kmh, 0.0F, 250.0F)))));
+  display.setBold(false);
+  display.setPixelSize(std::max(9, static_cast<int>(12.0 * unit)));
+  painter.setFont(display);
+  painter.setPen(QColor(114, 165, 155));
+  painter.drawText(QRectF(w*0.16,h*0.871,w*.11,h*.028),Qt::AlignCenter,
                    QStringLiteral("km/h"));
-
-  // A restrained steering-wheel rim gives the cabin its first mechanical
-  // reference. The wheel is decorative for now; no fabricated steering data.
-  const QPointF wheel(w * 0.29, h * 0.965);
-  const qreal wr = h * 0.12;
-  painter.setPen(QPen(QColor(55, 64, 72), std::max<qreal>(7, wr * 0.16)));
-  painter.setBrush(Qt::NoBrush);
-  painter.drawEllipse(wheel, wr, wr);
-  painter.setPen(QPen(QColor(71, 82, 93), std::max<qreal>(4, wr * 0.12)));
-  painter.drawLine(QPointF(wheel.x() - wr * 0.72, wheel.y() - wr * 0.18),
-                   QPointF(wheel.x() + wr * 0.65, wheel.y() + wr * 0.25));
-  painter.setBrush(QColor(45, 54, 63));
-  painter.drawEllipse(wheel, wr * 0.28, wr * 0.28);
   painter.restore();
 }
 
 void ViewportWidget::draw_precipitation(QPainter& painter, const QSize& size,
-                                        WeatherPreset weather, qint64 tick) {
+                                        WeatherPreset weather, qint64 tick,
+                                        bool windshield_only) {
   if (weather != WeatherPreset::Rain && weather != WeatherPreset::Snow) return;
   const int w = size.width();
   const int h = size.height();
   if (w <= 0 || h <= 0) return;
   painter.save();
   painter.setRenderHint(QPainter::Antialiasing, weather == WeatherPreset::Snow);
-  painter.setClipRect(QRect(QPoint(0, 0), size));
+  painter.setClipRect(QRect(0, 0, size.width(),
+                            windshield_only ? static_cast<int>(size.height() * 0.70)
+                                            : size.height()));
   const bool rain = weather == WeatherPreset::Rain;
   painter.setPen(QPen(rain ? QColor(176, 203, 220, 120) : QColor(245, 250, 255, 210),
                       rain ? 1.2 : 1.6));
@@ -1069,7 +1095,9 @@ void ViewportWidget::paintGL() {
     const auto mirrors = capture_driver_mirrors(size);
     QPainter painter(this);
     // QWidget uses logical pixels; the FBO renders use physical pixels.
-    draw_precipitation(painter, this->size(), weather_, clock_.elapsed() / 60);
+    draw_precipitation(painter, this->size(), weather_,
+                       static_cast<qint64>(simulation_frame_->time_seconds * 1000.0 / 60.0),
+                       true);
     draw_driver_dashboard(painter, this->size(), simulation_frame_->driver_speed_kmh);
     draw_driver_mirrors(painter, this->size(), mirrors);
     return;

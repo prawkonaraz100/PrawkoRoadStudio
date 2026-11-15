@@ -43,6 +43,7 @@
 #include "document/gizmo_drag.hpp"
 #include "document/selection_model.hpp"
 #include "document/signal_phase_overlay.hpp"
+#include "render/cockpit.hpp"
 #include "render/material_catalog.hpp"
 #include "render/prop_batching.hpp"
 #include "render/renderer.hpp"
@@ -205,7 +206,8 @@ public slots:
   void clear_signal_phase_preview();
 
   /// Playback supplies transient poses. An empty frame still hides authored actors.
-  void set_simulation_frame(const QVector<SimulationActorPose>& poses, const QString& driver_actor);
+  void set_simulation_frame(const QVector<SimulationActorPose>& poses,
+                            const QString& driver_actor, double time_seconds);
   void clear_simulation_frame();
 
 public:
@@ -242,7 +244,8 @@ public:
   [[nodiscard]] QImage capture_simulation_frame(const QSize& size,
                                                 const OrbitCamera& camera,
                                                 const QVector<SimulationActorPose>& poses,
-                                                const QString& driver_actor);
+                                                const QString& driver_actor,
+                                                double time_seconds = 0.0);
 
 signals:
   void simulation_preview_exit_requested();
@@ -356,15 +359,19 @@ private:
   static void draw_driver_mirrors(QPainter& painter, const QSize& output_size,
                                   const std::array<QImage, 3>& images);
   static void draw_precipitation(QPainter& painter, const QSize& size,
-                                 WeatherPreset weather, qint64 tick);
+                                 WeatherPreset weather, qint64 tick,
+                                 bool windshield_only = false);
   static void draw_driver_dashboard(QPainter& painter, const QSize& size, float speed_kmh);
   struct SimulationFrame {
     std::vector<InstanceData> actors;
     std::optional<DriverCamera> driver;
     float driver_speed_kmh = 0.0F;
+    float steering_wheel_rad = 0.0F;
+    double time_seconds = 0.0;
   };
   [[nodiscard]] SimulationFrame simulation_frame(const QVector<SimulationActorPose>& poses,
-                                                  const QString& driver_actor) const;
+                                                  const QString& driver_actor,
+                                                  double time_seconds = 0.0) const;
 
   /// Pushes the current render mode to the renderer: the Environment (textured
   /// vs sober lighting) and a grid-dimmed backdrop in textured mode.
@@ -544,6 +551,11 @@ private:
   std::vector<UploadedPropBatch> prop_batches_;
   std::optional<SimulationFrame> simulation_frame_;
   RenderMeshHandle simulation_actor_mesh_;
+  // Bundled Blender cockpit is loaded only when a driver view is used. GPU
+  // handles are invalidated on every full scene rebuild (clear_meshes).
+  std::optional<CockpitMeshes> cockpit_cpu_;
+  bool cockpit_load_attempted_ = false;
+  std::array<std::vector<RenderMeshHandle>, 3> cockpit_gpu_;
 
   /// Editable text-sign faces — one uploaded textured quad per placed text sign.
   std::vector<UploadedSignFace> sign_faces_;

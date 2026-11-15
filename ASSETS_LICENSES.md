@@ -22,6 +22,12 @@ models, fonts, images). Policy — see [`docs/standards/assets.md`](docs/standar
 | `assets/prawko/blender/create_bariera.py` | Original procedural Blender modeling script for PrawkoRoadStudio | PrawkoRoadStudio | Apache-2.0 | 2026-11-14 |
 | `assets/prawko/blender/prawko_bariera_drogowa.blend` | Original road barricade authored in Blender 5.3 from `create_bariera.py`; editable source | PrawkoRoadStudio | Apache-2.0 | 2026-11-14 |
 | `assets/prawko/blender/prawko_bariera_drogowa.glb` | GLB 2.0 export of the above original Blender model (project demo keeps its own copy) | PrawkoRoadStudio | Apache-2.0 | 2026-11-14 |
+| `assets/prawko/blender/create_kokpit.py` | Original Blender 5.3 vehicle interior generator | PrawkoRoadStudio | Apache-2.0 | 2026-11-15 |
+| `assets/prawko/blender/prawko_kokpit.blend` | Original editable Blender 3D cabin and controls | PrawkoRoadStudio | Apache-2.0 | 2026-11-15 |
+| `assets/prawko/blender/prawko_kokpit_shell.glb` | Original 3D cabin shell | PrawkoRoadStudio | Apache-2.0 | 2026-11-15 |
+| `assets/prawko/blender/prawko_kokpit_wheel.glb` | Original separate 3D steering wheel | PrawkoRoadStudio | Apache-2.0 | 2026-11-15 |
+| `assets/prawko/blender/prawko_kokpit_wiper.glb` | Original separate 3D wiper | PrawkoRoadStudio | Apache-2.0 | 2026-11-15 |
+| `assets/prawko/blender/kokpit_layout.json` | Blender mesh offsets and dimensions | PrawkoRoadStudio | Apache-2.0 | 2026-11-15 |
 | `assets/textures/asphalt/asphalt_02_diff_512.jpg` | [Poly Haven — asphalt_02](https://polyhaven.com/a/asphalt_02) (resized to 512, re-encoded JPEG q85) | Poly Haven (Rob Tuytel, Sergej Majboroda) | CC0 | 2026-07-14 |
 | `assets/textures/asphalt/asphalt_02_nor_gl_512.png` | [Poly Haven — asphalt_02](https://polyhaven.com/a/asphalt_02) (resized to 512, PNG — normals kept lossless) | Poly Haven (Rob Tuytel, Sergej Majboroda) | CC0 | 2026-07-17 |
 | `assets/textures/asphalt/asphalt_02_rough_512.jpg` | [Poly Haven — asphalt_02](https://polyhaven.com/a/asphalt_02) (resized to 512, re-encoded JPEG q85) | Poly Haven (Rob Tuytel, Sergej Majboroda) | CC0 | 2026-07-17 |

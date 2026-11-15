@@ -533,6 +533,16 @@ i usuniętych z katalogu aktywnych projektów. Nowa praca rozpoczyna
 się od pustej sceny, a kolejne składniki powstaną jako własne
 modele PrawkoNaRaz.
 
+### S3.3 — prawdziwy kokpit 3D Blender → PrawkoRoadStudio (15.11.2026)
+
+Wprowadzono oryginalne wnętrze przedniej kabiny zamiast płaskiego elementu ekranu. Źródłem jest `assets/prawko/blender/prawko_kokpit.blend` oraz odtwarzalny skrypt `create_kokpit.py` (Blender 5.3). Własne GLB rozdzielają bryłę deski/kabiny, kierownicę i wycieraczkę. W kabinie znajdują się konsola, ekran zegarów, kratki nawiewu, obramowanie szyby, słupki, obudowy i elementy sterowania — rzeczywiste trójkąty z własnymi materiałami, a nie obraz. Blenderowy plik i standardowe GLB pozostają edytowalne oraz odtwarzalne. Zasoby są zakodowane w Qt i nie są zwykłymi obiektami do przeciągania na drogę; istnieją wyłącznie w widoku kierowcy.
+
+`editor/src/render/cockpit.cpp` bazuje na obecnym importerze GLB, przywraca znormalizowany model do współrzędnych oka kierowcy na podstawie `kokpit_layout.json`, a `cockpit_pose` podpina każdą część do aktualnej pozycji/obrotu samochodu. Pierwsza osobna kierownica obraca się według szacunku zarejestrowanego kursu i prędkości; nie jest losową animacją ani bezpośrednią telemetrią czujnika. Dwie wycieraczki pracują na deszczu i śniegu, a ich faza zależy od czasu odtwarzania, przez co jest powtarzalna w eksporcie. Obraz lusterek nadal pochodzi z niezależnych kamer realnej sceny, bez powielania kokpitu.
+
+Ujęcie odbiorcze `archive/s33-cockpit-20261115/forward.png` (1026×883, standardowy EXE z rzeczywistym OpenGL) wykonano z kamerą wzdłuż drogi na kopii demo z barierą; pokazuje nawierzchnię widoczną ponad kierownicą i deską oraz komplet trzech lusterek. Pierwszy wariant był zbyt blisko oka i przysłaniał jezdnię — poprawiono położenie deski, rozmiar koła i elementy dachu w źródłowym modelu Blender przed odbiorem. Pozostałe ujęcia: `day.png`, `forward-rain.png`, `rain.png`, `snow.png`, `night.png`. Testy modułu, integracji i pełnej regresji zapisano w `HANDOFF.md`.
+
+**Granice etapu:** Jest fizyczny model przedniej kabiny i renderowane komponenty ruchome, lecz jeszcze nie ma kompletnej interaktywnej deski z aktywnymi kierunkowskazami, światłami, czujnikami, obrotomierzem, paliwem, pedałami ani działającymi przełącznikami 3D. Nie potwierdzono jeszcze FPS ani całego eksportu MP4 podczas przejazdu. Poprzednia sekcja o rysowanym kokpicie opisuje HISTORYCZNĄ wersję zastąpioną tą implementacją; nie należy traktować jej jako obecnego stanu.
+
 ### S3.3 — pogoda, sezon, pierwszy kokpit i zdarzenie hamowania (15.11.2026)
 
 Panel **Symulacja** ma dodatkowe wybory **Pogoda** (Bez opadów, Deszcz, Mgła, Śnieg) i **Pora roku** (Lato, Jesień, Zima). Wybór działa przez istniejący renderer OpenGL, nie przez statyczny filtr naklejony na zrzut: mgła jest odległościowa i wpływa na widoczność w każdej kamerze; deszcz przyciemnia asfalt i dodaje przebiegające smugi; śnieg dodaje opad oraz pokrywę nawierzchni. Grunt ma sezonowe barwy i śnieżną pokrywę. Trzy oddzielne FBO lusterek korzystają z identycznej atmosfery, z indywidualnym renderem opadu. Zwykły dzień w lecie bez opadów zachowuje poprzedni wygląd. Sober pozostaje niezależny.

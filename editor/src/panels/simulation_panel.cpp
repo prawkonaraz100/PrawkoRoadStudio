@@ -409,7 +409,7 @@ void SimulationPanel::present_frame() {
   time_label_->setText(tr("%1 / %2 s").arg(time, 0, 'f', 2).arg(playback_->duration(), 0, 'f', 2));
   preview_active_ = true;
   update_controls();
-  emit preview_frame(playback_->poses_at(time), driver_actor_);
+  emit preview_frame(playback_->poses_at(time), driver_actor_, time);
 }
 
 void SimulationPanel::refresh_camera_choices() {

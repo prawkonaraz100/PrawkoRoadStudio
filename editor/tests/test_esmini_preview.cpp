@@ -235,6 +235,27 @@ TEST(SimulationPlayback, InterpolatesOnlyBetweenSamplesOfTheSameActor) {
   EXPECT_DOUBLE_EQ(end.front().position[0], 40.0);
 }
 
+TEST(SimulationPlayback, SteeringTurnsWithRecordedHeadingAndReturnsToCentre) {
+  SimulationTrace trace;
+  const auto make = [](double time, double x, double heading) {
+    return SimulationSample{.time = time, .actor_id = 5,
+                            .actor_name = QStringLiteral("Ego"),
+                            .x = x, .heading = heading};
+  };
+  trace.samples = {make(0.00, 0.0, 0.00), make(0.05, 0.5, 0.01),
+                   make(0.10, 1.0, 0.01)};
+  const SimulationPlayback playback(trace, 0.05);
+  const auto turning = playback.poses_at(0.025);
+  const auto straight = playback.poses_at(0.075);
+  ASSERT_EQ(turning.size(), 1);
+  ASSERT_EQ(straight.size(), 1);
+  EXPECT_GT(turning.front().speed_mps, 9.0);
+  EXPECT_GT(turning.front().steering_angle_rad, 0.1);
+  EXPECT_DOUBLE_EQ(straight.front().steering_angle_rad, 0.0);
+  // No fabricated steering for actors absent at the requested time.
+  EXPECT_TRUE(playback.poses_at(-100.0).size() <= 1);
+}
+
 TEST(EsminiSimulation, RequiresAnActorAndTheEngine) {
   Document document;
   EsminiSimulation simulation;

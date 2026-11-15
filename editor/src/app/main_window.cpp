@@ -3305,7 +3305,7 @@ void MainWindow::export_scenario_video() {
   const QString encoder_path = encoder->text();
   const QString start_error = exporter.start(encoder_path, path, video, [&](double time) {
     return viewport_->capture_simulation_frame(
-        video.size, camera, recording.poses_at(time), driver_actor);
+        video.size, camera, recording.poses_at(time), driver_actor, time);
   });
   if (!start_error.isEmpty()) {
     error = start_error;

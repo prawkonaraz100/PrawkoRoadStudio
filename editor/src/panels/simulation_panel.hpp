@@ -44,7 +44,8 @@ public:
   }
 
 signals:
-  void preview_frame(const QVector<SimulationActorPose>& poses, const QString& driver_actor);
+  void preview_frame(const QVector<SimulationActorPose>& poses, const QString& driver_actor,
+                     double time_seconds);
   void preview_closed();
   void video_availability_changed(bool available);
   void run_availability_changed(bool available);

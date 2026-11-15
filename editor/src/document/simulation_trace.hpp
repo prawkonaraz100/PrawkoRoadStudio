@@ -50,6 +50,8 @@ struct SimulationActorPose {
   double roll = 0.0;
   // Derived from adjacent recorded positions; not a guessed engine speed.
   double speed_mps = 0.0;
+  // Approximate steering-wheel angle from trajectory curvature, NOT wheel telemetry.
+  double steering_angle_rad = 0.0;
 };
 
 /// Time-indexed actor transforms shared by playback and frame capture.

@@ -133,12 +133,25 @@ QVector<SimulationActorPose> SimulationPlayback::poses_at(double time) const {
       }
       return std::sqrt(sq) / duration;
     };
+    const auto wheel_angle = [&](const Keyframe& a, const Keyframe& b) {
+      const double seconds = b.time - a.time;
+      const double speed = track_speed(a, b);
+      if (seconds <= epsilon || speed < 0.5) return 0.0;
+      const double yaw_rate = std::remainder(b.heading - a.heading,
+                                             2.0 * std::numbers::pi) / seconds;
+      // Bicycle-model approximation, 2.6m wheelbase and 14:1 steering ratio.
+      // The esmini trace does not carry steering rack telemetry.
+      const double road_wheel = std::atan(2.6 * yaw_rate / speed);
+      return std::clamp(road_wheel * 14.0, -2.6, 2.6);
+    };
     if (next != track.frames.cend() && std::abs(next->time - time) <= epsilon) {
       SimulationActorPose pose{track.name, next->position, next->heading, next->pitch, next->roll};
       if (next != track.frames.cbegin()) {
         pose.speed_mps = track_speed(*std::prev(next), *next);
+        pose.steering_angle_rad = wheel_angle(*std::prev(next), *next);
       } else if (std::next(next) != track.frames.cend()) {
         pose.speed_mps = track_speed(*next, *std::next(next));
+        pose.steering_angle_rad = wheel_angle(*next, *std::next(next));
       }
       poses.push_back(pose);
       continue;
@@ -167,6 +180,7 @@ QVector<SimulationActorPose> SimulationPlayback::poses_at(double time) const {
     pose.pitch = angle(previous.pitch, next->pitch);
     pose.roll = angle(previous.roll, next->roll);
     pose.speed_mps = track_speed(previous, *next);
+    pose.steering_angle_rad = wheel_angle(previous, *next);
     poses.push_back(pose);
   }
   return poses;

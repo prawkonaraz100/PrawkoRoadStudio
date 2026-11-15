@@ -92,6 +92,13 @@
     <file alias="concrete_nor.png">../../assets/textures/prawko_atlas/concrete_nor_gl_1024.png</file>
     <file alias="concrete_rough.jpg">../../assets/textures/prawko_atlas/concrete_rough_1024.jpg</file>
   </qresource>
+  <!-- Original Blender 5.3 cockpit assemblies (Apache-2.0, created for Prawko). -->
+  <qresource prefix="/cockpit">
+    <file alias="shell.glb">../../assets/prawko/blender/prawko_kokpit_shell.glb</file>
+    <file alias="wheel.glb">../../assets/prawko/blender/prawko_kokpit_wheel.glb</file>
+    <file alias="wiper.glb">../../assets/prawko/blender/prawko_kokpit_wiper.glb</file>
+    <file alias="layout.json">../../assets/prawko/blender/kokpit_layout.json</file>
+  </qresource>
   <qresource prefix="/branding">
     <file alias="icon_16.png">branding/icon_16.png</file>
     <file alias="icon_24.png">branding/icon_24.png</file>
