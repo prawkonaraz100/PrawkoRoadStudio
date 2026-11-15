@@ -20,7 +20,9 @@
 // exclusively in editor/src/render/gl_*.  A future bgfx/WebGPU backend
 // replaces GLRenderer without touching viewport or panel code.
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <span>
 #include <string_view>
@@ -182,6 +184,39 @@ struct BackdropColors {
   std::array<float, 3> highlight{0.961F, 0.651F, 0.137F};
 };
 
+// R4b3a: one nearby traffic vehicle may illuminate the world independently
+// of the driver's pair. This is a bounded, diffuse spotlight model, NOT an
+// occlusion-shadow map or physical automotive lamp simulation.
+struct TrafficHeadlights {
+  std::array<std::array<float, 3>, 2> positions{};
+  std::array<float, 3> forward{1.0F, 0.0F, -0.08F};
+  float intensity = 0.0F;
+};
+
+// Actor box local X points forward; transform columns encode dimensions and
+// orientation. Use its real center/length/width rather than a world-axis guess.
+[[nodiscard]] inline TrafficHeadlights traffic_headlights_for_actor(const InstanceData& actor) {
+  TrafficHeadlights lights;
+  const auto& m = actor.model;
+  const float length = std::sqrt(m[0]*m[0] + m[1]*m[1] + m[2]*m[2]);
+  const float height = std::sqrt(m[8]*m[8] + m[9]*m[9] + m[10]*m[10]);
+  if (length < 0.01F || height < 0.01F) return lights;
+  std::array<float,3> ray{};
+  float ray_sq = 0.0F;
+  for (int j = 0; j < 3; ++j) {
+    ray[j] = m[j] / length - 0.09F * m[8+j] / height;
+    ray_sq += ray[j]*ray[j];
+    for (int lamp = 0; lamp < 2; ++lamp) {
+      const float side = lamp == 0 ? -0.34F : 0.34F;
+      lights.positions[lamp][j] = m[12+j] + 0.43F*m[j] +
+                                   side*m[4+j] - 0.13F*m[8+j];
+    }
+  }
+  const float inv_ray = 1.0F / std::sqrt(std::max(0.001F, ray_sq));
+  for (int j = 0; j < 3; ++j) lights.forward[j] = ray[j]*inv_ray;
+  return lights;
+}
+
 /// Scene lighting + sky description (all plain floats — theme/render boundary
 /// stays Qt- and GL-free). Hemisphere ambient (sky/ground lerp by normal.z) +
 /// one directional sun; R4 shadow maps are enabled only for Textured mode. The DEFAULT values are
@@ -208,6 +243,7 @@ struct Environment {
   std::array<std::array<float, 3>, 2> headlight_positions{};
   std::array<float, 3> headlight_forward{1.0F, 0.0F, 0.0F};
   float headlight_intensity = 0.0F;
+  TrafficHeadlights traffic_headlights{}; // nearest other vehicle, opt-in
 };
 
 /// S3.3: shared time-of-day presets for all cameras, including mirror FBOs

@@ -100,6 +100,10 @@ uniform vec3 u_headlight_left;
 uniform vec3 u_headlight_right;
 uniform vec3 u_headlight_forward;
 uniform float u_headlight_intensity;
+uniform vec3 u_traffic_headlight_left;
+uniform vec3 u_traffic_headlight_right;
+uniform vec3 u_traffic_headlight_forward;
+uniform float u_traffic_headlight_intensity;
 uniform float u_shadow_bounce;
 uniform float u_vertical_fill;     // diffuse sky bounce on vertical concrete
 uniform vec3 u_camera_pos;      // world-space eye (specular half-vector)
@@ -172,23 +176,31 @@ float sun_visibility(vec3 geom_n) {
 // Pair of real world-space, softly bounded diffuse spot emitters.
 // No fake screen-space overlay, no emissive glow across unlit materials.
 // This first-pass headlamp model does not cast separate occlusion shadows.
-vec3 headlight_lighting(vec3 world, vec3 normal) {
-  if (u_headlight_intensity <= 0.0) return vec3(0.0);
+vec3 cone_pair_lighting(vec3 world, vec3 normal, vec3 left_pos,
+                        vec3 right_pos, vec3 forward, float intensity) {
+  if (intensity <= 0.0) return vec3(0.0);
   vec3 sum = vec3(0.0);
-  for(int lamp=0;lamp<2;++lamp) {
-    vec3 source = lamp==0 ? u_headlight_left : u_headlight_right;
-    vec3 toward = world-source;
+  for (int lamp = 0; lamp < 2; ++lamp) {
+    vec3 source = lamp == 0 ? left_pos : right_pos;
+    vec3 toward = world - source;
     float distance_m = length(toward);
-    if(distance_m <= 0.001 || distance_m >= 65.0) continue;
-    vec3 ray = toward/distance_m;
-    float cone = smoothstep(0.87, 0.97, dot(ray,u_headlight_forward));
-    float range = pow(max(0.0, 1.0-distance_m/65.0), 2.0);
-    float attenuation = range/(1.0+0.0035*distance_m*distance_m);
-    float diffuse = max(dot(normal,-ray),0.0);
-    sum += vec3(1.0,0.96,0.86) *
-           (u_headlight_intensity*cone*attenuation*diffuse);
+    if (distance_m <= 0.001 || distance_m >= 65.0) continue;
+    vec3 ray = toward / distance_m;
+    float cone = smoothstep(0.87, 0.97, dot(ray, forward));
+    float range = pow(max(0.0, 1.0 - distance_m/65.0), 2.0);
+    float attenuation = range / (1.0 + 0.0035*distance_m*distance_m);
+    float diffuse = max(dot(normal, -ray), 0.0);
+    sum += vec3(1.0,0.96,0.86) * (intensity*cone*attenuation*diffuse);
   }
   return sum;
+}
+vec3 headlight_lighting(vec3 world, vec3 normal) {
+  return cone_pair_lighting(world, normal, u_headlight_left,
+                           u_headlight_right, u_headlight_forward,
+                           u_headlight_intensity)
+       + cone_pair_lighting(world, normal, u_traffic_headlight_left,
+                           u_traffic_headlight_right, u_traffic_headlight_forward,
+                           u_traffic_headlight_intensity);
 }
 
 void main() {
@@ -421,6 +433,10 @@ uniform vec3 u_headlight_left;
 uniform vec3 u_headlight_right;
 uniform vec3 u_headlight_forward;
 uniform float u_headlight_intensity;
+uniform vec3 u_traffic_headlight_left;
+uniform vec3 u_traffic_headlight_right;
+uniform vec3 u_traffic_headlight_forward;
+uniform float u_traffic_headlight_intensity;
 uniform float u_shadow_bounce;
 out vec4 frag_color;
 
@@ -440,23 +456,31 @@ float ground_visibility() {
 // Pair of real world-space, softly bounded diffuse spot emitters.
 // No fake screen-space overlay, no emissive glow across unlit materials.
 // This first-pass headlamp model does not cast separate occlusion shadows.
-vec3 headlight_lighting(vec3 world, vec3 normal) {
-  if (u_headlight_intensity <= 0.0) return vec3(0.0);
+vec3 cone_pair_lighting(vec3 world, vec3 normal, vec3 left_pos,
+                        vec3 right_pos, vec3 forward, float intensity) {
+  if (intensity <= 0.0) return vec3(0.0);
   vec3 sum = vec3(0.0);
-  for(int lamp=0;lamp<2;++lamp) {
-    vec3 source = lamp==0 ? u_headlight_left : u_headlight_right;
-    vec3 toward = world-source;
+  for (int lamp = 0; lamp < 2; ++lamp) {
+    vec3 source = lamp == 0 ? left_pos : right_pos;
+    vec3 toward = world - source;
     float distance_m = length(toward);
-    if(distance_m <= 0.001 || distance_m >= 65.0) continue;
-    vec3 ray = toward/distance_m;
-    float cone = smoothstep(0.87, 0.97, dot(ray,u_headlight_forward));
-    float range = pow(max(0.0, 1.0-distance_m/65.0), 2.0);
-    float attenuation = range/(1.0+0.0035*distance_m*distance_m);
-    float diffuse = max(dot(normal,-ray),0.0);
-    sum += vec3(1.0,0.96,0.86) *
-           (u_headlight_intensity*cone*attenuation*diffuse);
+    if (distance_m <= 0.001 || distance_m >= 65.0) continue;
+    vec3 ray = toward / distance_m;
+    float cone = smoothstep(0.87, 0.97, dot(ray, forward));
+    float range = pow(max(0.0, 1.0 - distance_m/65.0), 2.0);
+    float attenuation = range / (1.0 + 0.0035*distance_m*distance_m);
+    float diffuse = max(dot(normal, -ray), 0.0);
+    sum += vec3(1.0,0.96,0.86) * (intensity*cone*attenuation*diffuse);
   }
   return sum;
+}
+vec3 headlight_lighting(vec3 world, vec3 normal) {
+  return cone_pair_lighting(world, normal, u_headlight_left,
+                           u_headlight_right, u_headlight_forward,
+                           u_headlight_intensity)
+       + cone_pair_lighting(world, normal, u_traffic_headlight_left,
+                           u_traffic_headlight_right, u_traffic_headlight_forward,
+                           u_traffic_headlight_intensity);
 }
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -618,6 +642,10 @@ bool GLRenderer::init() {
   u_headlight_right_ = gl::GetUniformLocation(program_, "u_headlight_right");
   u_headlight_forward_ = gl::GetUniformLocation(program_, "u_headlight_forward");
   u_headlight_intensity_ = gl::GetUniformLocation(program_, "u_headlight_intensity");
+  u_traffic_headlight_left_ = gl::GetUniformLocation(program_, "u_traffic_headlight_left");
+  u_traffic_headlight_right_ = gl::GetUniformLocation(program_, "u_traffic_headlight_right");
+  u_traffic_headlight_forward_ = gl::GetUniformLocation(program_, "u_traffic_headlight_forward");
+  u_traffic_headlight_intensity_ = gl::GetUniformLocation(program_, "u_traffic_headlight_intensity");
   u_sky_top_ = gl::GetUniformLocation(sky_program_, "u_sky_top");
   u_sky_horizon_ = gl::GetUniformLocation(sky_program_, "u_sky_horizon");
   u_grid_view_ = gl::GetUniformLocation(grid_program_, "u_view");
@@ -649,8 +677,11 @@ bool GLRenderer::init() {
   u_ground_headlight_left_ = gl::GetUniformLocation(ground_program_, "u_headlight_left");
   u_ground_headlight_right_ = gl::GetUniformLocation(ground_program_, "u_headlight_right");
   u_ground_headlight_forward_ = gl::GetUniformLocation(ground_program_, "u_headlight_forward");
-  u_ground_headlight_intensity_ =
-      gl::GetUniformLocation(ground_program_, "u_headlight_intensity");
+  u_ground_headlight_intensity_ = gl::GetUniformLocation(ground_program_, "u_headlight_intensity");
+  u_ground_traffic_headlight_left_ = gl::GetUniformLocation(ground_program_, "u_traffic_headlight_left");
+  u_ground_traffic_headlight_right_ = gl::GetUniformLocation(ground_program_, "u_traffic_headlight_right");
+  u_ground_traffic_headlight_forward_ = gl::GetUniformLocation(ground_program_, "u_traffic_headlight_forward");
+  u_ground_traffic_headlight_intensity_ = gl::GetUniformLocation(ground_program_, "u_traffic_headlight_intensity");
   gl::GenVertexArrays(1, &empty_vao_);
   shadow_ready_ = init_shadow_resources();
   ready_ = true;
@@ -920,6 +951,11 @@ void GLRenderer::draw_ground(const CameraMatrices& camera) {
                 environment_.headlight_forward[1],
                 environment_.headlight_forward[2]);
   gl::Uniform1f(u_ground_headlight_intensity_,environment_.headlight_intensity);
+  const auto& traffic = environment_.traffic_headlights;
+  gl::Uniform3f(u_ground_traffic_headlight_left_, traffic.positions[0][0], traffic.positions[0][1], traffic.positions[0][2]);
+  gl::Uniform3f(u_ground_traffic_headlight_right_, traffic.positions[1][0], traffic.positions[1][1], traffic.positions[1][2]);
+  gl::Uniform3f(u_ground_traffic_headlight_forward_, traffic.forward[0], traffic.forward[1], traffic.forward[2]);
+  gl::Uniform1f(u_ground_traffic_headlight_intensity_, traffic.intensity);
   if(shadow_active_){
     gl::ActiveTexture(gl::kTexture4);
     gl::BindTexture(gl::kTexture2D,shadow_depth_);
@@ -992,6 +1028,11 @@ void GLRenderer::render(const std::vector<DrawItem>& items,
                 environment_.headlight_forward[1],
                 environment_.headlight_forward[2]);
   gl::Uniform1f(u_headlight_intensity_,environment_.headlight_intensity);
+  const auto& traffic = environment_.traffic_headlights;
+  gl::Uniform3f(u_traffic_headlight_left_, traffic.positions[0][0], traffic.positions[0][1], traffic.positions[0][2]);
+  gl::Uniform3f(u_traffic_headlight_right_, traffic.positions[1][0], traffic.positions[1][1], traffic.positions[1][2]);
+  gl::Uniform3f(u_traffic_headlight_forward_, traffic.forward[0], traffic.forward[1], traffic.forward[2]);
+  gl::Uniform1f(u_traffic_headlight_intensity_, traffic.intensity);
   // World-space eye for the specular half-vector (fed the same way sun_dir is).
   gl::Uniform3f(u_camera_pos_, camera.eye[0], camera.eye[1], camera.eye[2]);
 

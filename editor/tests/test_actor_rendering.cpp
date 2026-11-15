@@ -121,6 +121,24 @@ TEST(RenderLightingR4b2, SkyBounceAndHeadlightsAreOptIn) {
                                        SeasonPreset::Winter).headlight_intensity,0.0F);
 }
 
+TEST(RenderLightingR4b3a, VehicleHeadlightsFollowWorldHeadingAndDimensions) {
+  const auto car = osc::make_actor(osc::ActorKind::Car, "TrafficCar");
+  const auto* box = actor_bounding_box(car);
+  ASSERT_NE(box, nullptr);
+  const InstanceData body = actor_transform({11.0, 22.0, 0.0},
+                                            std::numbers::pi_v<double> / 2.0,
+                                            *box);
+  const TrafficHeadlights lamps = traffic_headlights_for_actor(body);
+  EXPECT_FLOAT_EQ(lamps.intensity, 0.0F); // never lights up without active simulation
+  EXPECT_GT(lamps.forward[1], 0.99F);
+  EXPECT_LT(lamps.forward[2], -0.05F);
+  EXPECT_GT(lamps.positions[0][1], body.model[13]);
+  EXPECT_GT(lamps.positions[1][1], body.model[13]);
+  EXPECT_GT(std::hypot(lamps.positions[0][0] - lamps.positions[1][0],
+                       lamps.positions[0][1] - lamps.positions[1][1]), 0.5F);
+  EXPECT_FLOAT_EQ(time_of_day_lighting(TimeOfDay::Night).traffic_headlights.intensity, 0.0F);
+}
+
 TEST(ActorRendering, AnEmptyScenarioAddsNoBatchAtAll) {
   // A scene with no actors must upload nothing — an empty batch would cost a
   // GL upload per frame for geometry nobody can see.

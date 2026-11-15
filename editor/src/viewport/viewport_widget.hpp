@@ -366,6 +366,7 @@ private:
   static void draw_driver_dashboard(QPainter& painter, const QSize& size, float speed_kmh);
   struct SimulationFrame {
     std::vector<InstanceData> actors;
+    std::optional<TrafficHeadlights> traffic_headlights;
     std::optional<DriverCamera> driver;
     float driver_speed_kmh = 0.0F;
     float steering_wheel_rad = 0.0F;

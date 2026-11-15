@@ -755,6 +755,28 @@ ViewportWidget::simulation_frame(const QVector<SimulationActorPose>& poses,
       }
     }
   }
+  // R4b3a: pick only the nearest non-Ego VEHICLE. Pedestrians must never
+  // emit headlights, and limiting the count controls GLSL 3.3 shader cost.
+  // The selected pair is shared by the forward and three mirror cameras.
+  if (frame.driver) {
+    float best_distance_squared = 130.0F * 130.0F;
+    for (const auto& pose : poses) {
+      if (pose.actor_name == driver_actor) continue;
+      const auto object = std::ranges::find(objects, pose.actor_name.toStdString(),
+                                            &osc::ScenarioObject::name);
+      if (object == objects.end() ||
+          !std::holds_alternative<osc::Vehicle>(object->entity_object)) continue;
+      const auto* box = actor_bounding_box(*object);
+      if (!box) continue;
+      const float dx = static_cast<float>(pose.position[0]) - frame.driver->eye[0];
+      const float dy = static_cast<float>(pose.position[1]) - frame.driver->eye[1];
+      const float d2 = dx*dx + dy*dy;
+      if (d2 >= best_distance_squared) continue;
+      best_distance_squared = d2;
+      frame.traffic_headlights = traffic_headlights_for_actor(
+          actor_transform(pose.position, pose.heading, *box, pose.pitch, pose.roll));
+    }
+  }
   return frame;
 }
 
@@ -1027,6 +1049,12 @@ void ViewportWidget::render_frame(const OrbitCamera& camera, const QSize& size,
             side*driver.right[j] - 0.55F*driver.up[j];
       }
     }
+  }
+  if (environment.headlight_intensity > 0.0F &&
+      simulation_frame_->traffic_headlights) {
+    environment.traffic_headlights = *simulation_frame_->traffic_headlights;
+    environment.traffic_headlights.intensity =
+        time_of_day_ == TimeOfDay::Night ? 11.0F : 4.8F;
   }
   renderer_->set_environment(environment);
   renderer_->render(draw_items, matrices, size.width(), size.height());
