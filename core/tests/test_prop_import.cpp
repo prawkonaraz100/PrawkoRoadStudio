@@ -252,6 +252,29 @@ TEST(PropImportColor, TextureBesideGltfIsKeptWithTheSameBytesAsEmbeddedGlb) {
   EXPECT_EQ(external.model.parts.front().texcoords, embedded.model.parts.front().texcoords);
 }
 
+TEST(PropImportPbr, PreservesCombinedMetallicRoughnessAndNormalAsLinearMaps) {
+  const PropImportResult imported = import_or_fail("pbr_metal_box.glb");
+  ASSERT_EQ(imported.model.parts.size(), 1U);
+  ASSERT_EQ(imported.model.textures.size(), 3U);
+  const auto& part = imported.model.parts.front();
+  EXPECT_TRUE(part.gltf_pbr);
+  EXPECT_NEAR(part.metallic, 0.75F, 0.0001F);
+  EXPECT_NEAR(part.roughness, 0.60F, 0.0001F);
+  EXPECT_NEAR(part.normal_strength, 0.8F, 0.0001F);
+  EXPECT_EQ(part.base_color_texture, 0);
+  EXPECT_EQ(part.metallic_roughness_texture, 1);
+  EXPECT_EQ(part.normal_texture, 2);
+  EXPECT_EQ(part.texcoords.size(), part.positions.size() / 3U * 2U);
+  EXPECT_TRUE(imported.model.textures[0].srgb);
+  EXPECT_FALSE(imported.model.textures[1].srgb);
+  EXPECT_FALSE(imported.model.textures[2].srgb);
+  ASSERT_GE(imported.model.textures[1].rgba.size(), 4U);
+  EXPECT_EQ(imported.model.textures[1].rgba[1], 128); // roughness G
+  EXPECT_EQ(imported.model.textures[1].rgba[2], 230); // metallic B
+  EXPECT_EQ(imported.model.textures[2].rgba[2], 255); // normal Z+
+  EXPECT_FALSE(any_message_contains(imported.diagnostics, "flattened"));
+}
+
 TEST(PropImportColor, AnImageUriEscapingTheModelDirectoryIsRefusedByName) {
   // Nothing but this check stands between a hostile .gltf and the filesystem.
   const PropImportResult imported = import_or_fail("path_traversal.gltf");

@@ -252,6 +252,33 @@ def well_formed() -> None:
     )
     write("textured_box.glb", glb_bytes(doc, b.blob))
 
+    # A real combined glTF metallic-roughness map with THREE distinct
+    # sampler encodings: sRGB albedo, LINEAR G/B material data and LINEAR
+    # tangent-space normal. Constants are deliberately not white/black.
+    b = Builder()
+    p, n, t, i = b.vec3(pos), b.vec3(nrm), b.vec2(uv), b.indices(idx)
+    albedo_view = b.image_from_bytes(write_png(4, 4, TEXTURE_RGB))
+    mr_view = b.image_from_bytes(write_png(4, 4, (64, 128, 230)))
+    normal_view = b.image_from_bytes(write_png(4, 4, (128, 128, 255)))
+    doc = assemble(
+        b,
+        [{"name": "pbr_metal", "primitives": [{
+            "attributes": {"POSITION": p, "NORMAL": n, "TEXCOORD_0": t},
+            "indices": i, "material": 0, "mode": MODE_TRIANGLES}]}],
+        materials=[{"name": "GGX-Metal",
+                    "pbrMetallicRoughness": {
+                        "baseColorFactor": [0.72, 0.44, 0.38, 1.0],
+                        "baseColorTexture": {"index": 0},
+                        "metallicFactor": 0.75,
+                        "roughnessFactor": 0.60,
+                        "metallicRoughnessTexture": {"index": 1}},
+                    "normalTexture": {"index": 2, "scale": 0.8}}],
+        images=[{"bufferView": albedo_view, "mimeType": "image/png"},
+                {"bufferView": mr_view, "mimeType": "image/png"},
+                {"bufferView": normal_view, "mimeType": "image/png"}],
+        textures=[{"source": 0}, {"source": 1}, {"source": 2}])
+    write("pbr_metal_box.glb", glb_bytes(doc, b.blob))
+
     # 2. The same box with a plain baseColorFactor and no texture at all, so a
     #    test can tell "flattened a texture" from "read a factor".
     b = Builder()

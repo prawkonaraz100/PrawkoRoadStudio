@@ -99,6 +99,10 @@ private:
   std::int32_t u_has_roughness_ = -1;
   std::int32_t u_roughness_map_ = -1;
   std::int32_t u_roughness_ = -1;
+  std::int32_t u_gltf_pbr_ = -1;
+  std::int32_t u_metallic_ = -1;
+  std::int32_t u_has_metallic_roughness_ = -1;
+  std::int32_t u_metallic_roughness_ = -1;
   std::int32_t u_vertical_fill_ = -1;
   std::int32_t u_camera_pos_ = -1;
   // Environment lighting uniforms (driven by set_environment).

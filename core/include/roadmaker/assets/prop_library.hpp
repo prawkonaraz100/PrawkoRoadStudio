@@ -51,6 +51,11 @@ struct PropPart {
   // legacy props and malformed or unsupported UV accessors.
   std::vector<double> texcoords;
   int base_color_texture = -1; // index into PropModel::textures; -1 = flat
+  bool gltf_pbr = false;
+  float metallic = 0.0F; // glTF metallicFactor; no metal for legacy props
+  int metallic_roughness_texture = -1; // glTF G=roughness, B=metallic
+  int normal_texture = -1; // tangent-space normal map
+  float normal_strength = 1.0F;
 };
 
 /// Decoded once per imported model and shared across every placed instance.
@@ -61,6 +66,7 @@ struct PropTexture {
   int height = 0;
   std::vector<std::uint8_t> rgba;
   bool clamp_to_edge = false;
+  bool srgb = true; // baseColor sRGB, normal/metallic-roughness LINEAR
 };
 
 /// A normalised sub-rectangle of a sign face: {left, top, width, height} in

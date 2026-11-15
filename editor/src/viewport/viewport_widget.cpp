@@ -299,13 +299,28 @@ void ViewportWidget::rebuild_scene() {
         rgba.height = image.height;
         rgba.rgba = image.rgba;
         rgba.wrap = image.clamp_to_edge ? TextureWrap::ClampToEdge : TextureWrap::Repeat;
-        rgba.srgb = true; // glTF baseColor textures are sRGB, roughness/normal are not
+        rgba.srgb = image.srgb; // glTF baseColor sRGB, normal and MR data linear
         uploaded.imported_textures.push_back(renderer_->upload(rgba));
       }
     }
     for (const RenderMeshData& part : batch.parts) {
       uploaded.parts.push_back(renderer_->upload(part));
       Material part_material;
+      part_material.gltf_pbr = part.gltf_pbr;
+      part_material.metallic_value = part.metallic;
+      part_material.normal_strength = part.normal_strength;
+      part_material.uv_scale = 1.0F;
+      if (part.metallic_roughness_texture >= 0 &&
+          static_cast<std::size_t>(part.metallic_roughness_texture) <
+              uploaded.imported_textures.size()) {
+        part_material.metallic_roughness = uploaded.imported_textures[
+            static_cast<std::size_t>(part.metallic_roughness_texture)];
+      }
+      if (part.normal_texture >= 0 &&
+          static_cast<std::size_t>(part.normal_texture) < uploaded.imported_textures.size()) {
+        part_material.normal =
+            uploaded.imported_textures[static_cast<std::size_t>(part.normal_texture)];
+      }
       if (part.base_color_texture >= 0 &&
           static_cast<std::size_t>(part.base_color_texture) < uploaded.imported_textures.size()) {
         part_material.base_color =
@@ -825,7 +840,7 @@ void ViewportWidget::render_frame(const OrbitCamera& camera, const QSize& size,
     // Sober intentionally remains flat (legacy); Textured uses the GLB's
     // actual authored UV0 + baseColor texture, shared by all model instances.
     if (textured_rendering_ && index < batch.part_materials.size() &&
-        batch.part_materials[index].base_color.valid())
+        batch.part_materials[index].gltf_pbr)
       return batch.part_materials[index];
     return prop_material;
   };

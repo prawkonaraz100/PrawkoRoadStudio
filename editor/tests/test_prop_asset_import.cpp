@@ -388,6 +388,8 @@ TEST_F(PropAssetImport, PrawkoA1BlenderShelterKeepsAlphaAndRoughnessWhileReporti
     }
     if (part.name.find("Brushed stainless") != std::string::npos) {
       metal_found = true;
+      EXPECT_TRUE(part.gltf_pbr);
+      EXPECT_GT(part.metallic, 0.8F);
       EXPECT_LT(part.roughness, 0.4);
     }
   }

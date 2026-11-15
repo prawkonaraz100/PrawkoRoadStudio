@@ -83,6 +83,10 @@ uniform float u_normal_strength;
 uniform int u_has_roughness;
 uniform sampler2D u_roughness_map; // .r channel
 uniform float u_roughness;         // scalar fallback / modulator
+uniform int u_gltf_pbr;            // GGX on imported glTF only
+uniform float u_metallic;          // metallicFactor, 0 legacy
+uniform int u_has_metallic_roughness;
+uniform sampler2D u_metallic_roughness; // G roughness, B metallic
 uniform float u_vertical_fill;     // diffuse sky bounce on vertical concrete
 uniform vec3 u_camera_pos;      // world-space eye (specular half-vector)
 // Environment lighting (hemisphere ambient + one directional sun). The Sober
@@ -167,6 +171,45 @@ void main() {
   vec3 lighting = hemi + direct + fill;         // colored light multiplier
   vec3 shade = mix(vec3(1.0), lighting, u_lit); // lines (u_lit=0) stay unlit
   vec3 base = albedo.rgb * shade;
+  if (u_gltf_pbr == 1 && u_lit > 0.5) {
+    // glTF 2.0 metallic-roughness: GGX NDF + Smith masking + Schlick Fresnel.
+    // Existing road shaders keep the old lighting and defaults bit-for-bit.
+    vec2 map_factors = u_has_metallic_roughness == 1
+        ? texture(u_metallic_roughness, uv).gb : vec2(1.0, 1.0);
+    float pbr_rough = clamp(rough * map_factors.x, 0.055, 1.0);
+    float pbr_metal = clamp(u_metallic * map_factors.y, 0.0, 1.0);
+    vec3 V = normalize(u_camera_pos - v_world_pos);
+    vec3 L = sun_dir;
+    vec3 H = normalize(L + V);
+    float nL = max(dot(n, L), 0.0);
+    float nV = max(dot(n, V), 0.001);
+    float nH = max(dot(n, H), 0.0);
+    float vH = max(dot(V, H), 0.0);
+    float a = pbr_rough * pbr_rough;
+    float a2 = a * a;
+    float denom = nH * nH * (a2 - 1.0) + 1.0;
+    float distribution = a2 / (3.14159265 * denom * denom + 1e-5);
+    float k = pow(pbr_rough + 1.0, 2.0) / 8.0;
+    float masking = (nL / (nL * (1.0 - k) + k + 1e-5)) *
+                    (nV / (nV * (1.0 - k) + k + 1e-5));
+    vec3 f0 = mix(vec3(0.04), albedo.rgb, pbr_metal);
+    vec3 fresnel = f0 + (1.0 - f0) * pow(1.0 - vH, 5.0);
+    vec3 brdf = (1.0 - fresnel) * (1.0 - pbr_metal) *
+                albedo.rgb / 3.14159265 +
+                (distribution * masking * fresnel) / (4.0 * nL * nV + 1e-4);
+    vec3 sun = brdf * u_sun_color * (u_sun_intensity * nL);
+    vec3 ambient_diffuse = albedo.rgb * hemi * (1.0 - pbr_metal);
+    // Low-frequency hemispheric approximation, not an environment cubemap
+    // or ray-traced reflection. Metal receives the sky color, not fake plastic.
+    vec3 reflection_ambient = mix(u_ground_light, u_sky_light,
+                                  clamp(0.5 + 0.5 * n.z, 0.0, 1.0)) *
+                              f0 * (1.0 - pbr_rough) * (u_ambient * 0.55);
+    vec3 linear_color = max(sun + ambient_diffuse + reflection_ambient,
+                            vec3(0.0));
+    // glTF baseColor samples decode as sRGB; encode lighting for RGBA8
+    // offscreen and screen targets, which are not sRGB-enabled framebuffers.
+    base = pow(clamp(linear_color, 0.0, 1.0), vec3(1.0 / 2.2));
+  }
   if (u_asphalt == 1) {
     // Wet asphalt darkens and receives a broad sky-colored sheen. Road
     // markings stay bright because their material does not set u_asphalt.
@@ -423,6 +466,11 @@ bool GLRenderer::init() {
   u_has_roughness_ = gl::GetUniformLocation(program_, "u_has_roughness");
   u_roughness_map_ = gl::GetUniformLocation(program_, "u_roughness_map");
   u_roughness_ = gl::GetUniformLocation(program_, "u_roughness");
+  u_gltf_pbr_ = gl::GetUniformLocation(program_, "u_gltf_pbr");
+  u_metallic_ = gl::GetUniformLocation(program_, "u_metallic");
+  u_has_metallic_roughness_ =
+      gl::GetUniformLocation(program_, "u_has_metallic_roughness");
+  u_metallic_roughness_ = gl::GetUniformLocation(program_, "u_metallic_roughness");
   u_vertical_fill_ = gl::GetUniformLocation(program_, "u_vertical_fill");
   u_camera_pos_ = gl::GetUniformLocation(program_, "u_camera_pos");
   u_sun_dir_ = gl::GetUniformLocation(program_, "u_sun_dir");
@@ -761,6 +809,7 @@ void GLRenderer::render(const std::vector<DrawItem>& items,
   gl::Uniform1i(u_base_color_, 0);    // sampler bound to texture unit 0
   gl::Uniform1i(u_normal_, 1);        // normal map on unit 1
   gl::Uniform1i(u_roughness_map_, 2); // roughness map on unit 2
+  gl::Uniform1i(u_metallic_roughness_, 3); // GLB metal/rough map, G and B channels
 
   // Transparent glTF parts are drawn AFTER all opaque road/prop meshes. Blend
   // with depth testing but without depth writes, so glass reveals the bench,
@@ -793,6 +842,7 @@ void GLRenderer::render(const std::vector<DrawItem>& items,
     const std::uint32_t base_tex = find_tex(mat.base_color);
     const std::uint32_t normal_tex = find_tex(mat.normal);
     const std::uint32_t roughness_tex = find_tex(mat.roughness);
+    const std::uint32_t mr_tex = find_tex(mat.metallic_roughness);
 
     // Normal (unit 1) + roughness (unit 2) bind first; base color binds LAST on
     // unit 0 so the active unit is reset to 0 for any later fixed-unit-0 code.
@@ -807,6 +857,14 @@ void GLRenderer::render(const std::vector<DrawItem>& items,
       gl::ActiveTexture(gl::kTexture2);
       gl::BindTexture(gl::kTexture2D, roughness_tex);
     }
+    // glTF material textures are linear data, unlike sRGB baseColor.
+    gl::Uniform1i(u_has_metallic_roughness_, mr_tex != 0 ? 1 : 0);
+    if (mr_tex != 0) {
+      gl::ActiveTexture(gl::kTexture3);
+      gl::BindTexture(gl::kTexture2D, mr_tex);
+    }
+    gl::Uniform1i(u_gltf_pbr_, mat.gltf_pbr ? 1 : 0);
+    gl::Uniform1f(u_metallic_, mat.metallic_value);
     // Scalar roughness fallback/modulator: default 1.0 → zero specular, so an
     // untextured/default Material stays pixel-identical to the pre-PBR output.
     gl::Uniform1f(u_roughness_, mat.roughness_value * mesh.roughness);

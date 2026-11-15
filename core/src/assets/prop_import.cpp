@@ -473,6 +473,11 @@ struct FlatPrimitive {
   float roughness = 1.0F;
   std::vector<double> texcoords;
   int base_color_texture = -1;
+  bool gltf_pbr = false;
+  float metallic = 0.0F;
+  int metallic_roughness_texture = -1;
+  int normal_texture = -1;
+  float normal_strength = 1.0F;
 };
 
 /// Per-face normals for a primitive that shipped without any, area-weighted at
@@ -796,39 +801,62 @@ private:
             ? model_.materials[static_cast<std::size_t>(primitive.material)]
                   .pbrMetallicRoughness.baseColorTexture.index
             : -1;
-    if (base_index >= 0) {
-      const auto uv_at = primitive.attributes.find("TEXCOORD_0");
-      if (uv_at == primitive.attributes.end()) {
-        warn(where, "baseColorTexture has no TEXCOORD_0; averaged colour fallback");
+    const auto* material =
+        primitive.material >= 0 &&
+                static_cast<std::size_t>(primitive.material) < model_.materials.size()
+            ? &model_.materials[static_cast<std::size_t>(primitive.material)]
+            : nullptr;
+    const auto uv_at = primitive.attributes.find("TEXCOORD_0");
+    if (uv_at != primitive.attributes.end()) {
+      auto uv = read_vec2_uv(model_, uv_at->second);
+      if (!uv.has_value() || uv->size() != positions->size()) {
+        warn(where, "TEXCOORD_0 invalid or count differs from POSITION; flat fallback");
       } else {
-        auto uv = read_vec2_uv(model_, uv_at->second);
-        if (!uv.has_value() || uv->size() != positions->size()) {
-          warn(where, "TEXCOORD_0 invalid or count differs from POSITION; averaged colour fallback");
-        } else if (const int texture = import_texture(base_index, where); texture >= 0) {
-          part.base_color_texture = texture;
-          part.texcoords.reserve(uv->size() * 2);
-          for (const auto& pair : *uv) {
-            part.texcoords.push_back(pair[0]);
-            part.texcoords.push_back(pair[1]);
-          }
+        part.texcoords.reserve(uv->size() * 2);
+        for (const auto& pair : *uv) {
+          part.texcoords.push_back(pair[0]);
+          part.texcoords.push_back(pair[1]);
         }
       }
     }
-    part.name = primitive_name(primitive);
-    part.color = resolve_color(primitive, where, part.base_color_texture >= 0);
-    if (primitive.material >= 0 &&
-        static_cast<std::size_t>(primitive.material) < model_.materials.size()) {
-      const tinygltf::Material& material =
-          model_.materials[static_cast<std::size_t>(primitive.material)];
-      part.roughness = static_cast<float>(
-          std::clamp(material.pbrMetallicRoughness.roughnessFactor, 0.05, 1.0));
-      if (material.alphaMode == "BLEND" &&
-          material.pbrMetallicRoughness.baseColorFactor.size() >= 4) {
-        part.opacity = static_cast<float>(
-            std::clamp(material.pbrMetallicRoughness.baseColorFactor[3], 0.0, 1.0));
+    if (base_index >= 0) {
+      if (material == nullptr || material->pbrMetallicRoughness.baseColorTexture.texCoord != 0) {
+        warn(where, "baseColorTexture references non-UV0 coordinates; flattened fallback");
+      } else if (part.texcoords.empty()) {
+        warn(where, "baseColorTexture has no valid TEXCOORD_0; averaged colour fallback");
+      } else {
+        part.base_color_texture = import_texture(base_index, where, true);
       }
-      // Transmission/refraction and metallic BRDF still require dedicated
-      // shaders. This small import patch only keeps BLEND alpha and roughness.
+    }
+    part.color = resolve_color(primitive, where, part.base_color_texture >= 0);
+    if (material != nullptr) {
+      part.gltf_pbr = true;
+      part.metallic = static_cast<float>(
+          std::clamp(material->pbrMetallicRoughness.metallicFactor, 0.0, 1.0));
+      part.roughness = static_cast<float>(
+          std::clamp(material->pbrMetallicRoughness.roughnessFactor, 0.05, 1.0));
+      const auto& mr = material->pbrMetallicRoughness.metallicRoughnessTexture;
+      if (mr.index >= 0) {
+        if (mr.texCoord == 0 && !part.texcoords.empty()) {
+          part.metallic_roughness_texture = import_texture(mr.index, where, false);
+        } else {
+          warn(where, "metallicRoughnessTexture UV0 missing or unsupported; scalar factors used");
+        }
+      }
+      if (material->normalTexture.index >= 0) {
+        if (material->normalTexture.texCoord == 0 && !part.texcoords.empty()) {
+          part.normal_texture = import_texture(material->normalTexture.index, where, false);
+          part.normal_strength = static_cast<float>(
+              std::clamp(material->normalTexture.scale, 0.0, 4.0));
+        } else {
+          warn(where, "normalTexture UV0 missing or unsupported; geometric normals used");
+        }
+      }
+      if (material->alphaMode == "BLEND" &&
+          material->pbrMetallicRoughness.baseColorFactor.size() >= 4) {
+        part.opacity = static_cast<float>(
+            std::clamp(material->pbrMetallicRoughness.baseColorFactor[3], 0.0, 1.0));
+      }
     }
 
     // Frame conversion happens HERE, once per vertex, through the one shared
@@ -946,7 +974,8 @@ private:
   /// Texture import is IMAGE-index deduplicated (not primitive deduplicated).
   /// Copies embedded RGBA bytes or decodes a directory-scoped .gltf image,
   /// applying the same URI traversal rules as legacy averaged-color fallback.
-  [[nodiscard]] int import_texture(int gltf_texture_index, const std::string& where) {
+  [[nodiscard]] int import_texture(int gltf_texture_index, const std::string& where,
+                                   bool srgb = true) {
     if (gltf_texture_index < 0 ||
         static_cast<std::size_t>(gltf_texture_index) >= model_.textures.size()) {
       warn(where, "baseColorTexture index invalid; flat fallback");
@@ -958,7 +987,8 @@ private:
       warn(where, "baseColorTexture image missing; flat fallback");
       return -1;
     }
-    if (const auto it = imported_images_.find(image_index); it != imported_images_.end())
+    const auto key = std::make_pair(image_index, srgb);
+    if (const auto it = imported_images_.find(key); it != imported_images_.end())
       return it->second;
     const auto& image = model_.images[static_cast<std::size_t>(image_index)];
     PropTexture result;
@@ -980,6 +1010,7 @@ private:
       return -1;
     }
     texture_bytes_ += result.rgba.size();
+    result.srgb = srgb;
     if (texture.sampler >= 0 &&
         static_cast<std::size_t>(texture.sampler) < model_.samplers.size()) {
       const auto& sampler = model_.samplers[static_cast<std::size_t>(texture.sampler)];
@@ -987,10 +1018,11 @@ private:
                              sampler.wrapT == TINYGLTF_TEXTURE_WRAP_CLAMP_TO_EDGE;
     }
     const int index = static_cast<int>(textures_.size());
-    imported_images_.emplace(image_index, index);
+    imported_images_.emplace(key, index);
     textures_.push_back(std::move(result));
-    note(where, fmt::format("baseColorTexture preserved as {}x{} RGBA8, original UV0",
-                            textures_.back().width, textures_.back().height));
+    note(where, fmt::format("glTF texture preserved as {}x{} RGBA8, original UV0 ({})",
+                            textures_.back().width, textures_.back().height,
+                            srgb ? "sRGB" : "linear"));
     return index;
   }
 
@@ -1119,7 +1151,7 @@ private:
   std::vector<Diagnostic> diagnostics_;
   std::vector<FlatPrimitive> parts_;
   std::vector<PropTexture> textures_;
-  std::map<int, int> imported_images_;
+  std::map<std::pair<int, bool>, int> imported_images_;
   std::size_t texture_bytes_ = 0;
   std::map<std::size_t, std::optional<std::array<double, 3>>> image_means_;
   std::vector<std::string> skipped_;
@@ -1268,7 +1300,12 @@ Expected<PropImportResult> import_prop_model(const std::filesystem::path& path,
                                  .opacity = flat.opacity,
                                  .roughness = flat.roughness,
                                  .texcoords = std::move(flat.texcoords),
-                                 .base_color_texture = flat.base_color_texture});
+                                 .base_color_texture = flat.base_color_texture,
+                                 .gltf_pbr = flat.gltf_pbr,
+                                 .metallic = flat.metallic,
+                                 .metallic_roughness_texture = flat.metallic_roughness_texture,
+                                 .normal_texture = flat.normal_texture,
+                                 .normal_strength = flat.normal_strength});
   }
   out.textures = std::move(reader.textures());
   const std::optional<std::pair<double, double>> extent = normalise_to_base_centre(out.parts);

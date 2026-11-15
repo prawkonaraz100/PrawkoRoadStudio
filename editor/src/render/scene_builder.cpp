@@ -269,6 +269,11 @@ void append_model_items(std::string_view model_id,
           {part.color[0], part.color[1], part.color[2], part.opacity});
       mesh.roughness = part.roughness;
       mesh.base_color_texture = part.base_color_texture;
+      mesh.gltf_pbr = part.gltf_pbr;
+      mesh.metallic = part.metallic;
+      mesh.metallic_roughness_texture = part.metallic_roughness_texture;
+      mesh.normal_texture = part.normal_texture;
+      mesh.normal_strength = part.normal_strength;
       mesh.uvs.reserve(part.texcoords.size());
       for (double v : part.texcoords) mesh.uvs.push_back(static_cast<float>(v));
       created.parts.push_back(std::move(mesh));

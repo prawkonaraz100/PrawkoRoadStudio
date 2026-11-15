@@ -72,6 +72,7 @@ struct Material {
   TextureHandle base_color;                          ///< invalid → use RenderMeshData::color
   TextureHandle normal;                              ///< invalid → geometric normal
   TextureHandle roughness;                           ///< invalid → roughness_value scalar
+  TextureHandle metallic_roughness; ///< glTF G=roughness, B=metallic, linear data
   std::array<float, 4> tint{1.0F, 1.0F, 1.0F, 1.0F}; ///< multiplies the sample
   float uv_scale = 0.25F;                            ///< texels per meter: 0.25 = 4 m tile
   /// Scalar roughness fallback/modulator. DEFAULT 1.0 is fully rough: the sun
@@ -79,6 +80,8 @@ struct Material {
   /// Material adds ZERO specular and reproduces the pre-PBR output exactly.
   float roughness_value = 1.0F;
   float normal_strength = 1.0F; ///< perturbation scale for the normal map
+  float metallic_value = 0.0F; ///< glTF metallicFactor, 0 for legacy
+  bool gltf_pbr = false; ///< opt-in GGX BRDF, legacy shader unchanged
   // Diffuse sky/road fill on near-vertical concrete: zero for every default
   // material and almost zero on horizontal sidewalk tops.
   float vertical_fill = 0.0F;
@@ -127,6 +130,11 @@ struct RenderMeshData {
   PrimitiveKind kind = PrimitiveKind::Triangles;
   float roughness = 1.0F; // imported glTF factor; default preserves legacy props
   int base_color_texture = -1; // index into imported PropModel::textures
+  bool gltf_pbr = false;
+  float metallic = 0.0F;
+  int metallic_roughness_texture = -1;
+  int normal_texture = -1;
+  float normal_strength = 1.0F;
 };
 
 /// Per-item feedback state. Drives the accent emphasis in the mesh shader:
