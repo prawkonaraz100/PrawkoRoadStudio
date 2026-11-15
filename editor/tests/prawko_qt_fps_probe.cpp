@@ -53,6 +53,14 @@ int main(int argc,char** argv) {
   format.setDepthBufferSize(24);
   QSurfaceFormat::setDefaultFormat(format);
   QApplication app(argc,argv);
+  const QString variant=argc>=5 ? QString::fromLocal8Bit(argv[4]) : QStringLiteral("orbit");
+  const bool night_driver=variant==QStringLiteral("night_driver");
+  const bool day_driver=variant==QStringLiteral("day_driver");
+  if(variant!=QStringLiteral("orbit") && !night_driver && !day_driver){
+    qCritical()<<"Unknown optional benchmark variant"<<variant;
+    return 9;
+  }
+  const bool driver_mode=night_driver || day_driver;
   roadmaker::editor::Settings::set_read_only(true);
   MainWindow window(nullptr, false);
   window.resize(1600,900);
@@ -61,7 +69,15 @@ int main(int argc,char** argv) {
   window.load_file(src);
   auto* viewport=window.viewport();
   viewport->set_textured_rendering(true);
-  viewport->set_camera_preset("orbit");
+  if(driver_mode){
+    // Opt-in GPU benchmark: fixed authored camera, real GL night/day lighting,
+    // three independent mirror FBOs, dashboard and PBR renderer. No sidecars
+    // or scenario timestamps are modified.
+    viewport->set_time_of_day(night_driver ? QStringLiteral("night") : QStringLiteral("day"));
+    viewport->set_camera_preset(QStringLiteral("driver-cockpit-forward-proof"));
+  } else {
+    viewport->set_camera_preset(QStringLiteral("orbit"));
+  }
   viewport->set_hints_enabled(true);
   viewport->set_hint(QStringLiteral("PrawkoRoadStudio FPS test — viewport and Qt overlays"));
   if(!viewport->isVisible()){qCritical()<<"Not visible";return 3;}
@@ -79,6 +95,9 @@ int main(int argc,char** argv) {
     QApplication::sendEvent(viewport,&event);
   };
   QJsonObject result{{"scene",QString::fromLocal8Bit(argv[3])},
+                     {"variant",variant},
+                     {"driver_mirrors_and_headlights_enabled",night_driver},
+                     {"three_mirror_fbos_enabled",driver_mode},
                      {"measurement","visible real QOpenGLWidget frameSwapped cadence, Qt events/overlays/compositor"},
                      {"resolution",QString("%1x%2").arg(window.width()).arg(window.height())},
                      {"qt_timer_interval_ms",16},{"warmup_frames",30},{"sampled_frames",180}};
@@ -110,7 +129,9 @@ int main(int argc,char** argv) {
       }
       if(mode==1)sendMouse(QEvent::MouseButtonRelease,base,Qt::LeftButton,Qt::NoButton);
       QJsonObject metric=measure(intervals);
-      metric["mode"]=mode==0?"steady_refresh":"alt_lmb_orbit";
+      metric["mode"]=driver_mode
+          ? (mode==0?"driver_refresh":"driver_pointer_events")
+          : (mode==0?"steady_refresh":"alt_lmb_orbit");
       metric["frame_swapped_count"]=frame_count;
       metric["timer_ticks"]=tick;
       tests.append(metric);
