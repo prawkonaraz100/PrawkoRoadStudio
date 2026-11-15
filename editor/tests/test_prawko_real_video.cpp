@@ -69,7 +69,10 @@ TEST(PrawkoRealVideo, DriverViewStreamsActualTrafficAndMirrorsToMp4) {
   view.setFormat(format);
   view.resize(1024,700);
   view.set_textured_rendering(true);
-  view.set_time_of_day(document.scene_state().time_of_day);
+  // Developer-only opt-in: exercise actual nighttime GL beams without
+  // modifying any saved scene, XODR or sidecar.
+  view.set_time_of_day(qEnvironmentVariableIsSet("PRAWKO_VIDEO_PROOF_FORCE_NIGHT")
+                           ? QStringLiteral("night") : document.scene_state().time_of_day);
   view.set_weather(document.scene_state().weather);
   view.set_season(document.scene_state().season);
   view.show();
@@ -111,6 +114,7 @@ TEST(PrawkoRealVideo, DriverViewStreamsActualTrafficAndMirrorsToMp4) {
       QRect(margin, height - side_height - margin, side_width, side_height),
       QRect(width - side_width - margin, height - side_height - margin, side_width, side_height)};
   const std::array<const char*, 3> mirror_names{"center", "left", "right"};
+  const bool night_proof = qEnvironmentVariableIsSet("PRAWKO_VIDEO_PROOF_FORCE_NIGHT");
   int total_moving_samples = 0;
   for (std::size_t i = 0; i < mirror_boxes.size(); ++i) {
     const QRect interior = mirror_boxes[i].adjusted(12, 10, -12, -10);
@@ -128,8 +132,12 @@ TEST(PrawkoRealVideo, DriverViewStreamsActualTrafficAndMirrorsToMp4) {
             std::abs(qBlue(p) - qBlue(q)) > 18) ++changed_samples;
       }
     }
-    EXPECT_GT(bright_samples, 20) << mirror_names[i] << " mirror is black";
-    EXPECT_GE(color_buckets.size(), 4U) << mirror_names[i] << " mirror has no scene";
+    // At night the rear-facing mirrors are unlit except for road markings;
+    // never demand daytime luminance from a real nighttime scene.
+    EXPECT_GT(bright_samples, night_proof ? 5 : 20)
+        << mirror_names[i] << " mirror is black";
+    EXPECT_GE(color_buckets.size(), night_proof ? 3U : 4U)
+        << mirror_names[i] << " mirror has no scene";
     EXPECT_GT(changed_samples, 0) << mirror_names[i] << " mirror is frozen";
     total_moving_samples += changed_samples;
     std::cout << "R4B_MIRROR_CAPTURE_PASS " << mirror_names[i]
@@ -138,6 +146,22 @@ TEST(PrawkoRealVideo, DriverViewStreamsActualTrafficAndMirrorsToMp4) {
               << " changed=" << changed_samples << '\n';
   }
   EXPECT_GT(total_moving_samples, 5);
+  if (night_proof) {
+    // Pin actual illuminated asphalt ahead, not unlit lane-marking pixels.
+    // This excludes most of the white markings and the dashboard. A no-lamp
+    // nighttime frame remains too dark to meet the threshold.
+    int illuminated = 0;
+    for (int y = height * 54 / 100; y < height * 60 / 100; y += 3) {
+      for (int x = width * 43 / 100; x < width * 57 / 100; x += 3) {
+        const QRgb color = before.pixel(x, y);
+        const int luma = (qRed(color) + qGreen(color) + qBlue(color)) / 3;
+        if (luma >= 70) ++illuminated;
+      }
+    }
+    EXPECT_GT(illuminated, 30) << "Night road should receive real beam lighting";
+    std::cout << "R4B2_NIGHT_ROAD_LIGHT_PASS illuminated_samples="
+              << illuminated << '\n';
+  }
   ASSERT_TRUE(before.save(output+".first.png","PNG"));
   ASSERT_TRUE(later.save(output+".moving.png","PNG"));
 

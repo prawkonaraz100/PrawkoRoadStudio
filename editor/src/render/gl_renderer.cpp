@@ -96,6 +96,11 @@ uniform int u_shadow_enabled;
 uniform mat4 u_shadow_light_matrix;
 uniform sampler2DShadow u_shadow_map;
 uniform float u_shadow_texel;
+uniform vec3 u_headlight_left;
+uniform vec3 u_headlight_right;
+uniform vec3 u_headlight_forward;
+uniform float u_headlight_intensity;
+uniform float u_shadow_bounce;
 uniform float u_vertical_fill;     // diffuse sky bounce on vertical concrete
 uniform vec3 u_camera_pos;      // world-space eye (specular half-vector)
 // Environment lighting (hemisphere ambient + one directional sun). The Sober
@@ -164,6 +169,28 @@ float sun_visibility(vec3 geom_n) {
   return visibility/9.0;
 }
 
+// Pair of real world-space, softly bounded diffuse spot emitters.
+// No fake screen-space overlay, no emissive glow across unlit materials.
+// This first-pass headlamp model does not cast separate occlusion shadows.
+vec3 headlight_lighting(vec3 world, vec3 normal) {
+  if (u_headlight_intensity <= 0.0) return vec3(0.0);
+  vec3 sum = vec3(0.0);
+  for(int lamp=0;lamp<2;++lamp) {
+    vec3 source = lamp==0 ? u_headlight_left : u_headlight_right;
+    vec3 toward = world-source;
+    float distance_m = length(toward);
+    if(distance_m <= 0.001 || distance_m >= 65.0) continue;
+    vec3 ray = toward/distance_m;
+    float cone = smoothstep(0.87, 0.97, dot(ray,u_headlight_forward));
+    float range = pow(max(0.0, 1.0-distance_m/65.0), 2.0);
+    float attenuation = range/(1.0+0.0035*distance_m*distance_m);
+    float diffuse = max(dot(normal,-ray),0.0);
+    sum += vec3(1.0,0.96,0.86) *
+           (u_headlight_intensity*cone*attenuation*diffuse);
+  }
+  return sum;
+}
+
 void main() {
   vec2 uv = v_uv * u_uv_scale;
   // A default Material carries no texture, so u_has_texture stays 0 and the
@@ -195,7 +222,9 @@ void main() {
   // Material opt-in keeps asphalt/grass/props and the legacy Sober preset
   // unchanged. Use the GEOMETRIC normal to avoid shadow flicker from PBR bumps.
   vec3 fill = u_sky_light * (u_vertical_fill * (1.0 - abs(geom_n.z)));
-  vec3 lighting = hemi + direct + fill;         // colored light multiplier
+  vec3 bounce = u_sky_light * (u_shadow_bounce * (1.0-sun_shadow));
+  vec3 lamps = headlight_lighting(v_world_pos, n);
+  vec3 lighting = hemi + direct + fill + bounce + lamps; // colored multiplier
   vec3 shade = mix(vec3(1.0), lighting, u_lit); // lines (u_lit=0) stay unlit
   vec3 base = albedo.rgb * shade;
   if (u_gltf_pbr == 1 && u_lit > 0.5) {
@@ -225,13 +254,14 @@ void main() {
                 albedo.rgb / 3.14159265 +
                 (distribution * masking * fresnel) / (4.0 * nL * nV + 1e-4);
     vec3 sun = brdf * u_sun_color * (u_sun_intensity * nL * sun_shadow);
-    vec3 ambient_diffuse = albedo.rgb * hemi * (1.0 - pbr_metal);
+    vec3 ambient_diffuse = albedo.rgb * (hemi + bounce + lamps) * (1.0-pbr_metal);
+    vec3 lamp_spec = lamps * f0 * (0.12 + 0.28 * (1.0 - pbr_rough));
     // Low-frequency hemispheric approximation, not an environment cubemap
     // or ray-traced reflection. Metal receives the sky color, not fake plastic.
     vec3 reflection_ambient = mix(u_ground_light, u_sky_light,
                                   clamp(0.5 + 0.5 * n.z, 0.0, 1.0)) *
                               f0 * (1.0 - pbr_rough) * (u_ambient * 0.55);
-    vec3 linear_color = max(sun + ambient_diffuse + reflection_ambient,
+    vec3 linear_color = max(sun + ambient_diffuse + reflection_ambient + lamp_spec,
                             vec3(0.0));
     // glTF baseColor samples decode as sRGB; encode lighting for RGBA8
     // offscreen and screen targets, which are not sRGB-enabled framebuffers.
@@ -387,6 +417,11 @@ uniform float u_base_z;
 uniform mat4 u_shadow_light_matrix;
 uniform sampler2DShadow u_shadow_map;
 uniform float u_shadow_texel;
+uniform vec3 u_headlight_left;
+uniform vec3 u_headlight_right;
+uniform vec3 u_headlight_forward;
+uniform float u_headlight_intensity;
+uniform float u_shadow_bounce;
 out vec4 frag_color;
 
 float ground_visibility() {
@@ -400,6 +435,28 @@ float ground_visibility() {
     for(int x=-1;x<=1;++x)
       visibility+=texture(u_shadow_map,vec3(p.xy+vec2(x,y)*u_shadow_texel,p.z-0.00035));
   return visibility/9.0;
+}
+
+// Pair of real world-space, softly bounded diffuse spot emitters.
+// No fake screen-space overlay, no emissive glow across unlit materials.
+// This first-pass headlamp model does not cast separate occlusion shadows.
+vec3 headlight_lighting(vec3 world, vec3 normal) {
+  if (u_headlight_intensity <= 0.0) return vec3(0.0);
+  vec3 sum = vec3(0.0);
+  for(int lamp=0;lamp<2;++lamp) {
+    vec3 source = lamp==0 ? u_headlight_left : u_headlight_right;
+    vec3 toward = world-source;
+    float distance_m = length(toward);
+    if(distance_m <= 0.001 || distance_m >= 65.0) continue;
+    vec3 ray = toward/distance_m;
+    float cone = smoothstep(0.87, 0.97, dot(ray,u_headlight_forward));
+    float range = pow(max(0.0, 1.0-distance_m/65.0), 2.0);
+    float attenuation = range/(1.0+0.0035*distance_m*distance_m);
+    float diffuse = max(dot(normal,-ray),0.0);
+    sum += vec3(1.0,0.96,0.86) *
+           (u_headlight_intensity*cone*attenuation*diffuse);
+  }
+  return sum;
 }
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -426,9 +483,12 @@ void main() {
 
   // Flat +Z surface lit by the scene environment (matches the mesh shader for
   // an up-facing normal): hemisphere sky ambient + one directional sun.
+  float visibility = ground_visibility();
   vec3 lighting = (u_sky * u_ambient) +
-                   (u_sun_color * (u_sun_intensity * max(normalize(u_sun_dir).z, 0.0)
-                                   * ground_visibility()));
+                  (u_sun_color * (u_sun_intensity * max(normalize(u_sun_dir).z, 0.0)
+                                  * visibility)) +
+                  (u_sky * u_shadow_bounce * (1.0 - visibility)) +
+                  headlight_lighting(vec3(v_world, u_base_z), vec3(0.0,0.0,1.0));
   vec3 color = grass * lighting;
   color = mix(color, vec3(0.85, 0.89, 0.93) * max(0.22, u_ambient + 0.4),
               clamp(u_snow * (0.72 + 0.28 * n), 0.0, 1.0));
@@ -553,6 +613,11 @@ bool GLRenderer::init() {
   u_shadow_light_matrix_ = gl::GetUniformLocation(program_, "u_shadow_light_matrix");
   u_shadow_map_ = gl::GetUniformLocation(program_, "u_shadow_map");
   u_shadow_texel_ = gl::GetUniformLocation(program_, "u_shadow_texel");
+  u_shadow_bounce_ = gl::GetUniformLocation(program_, "u_shadow_bounce");
+  u_headlight_left_ = gl::GetUniformLocation(program_, "u_headlight_left");
+  u_headlight_right_ = gl::GetUniformLocation(program_, "u_headlight_right");
+  u_headlight_forward_ = gl::GetUniformLocation(program_, "u_headlight_forward");
+  u_headlight_intensity_ = gl::GetUniformLocation(program_, "u_headlight_intensity");
   u_sky_top_ = gl::GetUniformLocation(sky_program_, "u_sky_top");
   u_sky_horizon_ = gl::GetUniformLocation(sky_program_, "u_sky_horizon");
   u_grid_view_ = gl::GetUniformLocation(grid_program_, "u_view");
@@ -580,6 +645,12 @@ bool GLRenderer::init() {
   u_ground_shadow_light_matrix_ = gl::GetUniformLocation(ground_program_, "u_shadow_light_matrix");
   u_ground_shadow_map_ = gl::GetUniformLocation(ground_program_, "u_shadow_map");
   u_ground_shadow_texel_ = gl::GetUniformLocation(ground_program_, "u_shadow_texel");
+  u_ground_shadow_bounce_ = gl::GetUniformLocation(ground_program_, "u_shadow_bounce");
+  u_ground_headlight_left_ = gl::GetUniformLocation(ground_program_, "u_headlight_left");
+  u_ground_headlight_right_ = gl::GetUniformLocation(ground_program_, "u_headlight_right");
+  u_ground_headlight_forward_ = gl::GetUniformLocation(ground_program_, "u_headlight_forward");
+  u_ground_headlight_intensity_ =
+      gl::GetUniformLocation(ground_program_, "u_headlight_intensity");
   gl::GenVertexArrays(1, &empty_vao_);
   shadow_ready_ = init_shadow_resources();
   ready_ = true;
@@ -835,6 +906,20 @@ void GLRenderer::draw_ground(const CameraMatrices& camera) {
   gl::UniformMatrix4fv(u_ground_shadow_light_matrix_,1,0,shadow_light_matrix_.data());
   gl::Uniform1i(u_ground_shadow_map_,4);
   gl::Uniform1f(u_ground_shadow_texel_,1.0F/static_cast<float>(kShadowSize));
+  gl::Uniform1f(u_ground_shadow_bounce_,environment_.shadow_bounce);
+  gl::Uniform3f(u_ground_headlight_left_,
+                environment_.headlight_positions[0][0],
+                environment_.headlight_positions[0][1],
+                environment_.headlight_positions[0][2]);
+  gl::Uniform3f(u_ground_headlight_right_,
+                environment_.headlight_positions[1][0],
+                environment_.headlight_positions[1][1],
+                environment_.headlight_positions[1][2]);
+  gl::Uniform3f(u_ground_headlight_forward_,
+                environment_.headlight_forward[0],
+                environment_.headlight_forward[1],
+                environment_.headlight_forward[2]);
+  gl::Uniform1f(u_ground_headlight_intensity_,environment_.headlight_intensity);
   if(shadow_active_){
     gl::ActiveTexture(gl::kTexture4);
     gl::BindTexture(gl::kTexture2D,shadow_depth_);
@@ -893,6 +978,20 @@ void GLRenderer::render(const std::vector<DrawItem>& items,
   gl::UniformMatrix4fv(u_shadow_light_matrix_,1,0,shadow_light_matrix_.data());
   gl::Uniform1i(u_shadow_map_,4);
   gl::Uniform1f(u_shadow_texel_,1.0F/static_cast<float>(kShadowSize));
+  gl::Uniform1f(u_shadow_bounce_,environment_.shadow_bounce);
+  gl::Uniform3f(u_headlight_left_,
+                environment_.headlight_positions[0][0],
+                environment_.headlight_positions[0][1],
+                environment_.headlight_positions[0][2]);
+  gl::Uniform3f(u_headlight_right_,
+                environment_.headlight_positions[1][0],
+                environment_.headlight_positions[1][1],
+                environment_.headlight_positions[1][2]);
+  gl::Uniform3f(u_headlight_forward_,
+                environment_.headlight_forward[0],
+                environment_.headlight_forward[1],
+                environment_.headlight_forward[2]);
+  gl::Uniform1f(u_headlight_intensity_,environment_.headlight_intensity);
   // World-space eye for the specular half-vector (fed the same way sun_dir is).
   gl::Uniform3f(u_camera_pos_, camera.eye[0], camera.eye[1], camera.eye[2]);
 

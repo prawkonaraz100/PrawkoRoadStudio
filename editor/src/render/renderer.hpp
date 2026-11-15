@@ -202,6 +202,12 @@ struct Environment {
   float snow_cover = 0.0F;
   float season = 0.0F; // 0 summer, 1 autumn, 2 winter (ground shader palette)
   bool shadows_enabled = false; // legacy + Sober unchanged; Textured enables R4
+  float shadow_bounce = 0.0F; // R4b2: opt-in sky bounce ONLY in sunlight shadow
+  // World-space pair of cone spotlights following the selected esmini driver.
+  // Zero strength means NO lights for legacy, day, Sober and static view.
+  std::array<std::array<float, 3>, 2> headlight_positions{};
+  std::array<float, 3> headlight_forward{1.0F, 0.0F, 0.0F};
+  float headlight_intensity = 0.0F;
 };
 
 /// S3.3: shared time-of-day presets for all cameras, including mirror FBOs
@@ -222,6 +228,7 @@ enum class TimeOfDay { Day, Dawn, Dusk, Night };
 [[nodiscard]] inline Environment textured_lighting() {
   Environment env{};
   env.shadows_enabled = true;
+  env.shadow_bounce = 0.11F; // low-energy reflected skylight, never erase shadows
   return env;
 }
 
@@ -234,6 +241,7 @@ enum class TimeOfDay { Day, Dawn, Dusk, Night };
     env.sky_color = {0.32F, 0.43F, 0.65F};
     env.sun_intensity = 0.52F;
     env.ambient = 0.24F;
+    env.shadow_bounce = 0.07F;
     break;
   case TimeOfDay::Dusk:
     env.sun_dir = {-0.9F, 0.1F, 0.10F};
@@ -241,6 +249,7 @@ enum class TimeOfDay { Day, Dawn, Dusk, Night };
     env.sky_color = {0.22F, 0.29F, 0.52F};
     env.sun_intensity = 0.32F;
     env.ambient = 0.16F;
+    env.shadow_bounce = 0.05F;
     break;
   case TimeOfDay::Night:
     env.sun_dir = {0.35F, 0.25F, 0.90F};
@@ -249,6 +258,7 @@ enum class TimeOfDay { Day, Dawn, Dusk, Night };
     env.ground_color = {0.12F, 0.16F, 0.22F};
     env.sun_intensity = 0.035F;
     env.ambient = 0.15F;
+    env.shadow_bounce = 0.0F; // no directional shadow pass at night
     break;
   case TimeOfDay::Day: break;
   }

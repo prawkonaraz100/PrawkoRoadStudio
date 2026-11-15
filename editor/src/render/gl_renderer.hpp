@@ -134,6 +134,11 @@ private:
   std::int32_t u_shadow_light_matrix_ = -1;
   std::int32_t u_shadow_map_ = -1;
   std::int32_t u_shadow_texel_ = -1;
+  std::int32_t u_shadow_bounce_ = -1;
+  std::int32_t u_headlight_left_ = -1;
+  std::int32_t u_headlight_right_ = -1;
+  std::int32_t u_headlight_forward_ = -1;
+  std::int32_t u_headlight_intensity_ = -1;
   std::uint32_t shadow_program_ = 0;
   std::uint32_t shadow_fbo_ = 0;
   std::uint32_t shadow_depth_ = 0;
@@ -190,6 +195,11 @@ private:
   std::int32_t u_ground_shadow_light_matrix_ = -1;
   std::int32_t u_ground_shadow_map_ = -1;
   std::int32_t u_ground_shadow_texel_ = -1;
+  std::int32_t u_ground_shadow_bounce_ = -1;
+  std::int32_t u_ground_headlight_left_ = -1;
+  std::int32_t u_ground_headlight_right_ = -1;
+  std::int32_t u_ground_headlight_forward_ = -1;
+  std::int32_t u_ground_headlight_intensity_ = -1;
 
   bool ready_ = false;
 };

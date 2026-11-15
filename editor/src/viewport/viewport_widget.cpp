@@ -1000,6 +1000,35 @@ void ViewportWidget::render_frame(const OrbitCamera& camera, const QSize& size,
                             ? override_driver->matrices(aspect)
                             : driver_view ? simulation_frame_->driver->matrices(aspect)
                                           : camera.matrices(aspect);
+  // Real twin low-beam lights are scene world-space emitters, not viewport
+  // decorations. Both eyes and all mirror cameras see the SAME world lights.
+  // Only driver simulation at dusk/night opts in; static/Sober/day unchanged.
+  Environment environment = textured_rendering_
+      ? conditioned_lighting(time_of_day_, weather_, season_)
+      : sober_lighting();
+  if (textured_rendering_ && simulation_frame_ && simulation_frame_->driver &&
+      (time_of_day_ == TimeOfDay::Dusk || time_of_day_ == TimeOfDay::Night)) {
+    const DriverCamera& driver = *simulation_frame_->driver;
+    environment.headlight_intensity = time_of_day_ == TimeOfDay::Night ? 16.0F : 7.0F;
+    // A slight downward pitch illuminates the road, not the horizon.
+    std::array<float,3> dir{};
+    float length_squared = 0.0F;
+    for (int j=0;j<3;++j) {
+      dir[j] = driver.forward[j] - 0.095F*driver.up[j];
+      length_squared += dir[j]*dir[j];
+    }
+    const float inv_length = 1.0F/std::sqrt(std::max(0.001F,length_squared));
+    for(int j=0;j<3;++j) {
+      environment.headlight_forward[j] = dir[j]*inv_length;
+      for(int lamp=0;lamp<2;++lamp) {
+        const float side = lamp==0 ? -0.58F : 0.58F;
+        environment.headlight_positions[lamp][j] =
+            driver.eye[j] + 1.50F*driver.forward[j] +
+            side*driver.right[j] - 0.55F*driver.up[j];
+      }
+    }
+  }
+  renderer_->set_environment(environment);
   renderer_->render(draw_items, matrices, size.width(), size.height());
   if (clean_capture_ || driver_view) {
     apply_render_mode();

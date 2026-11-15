@@ -38,6 +38,7 @@
 #include "document/actor_placement.hpp"
 #include "document/document.hpp"
 #include "render/scene_builder.hpp"
+#include "render/renderer.hpp"
 #include "viewport/picking.hpp"
 
 namespace roadmaker::editor {
@@ -99,6 +100,26 @@ Scene build_with_actors(const Document& document) {
 }
 
 } // namespace
+
+TEST(RenderLightingR4b2, SkyBounceAndHeadlightsAreOptIn) {
+  const Environment legacy{};
+  const Environment sober = sober_lighting();
+  const Environment day = textured_lighting();
+  const Environment night = time_of_day_lighting(TimeOfDay::Night);
+  const Environment dusk = time_of_day_lighting(TimeOfDay::Dusk);
+  EXPECT_FLOAT_EQ(legacy.shadow_bounce,0.0F);
+  EXPECT_FLOAT_EQ(sober.shadow_bounce,0.0F);
+  EXPECT_FLOAT_EQ(sober.headlight_intensity,0.0F);
+  EXPECT_FLOAT_EQ(day.headlight_intensity,0.0F);
+  EXPECT_FLOAT_EQ(day.shadow_bounce,0.11F);
+  EXPECT_TRUE(day.shadows_enabled);
+  EXPECT_FLOAT_EQ(night.shadow_bounce,0.0F);
+  EXPECT_LT(night.sun_intensity,0.10F);
+  EXPECT_FLOAT_EQ(dusk.shadow_bounce,0.05F);
+  EXPECT_FLOAT_EQ(dusk.headlight_intensity,0.0F);
+  EXPECT_FLOAT_EQ(conditioned_lighting(TimeOfDay::Night,WeatherPreset::Rain,
+                                       SeasonPreset::Winter).headlight_intensity,0.0F);
+}
 
 TEST(ActorRendering, AnEmptyScenarioAddsNoBatchAtAll) {
   // A scene with no actors must upload nothing — an empty batch would cost a
