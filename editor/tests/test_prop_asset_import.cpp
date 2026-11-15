@@ -429,7 +429,7 @@ TEST_F(PropAssetImport, PrawkoBlenderBarrierDropsMovesRotatesAndSurvivesReload) 
 
 TEST_F(PropAssetImport, PrawkoDemoSceneReloadsItsOwnBlenderModel) {
   const std::filesystem::path project =
-      std::filesystem::path(RM_REPO_ROOT_DIR) / "projects/Prawko-Bariera-Demo";
+      std::filesystem::path(RM_REPO_ROOT_DIR) / "tests/fixtures/Prawko-Bariera-Demo";
   Document loaded_before_registration;
   ASSERT_TRUE(loaded_before_registration.load(project / "bariera-ustawiona.xodr").has_value());
   EXPECT_EQ(loaded_before_registration.mesh().objects.size(), 0U);

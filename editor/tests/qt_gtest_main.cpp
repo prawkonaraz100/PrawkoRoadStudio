@@ -24,7 +24,14 @@
 #include <QApplication>
 
 int main(int argc, char** argv) {
-  qputenv("QT_QPA_PLATFORM", "offscreen");
+  // Keep every normal test headless. An explicitly requested, opt-in video
+  // acceptance run alone needs a real Win32 OpenGL context (three mirror FBOs).
+  // It writes only to a caller-specified archive path, never to user scenes.
+  if (qEnvironmentVariableIsEmpty("PRAWKO_VIDEO_PROOF_OUT")) {
+    qputenv("QT_QPA_PLATFORM", "offscreen");
+  } else {
+    qunsetenv("QT_QPA_PLATFORM");
+  }
   // QSettings resolves its store from the organization/application names, and
   // without these it falls back to the executable name — which on some
   // platforms lands in, or next to, the shipped RoadMaker store. Any case that

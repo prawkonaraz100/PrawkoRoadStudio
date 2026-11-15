@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original PrawkoNaRaz road. Apache-2.0, authored 2026-11-15. -->
+<OpenDRIVE>
+<header revMajor="1" revMinor="8" name="Deszcz: zakret i hamowanie pojazdu z przodu" vendor="PrawkoNaRaz"/>
+<road name="Deszcz: zakret i hamowanie pojazdu z przodu" length="240" id="1" junction="-1">
+<type s="0" type="townArterial"><speed max="50" unit="km/h"/></type>
+<planView><geometry s="0" x="0" y="0" hdg="0" length="90"><line/></geometry><geometry s="90" x="90" y="0" hdg="0" length="150"><arc curvature="0.003"/></geometry></planView>
+<elevationProfile><elevation s="0" a="0" b="0" c="0" d="0"/></elevationProfile>
+<lanes><laneSection s="0"><left><lane id="2" type="sidewalk" level="false"><width sOffset="0" a="2.1" b="0" c="0" d="0" /></lane><lane id="1" type="driving" level="false"><width sOffset="0" a="3.4" b="0" c="0" d="0" /><roadMark sOffset="0" type="solid" color="white" width="0.12" /></lane></left>
+<center><lane id="0" type="none"><roadMark sOffset="0" type="broken" color="white" width="0.12"/></lane></center>
+<right><lane id="-1" type="driving" level="false"><width sOffset="0" a="3.4" b="0" c="0" d="0" /><roadMark sOffset="0" type="solid" color="white" width="0.12" /></lane><lane id="-2" type="parking" level="false"><width sOffset="0" a="2.2" b="0" c="0" d="0" /></lane><lane id="-3" type="sidewalk" level="false"><width sOffset="0" a="2.1" b="0" c="0" d="0" /></lane></right></laneSection></lanes>
+
+<userData code="rm:waypoints" value="0,0;90,0"/>
+</road></OpenDRIVE>

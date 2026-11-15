@@ -25,14 +25,26 @@ Expected<QVector<SimulationSample>> read_samples(const QString& path) {
     return make_error(ErrorCode::IoFailure, "Cannot read the simulation CSV or it is too large.");
   }
   const QStringList header = QString::fromUtf8(file.readLine(kMaxLineBytes)).trimmed().split(',');
-  constexpr std::array<const char*, 11> columns{
-      "time", "id", "name", "x", "y", "z", "h", "p", "r", "roadId", "laneId"};
+  // esmini dat2csv schemas are versioned. Older builds report roadId/laneId;
+  // 3.11.0 reports measured speed/wheel_angle/wheel_rot instead. Do not
+  // pretend that wheel rotation is a lane ID, or reject real traffic traces.
+  constexpr std::array<const char*, 9> columns{
+      "time", "id", "name", "x", "y", "z", "h", "p", "r"};
   const auto invalid_csv = [] {
     return make_error(ErrorCode::InvalidDocument, "Unexpected esmini telemetry CSV format.");
   };
   if (header.size() < static_cast<qsizetype>(columns.size())) {
     return invalid_csv();
   }
+  const bool legacy = header.size() >= 11 &&
+      header.at(9).trimmed() == QLatin1String("roadId") &&
+      header.at(10).trimmed() == QLatin1String("laneId");
+  const bool current = header.size() >= 12 &&
+      header.at(9).trimmed() == QLatin1String("speed") &&
+      header.at(10).trimmed() == QLatin1String("wheel_angle") &&
+      header.at(11).trimmed() == QLatin1String("wheel_rot");
+  if (!legacy && !current) return invalid_csv();
+
   // dat2csv writes actor names without quoting. Preserve commas in a name by
   // reading time and ID from the front and the numeric fields from the back.
   for (std::size_t i = 0; i < columns.size(); ++i) {
@@ -70,9 +82,18 @@ Expected<QVector<SimulationSample>> read_samples(const QString& path) {
     sample.heading = number(6 + extra);
     sample.pitch = number(7 + extra);
     sample.roll = number(8 + extra);
-    sample.road_id = fields.at(9 + extra).trimmed();
-    bool lane_ok = false;
-    sample.lane_id = fields.at(10 + extra).toInt(&lane_ok);
+    bool lane_ok = true;
+    if (legacy) {
+      sample.road_id = fields.at(9 + extra).trimmed();
+      sample.lane_id = fields.at(10 + extra).toInt(&lane_ok);
+    } else {
+      // The newer schema provides physics values but no lane position.
+      // Validate each reported value; the playback still derives speed and
+      // steering from successive positions to support BOTH versions equally.
+      (void)number(9 + extra);  // speed
+      (void)number(10 + extra); // wheel_angle
+      (void)number(11 + extra); // wheel_rot
+    }
     if (!valid || !id_ok || !lane_ok || sample.time < 0.0 || sample.actor_name.isEmpty() ||
         (!samples.isEmpty() && sample.time < samples.back().time)) {
       return invalid_csv();

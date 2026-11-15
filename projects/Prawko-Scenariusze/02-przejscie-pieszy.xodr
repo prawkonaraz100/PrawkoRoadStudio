@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original PrawkoNaRaz road. Apache-2.0, authored 2026-11-15. -->
+<OpenDRIVE>
+<header revMajor="1" revMinor="8" name="Przejscie: pieszy i hamowanie" vendor="PrawkoNaRaz"/>
+<road name="Przejscie: pieszy i hamowanie" length="200" id="1" junction="-1">
+<type s="0" type="townArterial"><speed max="30" unit="km/h"/></type>
+<planView><geometry s="0" x="0" y="0" hdg="0" length="200"><line/></geometry></planView>
+<elevationProfile><elevation s="0" a="0" b="0" c="0" d="0"/></elevationProfile>
+<lanes><laneSection s="0"><left><lane id="2" type="sidewalk" level="false"><width sOffset="0" a="2.1" b="0" c="0" d="0" /></lane><lane id="1" type="driving" level="false"><width sOffset="0" a="3.4" b="0" c="0" d="0" /><roadMark sOffset="0" type="solid" color="white" width="0.12" /></lane></left>
+<center><lane id="0" type="none"><roadMark sOffset="0" type="broken" color="white" width="0.12"/></lane></center>
+<right><lane id="-1" type="driving" level="false"><width sOffset="0" a="3.4" b="0" c="0" d="0" /><roadMark sOffset="0" type="solid" color="white" width="0.12" /></lane><lane id="-2" type="parking" level="false"><width sOffset="0" a="2.2" b="0" c="0" d="0" /></lane><lane id="-3" type="sidewalk" level="false"><width sOffset="0" a="2.1" b="0" c="0" d="0" /></lane></right></laneSection></lanes>
+<objects><object type="crosswalk" subtype="zebra" id="1" name="Zebra Prawko" s="86" t="-1.1" zOffset="0" orientation="none" hdg="1.5707963267948966" length="9" width="3"><outlines><outline id="0" fillType="paint" outer="true" closed="true"><cornerRoad id="0" s="84.50" t="-5.6" dz="0" height="0"/><cornerRoad id="1" s="87.50" t="-5.6" dz="0" height="0"/><cornerRoad id="2" s="87.50" t="3.4" dz="0" height="0"/><cornerRoad id="3" s="84.50" t="3.4" dz="0" height="0"/></outline></outlines><markings><marking color="white" width="0.1" zOffset="0.005" spaceLength="0.5" lineLength="0.5" startOffset="0" stopOffset="0"><cornerReference id="0"/><cornerReference id="1"/><cornerReference id="2"/><cornerReference id="3"/></marking></markings><userData code="rm:crosswalk" dashLength="0.5" dashGap="0.5"/></object></objects>
+<userData code="rm:waypoints" value="0,0;200,0"/>
+</road></OpenDRIVE>

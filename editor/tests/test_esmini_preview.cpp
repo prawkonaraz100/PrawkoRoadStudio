@@ -188,6 +188,32 @@ TEST(SimulationTrace, ReadsFullPoseAndSeparatesStartedCompletedAndStoppedEvents)
   EXPECT_EQ(trace->ambiguous_events, QStringList{QStringLiteral("Duplicate")});
 }
 
+TEST(SimulationTrace, ReadsEsmini311MeasuredWheelAndSpeedCsv) {
+  QTemporaryDir directory;
+  ASSERT_TRUE(directory.isValid());
+  const QString csv = directory.filePath(QStringLiteral("measured.csv"));
+  const QString log = directory.filePath(QStringLiteral("measured.log"));
+  write_test_file(csv,
+                  "time, id, name, x, y, z, h, p, r, speed, wheel_angle, wheel_rot\n"
+                  "0.000, 0, Ego, 10.0, -1.7, 0, 0, 0, 0, 10.0, 0.0, 0.0\n"
+                  "0.050, 0, Ego, 10.5, -1.7, 0, 0.01, 0, 0, 10.0, 0.04, 1.4\n"
+                  "0.050, 1, Auto, behind, 4.0, -1.7, 0, 0, 0, 0, 8.0, 0.0, 1.1\n");
+  write_test_file(log, "engine completed\n");
+  const auto trace = read_simulation_trace(csv, log, {});
+  ASSERT_TRUE(trace.has_value()) << trace.error().message;
+  ASSERT_EQ(trace->samples.size(), 3);
+  EXPECT_EQ(trace->samples[0].actor_name, QStringLiteral("Ego"));
+  EXPECT_EQ(trace->samples[2].actor_name, QStringLiteral("Auto, behind"));
+  EXPECT_TRUE(trace->samples.front().road_id.isEmpty());
+  EXPECT_EQ(trace->samples.front().lane_id, 0);
+  const SimulationPlayback playback(*trace, 0.05);
+  EXPECT_GT(playback.poses_at(0.025).front().speed_mps, 9.0);
+  write_test_file(csv,
+                  "time, id, name, x, y, z, h, p, r, speed, wheel_angle, wheel_rot\n"
+                  "0.000, 0, Ego, 10, -1.7, 0, 0, 0, 0, 10, nan, 0\n");
+  EXPECT_FALSE(read_simulation_trace(csv, log, {}).has_value());
+}
+
 TEST(SimulationTrace, RejectsMissingOrMalformedTelemetry) {
   QTemporaryDir directory;
   ASSERT_TRUE(directory.isValid());

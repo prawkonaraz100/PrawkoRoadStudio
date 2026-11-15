@@ -137,6 +137,8 @@ add_executable(roadmaker_editor_tests
   test_material_catalog.cpp
   test_asset_import.cpp
   test_prop_asset_import.cpp
+  test_prawko_scenarios.cpp
+  test_prawko_real_video.cpp
   test_scrub_label.cpp
   test_slot_widget.cpp
   test_reference_layers.cpp
