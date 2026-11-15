@@ -14,6 +14,10 @@
 #include <cstring>
 #include <filesystem>
 #include <iostream>
+#include <array>
+#include <algorithm>
+#include <set>
+#include <QRect>
 
 #include "document/document.hpp"
 #include "document/esmini_simulation.hpp"
@@ -91,6 +95,49 @@ TEST(PrawkoRealVideo, DriverViewStreamsActualTrafficAndMirrorsToMp4) {
   ASSERT_EQ(later.size(),kSize);
   EXPECT_NE(std::memcmp(before.constBits(),later.constBits(),before.sizeInBytes()),0)
       << "Actual esmini vehicle and mirror frames cannot be identical";
+  // R4b: pin the three actual mirror FBO results, not just the main windshield.
+  // The boxes match the viewport's center/left/right layout. Inspect only their
+  // inner pixels, excluding rounded frames, HUD and cockpit. This detects a
+  // black/empty FBO (including a broken depth-map FBO restoration) and verifies
+  // that each mirror contains independently changing image content.
+  const int width = kSize.width(), height = kSize.height();
+  const int margin = std::max(7, width / 115);
+  const int center_width = std::clamp(static_cast<int>(width * 0.35), 160, 480);
+  const int side_width = std::clamp(static_cast<int>(width * 0.19), 110, 250);
+  const int center_height = std::max(40, center_width / 4);
+  const int side_height = std::max(58, side_width * 3 / 5);
+  const std::array<QRect, 3> mirror_boxes{
+      QRect((width - center_width) / 2, margin, center_width, center_height),
+      QRect(margin, height - side_height - margin, side_width, side_height),
+      QRect(width - side_width - margin, height - side_height - margin, side_width, side_height)};
+  const std::array<const char*, 3> mirror_names{"center", "left", "right"};
+  int total_moving_samples = 0;
+  for (std::size_t i = 0; i < mirror_boxes.size(); ++i) {
+    const QRect interior = mirror_boxes[i].adjusted(12, 10, -12, -10);
+    std::set<unsigned> color_buckets;
+    int bright_samples = 0, changed_samples = 0;
+    for (int y = interior.top(); y < interior.bottom(); y += 3) {
+      for (int x = interior.left(); x < interior.right(); x += 3) {
+        const QRgb p = before.pixel(x, y);
+        const QRgb q = later.pixel(x, y);
+        if ((qRed(p) + qGreen(p) + qBlue(p)) / 3 > 40) ++bright_samples;
+        color_buckets.insert(static_cast<unsigned>(
+            ((qRed(p) / 20) << 16) | ((qGreen(p) / 20) << 8) | (qBlue(p) / 20)));
+        if (std::abs(qRed(p) - qRed(q)) +
+            std::abs(qGreen(p) - qGreen(q)) +
+            std::abs(qBlue(p) - qBlue(q)) > 18) ++changed_samples;
+      }
+    }
+    EXPECT_GT(bright_samples, 20) << mirror_names[i] << " mirror is black";
+    EXPECT_GE(color_buckets.size(), 4U) << mirror_names[i] << " mirror has no scene";
+    EXPECT_GT(changed_samples, 0) << mirror_names[i] << " mirror is frozen";
+    total_moving_samples += changed_samples;
+    std::cout << "R4B_MIRROR_CAPTURE_PASS " << mirror_names[i]
+              << " colors=" << color_buckets.size()
+              << " bright=" << bright_samples
+              << " changed=" << changed_samples << '\n';
+  }
+  EXPECT_GT(total_moving_samples, 5);
   ASSERT_TRUE(before.save(output+".first.png","PNG"));
   ASSERT_TRUE(later.save(output+".moving.png","PNG"));
 
