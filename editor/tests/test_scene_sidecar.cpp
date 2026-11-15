@@ -84,6 +84,27 @@ TEST(SceneSidecar, ParsesViewAndRenderMode) {
   EXPECT_TRUE(*state->textured);
 }
 
+TEST(SceneSidecar, TimeOfDayPresetsRoundTripAndOldScenesDefaultToDay) {
+  const auto previous = scene_sidecar::parse(QByteArrayLiteral(R"({"scene_version":1})"));
+  ASSERT_TRUE(previous);
+  EXPECT_TRUE(previous->time_of_day.isEmpty());
+
+  for (const char* key : {"day", "dawn", "dusk", "night"}) {
+    SceneState scene = *previous;
+    scene.time_of_day = QString::fromLatin1(key);
+    const QByteArray saved = scene_sidecar::to_json(scene);
+    auto parsed = scene_sidecar::parse(saved);
+    ASSERT_TRUE(parsed);
+    EXPECT_EQ(parsed->time_of_day, QString::fromLatin1(key));
+    EXPECT_EQ(scene_sidecar::to_json(*parsed), saved);
+  }
+  auto unrecognized = scene_sidecar::parse(
+      QByteArrayLiteral(R"({"scene_version":1,"time_of_day":"midnight-blue"})"));
+  ASSERT_TRUE(unrecognized);
+  EXPECT_TRUE(unrecognized->time_of_day.isEmpty());
+  EXPECT_FALSE(scene_sidecar::to_json(*unrecognized).contains("midnight-blue"));
+}
+
 TEST(SceneSidecar, DriverViewActorRoundTripsAndCanBeCleared) {
   auto parsed = scene_sidecar::parse(R"({"scene_version":1,"driver_view_actor":"Auto"})");
   ASSERT_TRUE(parsed);

@@ -134,6 +134,10 @@ struct SceneState {
   /// Overrides the application default for this scene only.
   std::optional<bool> textured;
 
+  /// S3.3: optional scene-local daylight preset: day/dawn/dusk/night.
+  /// Empty in older scenes => day; never stored in OpenDRIVE.
+  QString time_of_day;
+
   /// The editing mode this scene was last in (p8-s2, #246): Map or Scenario.
   ///
   /// Layer 2 by ADR-0008 — it is which pane of the editor you were working in,

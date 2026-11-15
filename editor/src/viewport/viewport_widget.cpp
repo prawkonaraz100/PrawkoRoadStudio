@@ -858,6 +858,9 @@ void ViewportWidget::render_frame(const OrbitCamera& camera, const QSize& size,
                            : 1.0F;
   if (clean_capture_ || driver_view) {
     BackdropColors backdrop = theme::current().backdrop();
+    if (textured_rendering_) {
+      backdrop = time_of_day_backdrop(backdrop, time_of_day_);
+    }
     backdrop.grid_major[3] = 0.0F;
     backdrop.grid_minor[3] = 0.0F;
     renderer_->set_backdrop(backdrop);
@@ -2180,13 +2183,15 @@ void ViewportWidget::wheelEvent(QWheelEvent* event) {
 }
 
 void ViewportWidget::apply_render_mode() {
-  renderer_->set_environment(textured_rendering_ ? textured_lighting() : sober_lighting());
+  renderer_->set_environment(textured_rendering_ ? time_of_day_lighting(time_of_day_)
+                                                : sober_lighting());
 
   // In textured mode the reference grid is scenery-competing clutter, so fade
   // it heavily (the daytime surfaces carry the scene); sober mode keeps the
   // full-strength grid it has always had.
   BackdropColors backdrop = theme::current().backdrop();
   if (textured_rendering_) {
+    backdrop = time_of_day_backdrop(backdrop, time_of_day_);
     backdrop.grid_major[3] *= 0.35F;
     backdrop.grid_minor[3] *= 0.35F;
   }
@@ -2195,6 +2200,22 @@ void ViewportWidget::apply_render_mode() {
   // Procedural grass ground in textured mode only, sitting just under the
   // network floor so coplanar road surfaces draw over it (Sober keeps the grid).
   renderer_->set_ground(textured_rendering_, ground_base_z(scene_bounds_));
+}
+
+void ViewportWidget::set_time_of_day(const QString& key) {
+  TimeOfDay phase = TimeOfDay::Day;
+  if (key == QLatin1String("dawn")) {
+    phase = TimeOfDay::Dawn;
+  } else if (key == QLatin1String("dusk")) {
+    phase = TimeOfDay::Dusk;
+  } else if (key == QLatin1String("night")) {
+    phase = TimeOfDay::Night;
+  }
+  if (phase != time_of_day_) {
+    time_of_day_ = phase;
+    apply_render_mode();
+    update();
+  }
 }
 
 void ViewportWidget::set_textured_rendering(bool textured) {

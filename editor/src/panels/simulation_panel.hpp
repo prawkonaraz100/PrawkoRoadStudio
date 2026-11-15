@@ -31,6 +31,8 @@ public:
   void pause();
   [[nodiscard]] bool can_run() const;
   [[nodiscard]] QString driver_actor() const { return driver_actor_; }
+  [[nodiscard]] QString time_of_day() const;
+  void set_time_of_day(const QString& key);
 
   [[nodiscard]] const std::optional<SimulationRun>& result() const { return simulation_.result(); }
   [[nodiscard]] const SimulationPlayback* playback() const {
@@ -43,6 +45,7 @@ signals:
   void video_availability_changed(bool available);
   void run_availability_changed(bool available);
   void video_export_requested();
+  void time_of_day_changed(const QString& key);
 
 private:
   void update_controls();
@@ -69,6 +72,7 @@ private:
   QLabel* time_label_;
   QComboBox* events_;
   QComboBox* camera_;
+  QComboBox* time_of_day_;
   QString driver_actor_;
   std::optional<SimulationPlayback> playback_;
   QTimer timer_;

@@ -113,7 +113,8 @@ SimulationPanel::SimulationPanel(Document& document, Settings& settings, QWidget
       edit_(new QPushButton(tr("Wróć do edycji"), this)),
       export_video_(new QPushButton(tr("Export MP4…"), this)),
       timeline_(new TimelineSlider(this)), time_label_(new QLabel(this)),
-      events_(new QComboBox(this)), camera_(new QComboBox(this)) {
+      events_(new QComboBox(this)), camera_(new QComboBox(this)),
+      time_of_day_(new QComboBox(this)) {
   auto* buttons = new QHBoxLayout;
   buttons->addWidget(run_);
   buttons->addWidget(cancel_);
@@ -125,6 +126,13 @@ SimulationPanel::SimulationPanel(Document& document, Settings& settings, QWidget
   buttons->addWidget(export_video_);
   auto* layout = new QVBoxLayout(this);
   layout->addLayout(buttons);
+  auto* conditions = new QHBoxLayout;
+  auto* day_label = new QLabel(tr("Pora dnia"), this);
+  day_label->setBuddy(time_of_day_);
+  conditions->addWidget(day_label);
+  conditions->addWidget(time_of_day_);
+  conditions->addStretch();
+  layout->addLayout(conditions);
   auto* transport = new QHBoxLayout;
   transport->addWidget(play_);
   transport->addWidget(restart_);
@@ -161,6 +169,12 @@ SimulationPanel::SimulationPanel(Document& document, Settings& settings, QWidget
   camera_->setToolTip(tr("Choose the view used for playback and video export"));
   camera_->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
   camera_->setMinimumContentsLength(18);
+  time_of_day_->setObjectName(QStringLiteral("simulation_time_of_day"));
+  time_of_day_->setAccessibleName(tr("Pora dnia w symulacji"));
+  time_of_day_->addItem(tr("Dzień"), QStringLiteral("day"));
+  time_of_day_->addItem(tr("Świt"), QStringLiteral("dawn"));
+  time_of_day_->addItem(tr("Zmierzch"), QStringLiteral("dusk"));
+  time_of_day_->addItem(tr("Noc"), QStringLiteral("night"));
   timer_.setInterval(16);
   timer_.setTimerType(Qt::PreciseTimer);
 
@@ -178,6 +192,10 @@ SimulationPanel::SimulationPanel(Document& document, Settings& settings, QWidget
       seek(events_->itemData(index).toInt());
       events_->setCurrentIndex(0);
     }
+  });
+  connect(time_of_day_, &QComboBox::currentIndexChanged, this, [this](int) {
+    document_.undo_stack()->resetClean(); // same save-dirty convention as camera
+    emit time_of_day_changed(time_of_day());
   });
   connect(camera_, &QComboBox::currentIndexChanged, this, [this](int) {
     driver_actor_ = camera_->currentData().toString();
@@ -201,6 +219,7 @@ SimulationPanel::SimulationPanel(Document& document, Settings& settings, QWidget
     present_frame();
   });
   connect(&document_, &Document::loaded, this, [this] {
+    set_time_of_day(document_.scene_state().time_of_day);
     driver_actor_ = document_.scene_state().driver_view_actor;
     mark_scene_changed();
     refresh_camera_choices();
@@ -222,6 +241,16 @@ SimulationPanel::SimulationPanel(Document& document, Settings& settings, QWidget
   driver_actor_ = document_.scene_state().driver_view_actor;
   refresh_camera_choices();
   update_controls();
+}
+
+QString SimulationPanel::time_of_day() const {
+  return time_of_day_->currentData().toString();
+}
+
+void SimulationPanel::set_time_of_day(const QString& key) {
+  const int index = time_of_day_->findData(key.isEmpty() ? QStringLiteral("day") : key);
+  const QSignalBlocker block(time_of_day_);
+  time_of_day_->setCurrentIndex(index >= 0 ? index : 0);
 }
 
 void SimulationPanel::run(bool play_when_ready) {

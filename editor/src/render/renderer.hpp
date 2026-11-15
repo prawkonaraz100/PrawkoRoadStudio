@@ -23,6 +23,7 @@
 #include <array>
 #include <cstdint>
 #include <span>
+#include <string_view>
 #include <vector>
 
 namespace roadmaker::editor {
@@ -179,9 +180,75 @@ struct Environment {
   float ambient = 0.35F;
 };
 
+/// S3.3: shared time-of-day presets for all cameras, including mirror FBOs
+/// and exported video frames. Day is the legacy environment (unchanged).
+enum class TimeOfDay { Day, Dawn, Dusk, Night };
+
+[[nodiscard]] constexpr std::string_view time_of_day_key(TimeOfDay phase) {
+  switch (phase) {
+  case TimeOfDay::Dawn: return "dawn";
+  case TimeOfDay::Dusk: return "dusk";
+  case TimeOfDay::Night: return "night";
+  case TimeOfDay::Day: break;
+  }
+  return "day";
+}
+
 /// The daytime "Textured" render mode: hemisphere sky/ground + a warm sun.
 [[nodiscard]] inline Environment textured_lighting() {
   return Environment{};
+}
+
+[[nodiscard]] inline Environment time_of_day_lighting(TimeOfDay phase) {
+  Environment env = textured_lighting();
+  switch (phase) {
+  case TimeOfDay::Dawn:
+    env.sun_dir = {0.90F, 0.25F, 0.16F};
+    env.sun_color = {1.0F, 0.59F, 0.30F};
+    env.sky_color = {0.32F, 0.43F, 0.65F};
+    env.sun_intensity = 0.52F;
+    env.ambient = 0.24F;
+    break;
+  case TimeOfDay::Dusk:
+    env.sun_dir = {-0.9F, 0.1F, 0.10F};
+    env.sun_color = {1.0F, 0.44F, 0.23F};
+    env.sky_color = {0.22F, 0.29F, 0.52F};
+    env.sun_intensity = 0.32F;
+    env.ambient = 0.16F;
+    break;
+  case TimeOfDay::Night:
+    env.sun_dir = {0.35F, 0.25F, 0.90F};
+    env.sun_color = {0.28F, 0.38F, 0.62F};
+    env.sky_color = {0.12F, 0.20F, 0.35F};
+    env.ground_color = {0.12F, 0.16F, 0.22F};
+    env.sun_intensity = 0.035F;
+    env.ambient = 0.15F;
+    break;
+  case TimeOfDay::Day: break;
+  }
+  return env;
+}
+
+/// Change only the sky of an existing themed backdrop. The editor's Sober
+/// mode and the default day retain their previous colors unchanged.
+[[nodiscard]] inline BackdropColors time_of_day_backdrop(BackdropColors backdrop,
+                                                         TimeOfDay phase) {
+  switch (phase) {
+  case TimeOfDay::Dawn:
+    backdrop.sky_top = {0.18F, 0.31F, 0.48F};
+    backdrop.sky_horizon = {0.76F, 0.39F, 0.24F};
+    break;
+  case TimeOfDay::Dusk:
+    backdrop.sky_top = {0.075F, 0.13F, 0.28F};
+    backdrop.sky_horizon = {0.62F, 0.28F, 0.24F};
+    break;
+  case TimeOfDay::Night:
+    backdrop.sky_top = {0.008F, 0.016F, 0.041F};
+    backdrop.sky_horizon = {0.024F, 0.039F, 0.079F};
+    break;
+  case TimeOfDay::Day: break;
+  }
+  return backdrop;
 }
 
 /// The "Sober" render mode — reproduces the M2 flat look exactly: a white,

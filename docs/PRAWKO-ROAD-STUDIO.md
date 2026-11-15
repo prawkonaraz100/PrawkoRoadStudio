@@ -533,11 +533,17 @@ i usuniętych z katalogu aktywnych projektów. Nowa praca rozpoczyna
 się od pustej sceny, a kolejne składniki powstaną jako własne
 modele PrawkoNaRaz.
 
+### S3.3 — dzień, świt, zmierzch i noc (15.11.2026)
+
+Panel **Symulacja → Pora dnia** udostępnia cztery presety oświetlenia: Dzień, Świt, Zmierzch i Noc. Korzystają z istniejącego renderera OpenGL: każdy preset określa kierunek i barwę światła, intensywność słońca, oświetlenie otoczenia i kolory nieba. Zwykły dzień zachowuje dotychczasowe parametry renderera; Sober nadal działa niezależnie. Zmiana pory dnia włącza tryb Textured, aby była widoczna.
+
+Wybór jest stanem konkretnej sceny (pole SceneState::time_of_day w atomowo zapisywanym pliku .rmscene.json, nie w pliku drogi .xodr), więc nie zmienia preferencji innych projektów. Starsza scena bez pola time_of_day otwiera się z presetem Dzień. Kamera edytora, kamera kierowcy i trzy kamery lusterek korzystają ze wspólnego środowiska, tak samo jak zapis klatek przez capture_simulation_frame do PNG/MP4. Presety nie tworzą jeszcze reflektorów, fizycznego rozpraszania światła, opadów ani zmian zachowania pojazdów. Testy obrazowe wykonuje się na kopii projektu; oryginalne sceny nie są modyfikowane.
+
 ### S3.3 — lusterka w aktywnej kamerze kierowcy (14.11.2026)
 
 Podgląd pierwszoosobowy pojazdu korzysta z trzech dodatkowych, niezależnych kamer: wstecznej (góra/środek), lewej bocznej (dół/lewo) i prawej bocznej (dół/prawo). Funkcja driver_mirror_camera w viewport/camera.cpp wyprowadza osie kamer z aktualnego DriverCamera wybranego pojazdu, więc uwzględnia jego obrót, pochylenie i przechył. Obrazy są prawdziwymi renderami OpenGL w trzech małych framebufferach, odbijanymi poziomo w nakładce Qt, nie dekoracjami. Zapis scen pozostaje bez zmian. W eksporcie wideo i pojedynczych klatek nakładki są składane z obrazem kierowcy przez capture_simulation_frame.
 
-Test kamery: DriverCamera.ThreeMirrorsFollowVehicleAndLookBehind; odbiór wizualny na rzeczywistym EXE: --screenshot ... --camera driver-mirrors-proof na osobnej scenie bariery Prawko. Obraz i skrypty testowe są lokalnie w archive/driver-mirrors-s33. Przetestowano kadr statyczny, nie wykonano jeszcze końcowego testu płynnego odtwarzania z trzema lusterkami i pomiaru wydajności. To tylko część zadania 5d: pogoda, dzień/noc, sezon, pełny kokpit i warianty nie są ukończone.
+Test kamery: DriverCamera.ThreeMirrorsFollowVehicleAndLookBehind; odbiór wizualny na rzeczywistym EXE: --screenshot ... --camera driver-mirrors-proof na osobnej scenie bariery Prawko. Obraz i skrypty testowe są lokalnie w archive/driver-mirrors-s33. Przetestowano kadr statyczny, nie wykonano jeszcze końcowego testu płynnego odtwarzania z trzema lusterkami i pomiaru wydajności. To tylko część zadania 5d: osobny etap powyżej wprowadza presety dnia/nocy, natomiast pogoda, sezon, pełny kokpit i warianty nie są ukończone.
 
 ### Rzeczywisty model z Blendera — bariera Prawko (14.11.2026)
 

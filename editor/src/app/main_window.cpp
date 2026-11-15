@@ -182,6 +182,7 @@ MainWindow::MainWindow(QWidget* parent, bool restore_saved_layout)
     state.view = viewport_->view_state();
     state.textured = viewport_->textured_rendering();
     state.driver_view_actor = simulation_panel_->driver_actor();
+    state.time_of_day = simulation_panel_->time_of_day();
   });
   // The viewport restores the camera itself; the render mode is the app's to
   // apply, because the View menu has to agree with it.
@@ -1303,6 +1304,16 @@ void MainWindow::build_docks() {
           &SimulationPanel::video_export_requested,
           this,
           &MainWindow::export_scenario_video);
+  connect(simulation_panel_, &SimulationPanel::time_of_day_changed, this,
+          [this](const QString& phase) {
+            // Conditions always use the illuminated/textured renderer.
+            viewport_->set_textured_rendering(true);
+            viewport_->set_time_of_day(phase);
+            if (textured_action_) {
+              const QSignalBlocker blocker(textured_action_);
+              textured_action_->setChecked(true);
+            }
+          });
   connect(simulation_panel_,
           &SimulationPanel::preview_frame,
           viewport_,
@@ -2032,6 +2043,9 @@ void MainWindow::apply_scene_state() {
   const auto& textured = document_.scene_state().textured;
   const bool effective = textured.value_or(settings_.textured_rendering());
   viewport_->set_textured_rendering(effective);
+  const QString phase = document_.scene_state().time_of_day;
+  simulation_panel_->set_time_of_day(phase);
+  viewport_->set_time_of_day(phase);
   if (textured_action_ != nullptr) {
     // Without the block the menu toggle would fire and push this scene's mode
     // back into Settings as the new application default.

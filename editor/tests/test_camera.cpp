@@ -56,6 +56,26 @@ TEST(DriverCamera, FollowsHeadingPitchAndRollAtTheVehicleEye) {
   EXPECT_NEAR(tilted[0][2], -std::cos(0.2F) * std::sin(0.3F), 1e-5F);
 }
 
+TEST(TimeOfDay, PresetsModifyLightingAndSkyWithoutChangingDayBaseline) {
+  const Environment day = time_of_day_lighting(TimeOfDay::Day);
+  const Environment dawn = time_of_day_lighting(TimeOfDay::Dawn);
+  const Environment dusk = time_of_day_lighting(TimeOfDay::Dusk);
+  const Environment night = time_of_day_lighting(TimeOfDay::Night);
+  EXPECT_FLOAT_EQ(day.sun_intensity, textured_lighting().sun_intensity);
+  EXPECT_LT(dawn.sun_intensity, day.sun_intensity);
+  EXPECT_LT(dusk.sun_intensity, dawn.sun_intensity);
+  EXPECT_LT(night.sun_intensity, dusk.sun_intensity);
+  EXPECT_LT(night.ambient, day.ambient);
+  EXPECT_EQ(time_of_day_key(TimeOfDay::Dawn), "dawn");
+  EXPECT_EQ(time_of_day_key(TimeOfDay::Dusk), "dusk");
+  EXPECT_EQ(time_of_day_key(TimeOfDay::Night), "night");
+  BackdropColors default_sky;
+  EXPECT_EQ(time_of_day_backdrop(default_sky, TimeOfDay::Day).sky_top,
+            default_sky.sky_top);
+  EXPECT_NE(time_of_day_backdrop(default_sky, TimeOfDay::Night).sky_top,
+            default_sky.sky_top);
+}
+
 TEST(DriverCamera, ThreeMirrorsFollowVehicleAndLookBehind) {
   const DriverCamera driver{.eye = {10.0F, 20.0F, 2.0F},
                             .forward = {1.0F, 0.0F, 0.0F},

@@ -128,6 +128,8 @@ public slots:
   void set_textured_rendering(bool textured);
 
   [[nodiscard]] bool textured_rendering() const { return textured_rendering_; }
+  void set_time_of_day(const QString& key);
+  [[nodiscard]] TimeOfDay time_of_day() const { return time_of_day_; }
 
   /// The camera pose as Layer-2 scene state (fmt-s1, #325) — what MainWindow's
   /// provider stamps onto the sidecar a save writes. The camera itself stays
@@ -553,6 +555,7 @@ private:
   /// true = daytime Textured (lit surfaces, grass ground, textures — opt-in).
   /// Drives the renderer Environment/ground/grid via apply_render_mode().
   bool textured_rendering_ = false;
+  TimeOfDay time_of_day_ = TimeOfDay::Day;
 
   /// Compiled-in material definitions (surface code → textures + PBR params).
   MaterialCatalog material_catalog_;

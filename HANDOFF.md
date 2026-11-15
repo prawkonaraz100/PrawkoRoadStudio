@@ -1,10 +1,20 @@
 # PrawkoRoadStudio — PRZEKAZANIE PRACY / START TUTAJ
 
-> Stan na 14.11.2026. Przed zmianą kodu przeczytaj ten plik i `AGENTS.md`. Kolejność prac wyznacza **Aktywny plan** na początku pliku.
+> Stan na 15.11.2026. Przed zmianą kodu przeczytaj ten plik i `AGENTS.md`. Kolejność prac wyznacza **Aktywny plan** na początku pliku.
 
 ## Cel PrawkoNaRaz
 
 Instruktor tworzy i edytuje sytuację drogową, odtwarza ją, wybiera kamerę i eksportuje PNG lub MP4 w jednym programie Windows. Funkcjonalnym punktem odniesienia jest VICOM. Najpierw doprowadzamy cały przepływ do działania na dostępnych modelach. Wspólny model C++ oraz OpenDRIVE i OpenSCENARIO obsługują edytor i agenta. [Zakres funkcji i kryteria produktu](docs/PRAWKO-VICOM.md)
+
+## 15.11.2026 — S3.3/5d: dzień, świt, zmierzch i noc — potwierdzony podetap
+
+**Wdrożono:** Panel Symulacja → Pora dnia: Dzień, Świt, Zmierzch i Noc. Zmiana ustawia kolor/kierunek/natężenie słońca, światło otoczenia i kolory nieba w istniejącym rendererze. Dzień nie zmienia poprzedniego światła Textured. UI przełącza tryb Textured automatycznie. Jedno środowisko dla kamery edytora, kamery kierowcy, 3 lusterek i klatek eksportu PNG/MP4. Pole SceneState.time_of_day jest zachowywane per scena w atomowym pliku .rmscene.json; starsze sceny bez pola otwierają domyślny dzień. Bez zmian XODR/XOSC, geometrii, tras lub repo agenta (agent_head=67a92fa24b4054b7f094c9b667f3634c35ad9210).
+
+**Weryfikacja:** początkowy HEAD edytora 77b34f01c453edac8b15c67d011798470eb99010, czyste i zgodne z origin oba repo; prawko-resume.ps1 -Verify PASS. Po implementacji scripts/prawko-build-win.ps1 -Target all -Jobs 3: **BUILD_PASS: all / AGENT_BINDING_SYNC_PASS**. Trzy nowe testy TimeOfDay, SceneSidecar i SceneStateWindowTest + dwa DriverCamera: **5/5 PASS**. Pełny Qt: **1340 PASS / 6 SKIPPED / 0 FAIL** z 1346. scripts/prawko-verify-win.ps1: **2072/2072 C++ PASS** (10 disabled), **7/7 Python PASS**, **QUALITY_GATE_PASS**.
+
+**Odbiór wizualny:** osobna kopia projects/Prawko-Bariera-Demo, 4 uruchomienia rzeczywistego EXE z kamerą driver-mirrors-proof, wynik **ATMOSPHERE_RENDER_PASS** każdej pory. Zrzuty 866×783 px: archive/s33-day-night-20261115/{day,dawn,dusk,night}.png. Zrzuty świtu/nocy obejrzano: otoczenie i trzy lustra zmieniają jasność/barwy; nie naruszono oryginalnych scen. Skrypt archive/s33-day-night-capture.ps1, logi testów archive/s33-day-night-20261115/qt-*.log.
+
+**Ograniczenia i pierwszy kolejny krok:** Noc bez świateł pojazdu jest bardzo ciemna; pełny system reflektorów nie istnieje. Nie przeprowadzono ręcznego testu myszą, odtwarzania ruchu z oceną FPS ani pełnego MP4 dla presetów. Następny podetap S3.3: **pogoda** — deszcz, mgła, śnieg, mokra nawierzchnia i ograniczona widoczność w tym samym rendererze, w lusterkach i eksporcie. Następnie sezon, zdarzenia drogowe i pełny kokpit. S3.3/5d pozostaje otwarty.
 
 ## 14.11.2026 — S3.3 / 5d: rzeczywiste lusterka w widoku kierowcy
 
@@ -130,7 +140,7 @@ Punkty wejścia to `MainWindow::export_scenario_video()`, [proces eksportu](edit
 
 **5c. Szablony i warianty.** Dodaj tworzenie niezależnej kopii szablonu z ekranu startowego i menu `File`, z zachowaniem spójnego zapisu i kontroli niezapisanych zmian. W dalszym kroku dodaj szablony miejskie, pozamiejskie i autostradowe, podmianę otoczenia, przypisywanie ról pasów i stref oraz raport odwołań do korekty.
 
-**5d. Warunki i nagrania (częściowo).** Działające lusterka w aktywnej kamerze kierowcy oraz w zrzutach PNG/MP4 wdrożono i statycznie odebrano (sekcja S3.3 powyżej). Nadal dodaj pogodę, porę dnia i sezon, dodatkowe ujęcia, pełny kokpit, presety oraz eksport wielu wariantów. Do dopracowania modeli i materiałów wróć po potwierdzeniu przepływu pracy.
+**5d. Warunki i nagrania (częściowo).** Wdrożono trzy realne lusterka widoku kierowcy i cztery presety pory dnia (Dzień/Świt/Zmierzch/Noc) z zapisem per scena, wspólnym rendererem i odbiorem zrzutów PNG na kopii. Kolejny podetap: **pogoda** (deszcz, mgła, śnieg, mokra nawierzchnia i widoczność); potem sezon, dodatkowe ujęcia, reflektory do realistycznej nocy, pełny kokpit i eksport wielu wariantów. Nie uznawać całego 5d za zakończony.
 
 ## Gotowe polecenie do nowej rozmowy
 

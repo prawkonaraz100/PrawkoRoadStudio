@@ -882,6 +882,25 @@ TEST_F(SceneStateWindowTest, TheStoredRenderModeWinsForThatSceneAndIsNotAPrefere
   EXPECT_EQ(window_->viewport()->textured_rendering(), app_default);
 }
 
+TEST_F(SceneStateWindowTest, TimeOfDayRestoresAndUiChangesReachViewport) {
+  window_->load_file(make_scene("night.xodr",
+                  R"({"scene_version":1,"textured":true,"time_of_day":"night"})"));
+  auto* combo = window_->findChild<QComboBox*>(QStringLiteral("simulation_time_of_day"));
+  ASSERT_NE(combo, nullptr);
+  EXPECT_EQ(combo->currentData().toString(), QStringLiteral("night"));
+  EXPECT_EQ(window_->viewport()->time_of_day(), TimeOfDay::Night);
+  EXPECT_TRUE(window_->viewport()->textured_rendering());
+
+  const int dawn = combo->findData(QStringLiteral("dawn"));
+  ASSERT_GE(dawn, 0);
+  combo->setCurrentIndex(dawn);
+  EXPECT_EQ(window_->viewport()->time_of_day(), TimeOfDay::Dawn);
+
+  window_->load_file(make_scene("old.xodr", nullptr));
+  EXPECT_EQ(combo->currentData().toString(), QStringLiteral("day"));
+  EXPECT_EQ(window_->viewport()->time_of_day(), TimeOfDay::Day);
+}
+
 TEST_F(SceneStateWindowTest, SavingAndOpeningAProjectRemembersItsLastScene) {
   auto project = Project::create(root(), QStringLiteral("Downtown"));
   ASSERT_TRUE(project.has_value());

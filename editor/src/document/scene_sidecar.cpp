@@ -34,6 +34,7 @@ constexpr auto kVersionKey = "scene_version";
 constexpr auto kViewKey = "view";
 constexpr auto kDriverViewActorKey = "driver_view_actor";
 constexpr auto kTexturedKey = "textured";
+constexpr auto kTimeOfDayKey = "time_of_day";
 constexpr auto kModeKey = "mode";
 constexpr auto kWorkspaceKey = "workspace";
 constexpr auto kReferenceLayersKey = "reference_layers";
@@ -392,6 +393,20 @@ Expected<SceneState> parse(const QByteArray& json) {
     spdlog::warn("scene sidecar: 'textured' is not a boolean — falling back to the app default");
   }
 
+  const QJsonValue phase = root.value(QLatin1String(kTimeOfDayKey));
+  if (phase.isString()) {
+    const QString key = phase.toString();
+    if (key == QLatin1String("day") || key == QLatin1String("dawn") ||
+        key == QLatin1String("dusk") || key == QLatin1String("night")) {
+      state.time_of_day = key;
+    } else {
+      spdlog::warn("scene sidecar: unknown time_of_day '{}' - using day",
+                   key.toStdString());
+    }
+  } else if (!phase.isUndefined()) {
+    spdlog::warn("scene sidecar: 'time_of_day' is not a string - using day");
+  }
+
   // The editing mode (p8-s2, #246). An unknown spelling degrades to Map with a
   // warning rather than failing the load — a sidecar from a newer build must
   // never cost a scene. Note the ACTIVE SCENARIO FILE is deliberately not
@@ -456,6 +471,11 @@ QByteArray to_json(const SceneState& state) {
     root.remove(QLatin1String(kDriverViewActorKey));
   } else {
     root.insert(QLatin1String(kDriverViewActorKey), state.driver_view_actor);
+  }
+  if (state.time_of_day.isEmpty()) {
+    root.remove(QLatin1String(kTimeOfDayKey));
+  } else {
+    root.insert(QLatin1String(kTimeOfDayKey), state.time_of_day);
   }
   if (state.mode) {
     root.insert(QLatin1String(kModeKey),
