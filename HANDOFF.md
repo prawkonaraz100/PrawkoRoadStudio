@@ -4,7 +4,11 @@
 
 ## Cel PrawkoNaRaz
 
-Instruktor tworzy i edytuje sytuację drogową, odtwarza ją, wybiera kamerę i eksportuje PNG lub MP4 w jednym programie Windows. Funkcjonalnym punktem odniesienia jest VICOM. Najpierw doprowadzamy cały przepływ do działania na dostępnych modelach. Wspólny model C++ oraz OpenDRIVE i OpenSCENARIO obsługują edytor i agenta. [Zakres funkcji i kryteria produktu](docs/PRAWKO-VICOM.md)
+Instruktor tworzy i edytuje sytuację drogową, odtwarza ją, wybiera kamerę i eksportuje PNG lub MP4 w jednym programie Windows. Funkcjonalnym punktem odniesienia jest VICOM. **Podstawowy przepływ pracy został już potwierdzony; aktualnym priorytetem jest realistyczne otoczenie drogowe i produkcja własnych modeli 3D w Blenderze, nie dalsza ogólna rozbudowa edytora.** Wspólny model C++ oraz OpenDRIVE i OpenSCENARIO obsługują edytor i agenta. [Zakres funkcji i kryteria produktu](docs/PRAWKO-VICOM.md)
+
+## AKTUALNA DECYZJA / PRIORYTET: PRAWKO ASSETS
+
+**Od 15.11.2026 nadrzędny kierunek prac to realistyczne assety 3D tworzone we własnym Blenderze i wykorzystywane w PrawkoRoadStudio.** Bazowe funkcje programu wystarczają do rozpoczęcia produkcji modeli. **Nie kontynuować teraz rozbudowy edytora dla samej rozbudowy.** Pierwszy krok: jedna zaawansowana wiata przystankowa, test materiałów i integracji, dopiero potem produkcja większej biblioteki. Szczegółowe kryteria i kolejność znajdują się w **Aktywnym planie → PRIORYTET A1**, który ma pierwszeństwo przed starszymi punktami 5b–5d. To decyzja o kolejności prac, a nie deklaracja ukończenia wszystkich wcześniej otwartych funkcji.
 
 ## 15.11.2026 — S3.3: wymiana aktywnych scen i pełny odbiór jazdy MP4
 
@@ -154,6 +158,20 @@ Dodatkowy pasek `toolbar.options` chowa się w stanie bez kontekstowych opcji; p
 
 ## Aktywny plan
 
+### PRIORYTET A1 — Prawko Assets: realistyczne modele drogowe (AKTYWNY, decyzja użytkownika 15.11.2026)
+
+**Decyzja projektowa:** kończymy etap rozwoju **podstawowych funkcjonalności** PrawkoRoadStudio i przechodzimy do systematycznej produkcji **własnych, szczegółowych, realistycznych assetów 3D** dla czterech aktywnych scen `projects/Prawko-Scenariusze/`. To jest **pierwsze zadanie dla każdego kolejnego agenta**. Nie zaczynać od nowych paneli, silników, edytorów siatek, uniwersalnych mechanizmów komponentów ani dodatkowych scenariuszy, jeśli nie blokują importu lub wizualnej jakości modeli. Poniższe etapy VICOM (1–5) są historią i backlogiem dalszym, **nie zastępują priorytetu A1**. S3.3 nie jest globalnie zamknięte; niezakończone funkcje zostają odłożone.
+
+**Pierwszy podetap — jeden model próbny:** w istniejącym **Blenderze 5.3** utworzyć od podstaw szczegółową, realistyczną **wiatę przystankową** z konstrukcją metalową, transparentnymi szybami, ławką, betonową podstawą, detalami łączeń i poprawnymi materiałami. Najpierw sprawdzić pipeline **Blender → GLB → biblioteka Prawko → drag & drop na nową scenę → ustawienie pozycji/obrotu → zapis i ponowne otwarcie**. Źródło `.blend`, skrypt `bpy` (o ile użyty), `.glb`, tekstury, miniatury, manifest i wpis licencyjny trzymać w istniejącej strukturze `assets/prawko/`, bez stockowych modeli i bez nadpisywania dotychczasowych zasobów.
+
+**Bramka jakości przed produkcją seryjną:** obejrzeć **rzeczywisty renderer Qt**, porównać geometrię i materiały z Blenderem (w szczególności szkło/przezroczystość, tekstury/PBR, metal, cienie i odbicia), sprawdzić skalę i orientację, wybór myszą, transformacje i trwałość zapisu, widok kierowcy i trzy lusterka oraz dzień/noc/deszcz. W razie wykrycia braków renderera wykonać **wyłącznie poprawki konieczne do prawidłowego wyświetlenia modeli**, z osobnym testem regresyjnym. Zmierzyć podstawową wydajność przy powtórzeniu obiektu w scenie. Nie deklarować PBR, odbić, szkła ani wydajności jako PASS bez rzeczywistego wyniku. Potwierdzić Quality Gate, commit/push i aktualizację tego `HANDOFF.md`.
+
+**Po pozytywnym odbiorze pojedynczego assetu:** ustalić spójny standard wymiarów w metrach, osi, pivotów, nazw i materiałów, budżetów geometrii/tekstur, wersjonowania oraz miniatur w istniejącej bibliotece. Dopiero wtedy zacząć **seryjne modelowanie** otoczenia do czterech nowych scen: krawężniki i nawierzchnie, budynki, chodniki, ogrodzenia, drzewa i roślinność sezonowa, znaki i infrastruktura, wiaty oraz pojazdy i piesi. Stosować prawdziwą geometrię i materiały, nie płaskie imitacje ani dekoracyjne nakładki.
+
+**Ograniczenia nadal otwarte, ale niepriorytetowe:** pełna telemetria kokpitu i działające przełączniki, reflektory nocne, dopracowanie pogody, kolejne zdarzenia oraz bardziej rozbudowane UI. Wracać do nich, gdy staną się rzeczywistą przeszkodą dla jakości scen albo po zakończeniu etapu Prawko Assets. Nie modyfikować istniejących zapisanych scen użytkownika ani historii Git bez potrzeby.
+
+### Wcześniejsze etapy i odłożony backlog (nie zaczynać od tych punktów)
+
 ### 1. Ukończono — kontrolowany przebieg esmini w tle
 
 Punkt wejścia stanowią [panel symulacji](editor/src/panels/simulation_panel.cpp) i [wynik przebiegu](editor/src/document/esmini_simulation.hpp). Testy z prawdziwym silnikiem uruchamiają się po ustawieniu `ESMINI_PATH` na plik esmini z dystrybucji zawierającej również `dat2csv`.
@@ -176,15 +194,15 @@ Punkty wejścia to `MainWindow::export_scenario_video()`, [proces eksportu](edit
 
 **5a. Wdrożono bibliotekę uczestników i rysowanie ruchu kursorem.** Punkty wejścia to `MainWindow::on_library_drop()`, `RouteTool` i `osc::edit::set_init_polyline()`. Instruktor ma dodawać i edytować ruch kursorem. Parametry techniczne są dostępne na żądanie.
 
-**5b. Następne zadanie — wygodne ustawienia ruchu i odbiór kursorem.** Na kopii zwykłej mapy sprawdź realną myszą przeciągnięcie auta i pieszego, wyznaczenie tras, korektę węzła, cofnięcie, ponowne otwarcie i uruchomienie. Dodaj przy zaznaczonym uczestniku czytelne ustawienia prędkości (km/h), chwili startu i zachowania na końcu oraz przycisk edycji trasy. Podepnij ustawienia do tego samego XOSC i pozwól edytować obsługiwane ścieżki zdarzeń bez utraty wyzwalaczy. Kryterium odbioru to ustawienie auta i pieszego oraz nagranie przejścia w jednym oknie bez otwierania Storyboard dla typowej sceny.
+**5b. Backlog wstrzymany na czas priorytetu Prawko Assets — wygodne ustawienia ruchu i odbiór kursorem.** Na kopii zwykłej mapy sprawdź realną myszą przeciągnięcie auta i pieszego, wyznaczenie tras, korektę węzła, cofnięcie, ponowne otwarcie i uruchomienie. Dodaj przy zaznaczonym uczestniku czytelne ustawienia prędkości (km/h), chwili startu i zachowania na końcu oraz przycisk edycji trasy. Podepnij ustawienia do tego samego XOSC i pozwól edytować obsługiwane ścieżki zdarzeń bez utraty wyzwalaczy. Kryterium odbioru to ustawienie auta i pieszego oraz nagranie przejścia w jednym oknie bez otwierania Storyboard dla typowej sceny.
 
 **5c. Szablony i warianty.** Dodaj tworzenie niezależnej kopii szablonu z ekranu startowego i menu `File`, z zachowaniem spójnego zapisu i kontroli niezapisanych zmian. W dalszym kroku dodaj szablony miejskie, pozamiejskie i autostradowe, podmianę otoczenia, przypisywanie ról pasów i stref oraz raport odwołań do korekty.
 
-**5d. Warunki, kamery i nagrania (częściowo).** Są trzy rzeczywiste kamery lusterek, cztery pory dnia, cztery warianty pogody oraz trzy pory roku z zapisem per scena. Początkowy kokpit 2D zastąpiono własnym **modelem wnętrza 3D z Blendera**: prawdziwa deska, obudowa kabiny, ruchoma kierownica wyliczana z trajektorii, dwa ruchome pióra wycieraczek powiązane z czasem symulacji, czytelna prędkość km/h. Zweryfikowano rzeczywiste kadry OpenGL z drogą przed samochodem, deszczem i lusterkami. **Najbliższe zadanie:** pełne sterowanie i telemetria wyposażenia (światła, kontrolki, obrotomierz, paliwo, pedały), dynamiczny odbiór MP4/FPS w ruchomej scenie esmini oraz efekty reflektorów. Cały 5d nie jest jeszcze ukończony.
+**5d. Warunki, kamery i nagrania (częściowo; dalsza rozbudowa odłożona na czas priorytetu Prawko Assets).** Są trzy rzeczywiste kamery lusterek, cztery pory dnia, cztery warianty pogody oraz trzy pory roku z zapisem per scena. Początkowy kokpit 2D zastąpiono własnym **modelem wnętrza 3D z Blendera**: prawdziwa deska, obudowa kabiny, ruchoma kierownica wyliczana z trajektorii, dwa ruchome pióra wycieraczek powiązane z czasem symulacji, czytelna prędkość km/h. Zweryfikowano rzeczywiste kadry OpenGL z drogą przed samochodem, deszczem i lusterkami. **Najbliższe zadanie:** pełne sterowanie i telemetria wyposażenia (światła, kontrolki, obrotomierz, paliwo, pedały), dynamiczny odbiór MP4/FPS w ruchomej scenie esmini oraz efekty reflektorów. Cały 5d nie jest jeszcze ukończony.
 
 ## Gotowe polecenie do nowej rozmowy
 
-> Kontynuuj PrawkoRoadStudio w `F:\PrawkoRoadStudio`. Przeczytaj `HANDOFF.md` i `AGENTS.md`, uruchom `scripts/prawko-resume.ps1 -Verify` i potwierdź stan obu repozytoriów GitHub, ostatnie commity oraz testy. Kontynuuj pierwszy niewykonany etap z **Aktywnego planu**. Testuj na kopiach i nie nadpisuj niezapisanych scen. Po zakończeniu etapu wykonaj testy, uaktualnij stan i kolejny krok w `HANDOFF.md`, zacommituj, wypchnij i wykonaj `scripts/prawko-git.ps1 -Action finish`.
+> Kontynuuj PrawkoRoadStudio w `F:\PrawkoRoadStudio`. Przeczytaj `HANDOFF.md` i `AGENTS.md`, uruchom `scripts/prawko-resume.ps1 -Verify` i potwierdź stan obu repozytoriów GitHub, ostatnie commity oraz testy. Zacznij od **PRIORYTETU A1 — Prawko Assets** w Aktywnym planie: zbuduj i odbierz wiatę przystankową Blender → GLB → przeciągnięcie na scenę → zapis/odczyt → wizualny odbiór; nie wracaj teraz do backlogu funkcjonalności 5b–5d. Testuj na kopiach i nie nadpisuj niezapisanych scen. Po zakończeniu etapu wykonaj testy, uaktualnij stan i kolejny krok w `HANDOFF.md`, zacommituj, wypchnij i wykonaj `scripts/prawko-git.ps1 -Action finish`.
 
 ## Historia prac
 
