@@ -1,0 +1,33 @@
+{
+  "title": "Prawko Wiata Miejska A1",
+  "units": "metres",
+  "axes": "Z up, front negative Y",
+  "dimensions_m": [
+    4.96,
+    2.35,
+    2.769
+  ],
+  "objects": 156,
+  "materials": [
+    "01 Powder coated steel RAL 7016",
+    "02 Brushed stainless bolt steel",
+    "03 Dark silicone EPDM",
+    "04 Fine grained board-formed concrete",
+    "05 Warm slatted treated hardwood",
+    "06 Clear safety glass light cyan",
+    "07 Matte graphite insulated roof",
+    "08 Route timetable paper",
+    "09 Prawko warm stop identifier",
+    "10 Safety reflector red",
+    "11 Route legend black",
+    "12 Route legend blue"
+  ],
+  "blender_version": "5.3.0",
+  "glass_alpha": 0.23,
+  "glass_transmission": 0.64,
+  "texture_files": [
+    "//prawko_wiata_beton_albedo.png",
+    "//prawko_wiata_drewno_albedo.png"
+  ],
+  "glb": "prawko_wiata_przystankowa.glb"
+}

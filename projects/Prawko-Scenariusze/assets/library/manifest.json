@@ -1,0 +1,18 @@
+{
+  "manifest_version": 1,
+  "items": [
+    {
+      "key": "prop.prawko_wiata_przystankowa",
+      "label": "Wiata miejska Prawko A1",
+      "category": "Prawko | Obiekty 3D",
+      "create": {
+        "kind": "tree",
+        "model": "prawko_wiata_przystankowa",
+        "model_file": "assets/props/prawko_wiata_przystankowa.glb",
+        "source": "assets/prawko/blender/wiata_przystankowa/prawko_wiata_przystankowa.glb",
+        "license": "Apache-2.0 — autorski model PrawkoNaRaz"
+      },
+      "thumbnail": "assets/library/thumbnails/prawko_wiata_przystankowa.png"
+    }
+  ]
+}

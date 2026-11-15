@@ -21,6 +21,7 @@
 // tools place it and the exporters draw it exactly as they do a bundled prop.
 
 #include "roadmaker/assets/prop_library.hpp"
+#include "roadmaker/assets/prop_import.hpp"
 #include "roadmaker/edit/operations.hpp"
 #include "roadmaker/mesh/mesh_builder.hpp"
 #include "roadmaker/road/authoring.hpp"
@@ -344,6 +345,43 @@ TEST_F(PropAssetImport, TheItemRoundTripsThroughTheManifest) {
     return d.message.find("could not be loaded") != std::string::npos;
   });
   EXPECT_FALSE(broken);
+}
+
+TEST_F(PropAssetImport, PrawkoA1BlenderShelterKeepsAlphaAndRoughnessWhileReportingTextureLimits) {
+  const auto source = std::filesystem::path(RM_ASSETS_DIR) /
+      "prawko/blender/wiata_przystankowa/prawko_wiata_przystankowa.glb";
+  ASSERT_TRUE(std::filesystem::is_regular_file(source));
+  auto imported = props::import_prop_model(source, "prawko_wiata_przystankowa");
+  ASSERT_TRUE(imported.has_value()) << imported.error().message;
+  EXPECT_GT(imported->model.parts.size(), 80U);
+  EXPECT_LE(imported->model.parts.size(), props::kMaxPropParts);
+  EXPECT_NEAR(imported->model.height, 2.77, 0.05);
+  EXPECT_GT(imported->model.radius, 2.3);
+  std::size_t triangle_count = 0;
+  bool glass_found = false;
+  bool textured_found = false;
+  bool metal_found = false;
+  for (const props::PropPart& part : imported->model.parts) {
+    triangle_count += part.indices.size() / 3;
+    EXPECT_FALSE(part.positions.empty());
+    if (part.name.find("Clear safety glass") != std::string::npos) {
+      glass_found = true;
+      EXPECT_NEAR(part.opacity, 0.23, 0.04);
+      EXPECT_LT(part.roughness, 0.2);
+    }
+    if (part.name.find("Brushed stainless") != std::string::npos) {
+      metal_found = true;
+      EXPECT_LT(part.roughness, 0.4);
+    }
+  }
+  for (const Diagnostic& diagnostic : imported->diagnostics) {
+    textured_found |= diagnostic.message.find("flattened") != std::string::npos;
+  }
+  EXPECT_TRUE(glass_found);
+  EXPECT_TRUE(metal_found);
+  EXPECT_TRUE(textured_found) << "Real UV textures must be flagged as not yet faithfully rendered";
+  EXPECT_GT(triangle_count, 5000U);
+  EXPECT_LT(triangle_count, props::kMaxPropTriangles);
 }
 
 // This is the ACTUAL asset authored and exported by Blender 5.3, not a

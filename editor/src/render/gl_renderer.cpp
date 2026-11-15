@@ -496,6 +496,7 @@ RenderMeshHandle GLRenderer::upload(const RenderMeshData& data) {
   }
   GpuMesh mesh;
   mesh.color = data.color;
+  mesh.roughness = data.roughness;
   mesh.kind = data.kind;
   mesh.index_count = static_cast<std::int32_t>(data.indices.size());
 
@@ -761,11 +762,20 @@ void GLRenderer::render(const std::vector<DrawItem>& items,
   gl::Uniform1i(u_normal_, 1);        // normal map on unit 1
   gl::Uniform1i(u_roughness_map_, 2); // roughness map on unit 2
 
-  for (const DrawItem& item : items) {
-    const auto found = meshes_.find(item.mesh.id);
-    if (found == meshes_.end()) {
-      continue;
+  // Transparent glTF parts are drawn AFTER all opaque road/prop meshes. Blend
+  // with depth testing but without depth writes, so glass reveals the bench,
+  // sidewalk and other scene geometry. Opaque assets retain the exact old pass.
+  // This is alpha BLEND only: it is not physical transmission or refraction.
+  for (int pass = 0; pass < 2; ++pass) {
+    if (pass == 1) {
+      gl::DepthMask(0);
+      gl::Enable(gl::kBlend);
+      gl::BlendFunc(gl::kSrcAlpha, gl::kOneMinusSrcAlpha);
     }
+    for (const DrawItem& item : items) {
+      const auto found = meshes_.find(item.mesh.id);
+      if (found == meshes_.end()) continue;
+      if ((found->second.color[3] < 0.999F) != (pass == 1)) continue;
     // Non-const: the instanced path lazily creates mesh.instance_vbo on first use.
     GpuMesh& mesh = found->second;
 
@@ -799,7 +809,7 @@ void GLRenderer::render(const std::vector<DrawItem>& items,
     }
     // Scalar roughness fallback/modulator: default 1.0 → zero specular, so an
     // untextured/default Material stays pixel-identical to the pre-PBR output.
-    gl::Uniform1f(u_roughness_, mat.roughness_value);
+    gl::Uniform1f(u_roughness_, mat.roughness_value * mesh.roughness);
     gl::Uniform1f(u_vertical_fill_, mat.vertical_fill);
     gl::Uniform1i(u_asphalt_, mat.asphalt ? 1 : 0);
 
@@ -878,7 +888,10 @@ void GLRenderer::render(const std::vector<DrawItem>& items,
                                 nullptr,
                                 static_cast<gl::GLsizei>(item.instances.size()));
     }
-  }
+    } // draw items for this alpha pass
+  } // opaque + blend
+  gl::Disable(gl::kBlend);
+  gl::DepthMask(1);
   gl::BindVertexArray(0);
   gl::UseProgram(0);
 }

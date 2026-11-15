@@ -65,6 +65,7 @@ private:
     std::uint32_t instance_vbo = 0;
     std::int32_t index_count = 0;
     std::array<float, 4> color{};
+    float roughness = 1.0F;
     PrimitiveKind kind = PrimitiveKind::Triangles;
   };
 

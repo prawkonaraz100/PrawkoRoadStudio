@@ -8,6 +8,9 @@ Pliki OpenDRIVE i OpenSCENARIO przygotowane 15 listopada 2026 r. od podstaw (Apa
 | 02-przejscie-pieszy | zmierzch/jesien | Pieszy wchodzi na pasy, Ego hamuje |
 | 03-deszcz-luk | deszcz/jesien | Luk drogi, AutoPrzed hamuje, Ego reaguje |
 | 04-zima-mgla | mgla/zima | Wolniejsza jazda i ograniczona widocznosc |
+| 05-wiata-test | dzien/lato | Osobna scena do testu GLB i materialow realistycznej wiaty przystankowej |
+
+Scena 05-wiata-test powstala osobno na potrzeby etapu Prawko Assets A1. Model GLB i miniatura znajduja sie w assets/props i assets/library. Cztery pierwotne scenariusze pozostaja bez zmian, a generator scripts/create-prawko-scenarios.cjs odtwarza tylko pierwotny pakiet czterech. Wiata jest przetestowana w dzien, deszcz i noc (noc bez realistycznego oswietlenia), ale pelne tekstury PBR/UV sa nadal otwarte.
 
 Otworz plik .xodr w edytorze, a w panelu Symulacja uruchom przejazd.
 Odpowiadajace mu pliki .xosc i .rmscene.json zostana automatycznie odczytane.

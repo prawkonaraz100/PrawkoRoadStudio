@@ -264,10 +264,11 @@ void append_model_items(std::string_view model_id,
     created.parts.reserve(model->parts.size());
     for (const props::PropPart& part : model->parts) {
       // MODEL-space geometry (the instanced draw applies the per-instance matrix).
-      created.parts.push_back(to_render_data(part.positions,
-                                             part.normals,
-                                             part.indices,
-                                             {part.color[0], part.color[1], part.color[2], 1.0F}));
+      RenderMeshData mesh = to_render_data(
+          part.positions, part.normals, part.indices,
+          {part.color[0], part.color[1], part.color[2], part.opacity});
+      mesh.roughness = part.roughness;
+      created.parts.push_back(std::move(mesh));
     }
     scene.prop_batches.push_back(std::move(created));
     batch = &scene.prop_batches.back();

@@ -43,6 +43,10 @@ struct PropPart {
   std::vector<std::uint32_t> indices;
   std::array<float, 3> color;
   std::string name;
+  // Optional imported glTF alpha BLEND and roughness factors. Appended so
+  // existing generated/positional built-in props keep their opaque defaults.
+  float opacity = 1.0F;
+  float roughness = 1.0F;
 };
 
 /// A normalised sub-rectangle of a sign face: {left, top, width, height} in

@@ -28,6 +28,16 @@ models, fonts, images). Policy — see [`docs/standards/assets.md`](docs/standar
 | `assets/prawko/blender/prawko_kokpit_wheel.glb` | Original separate 3D steering wheel | PrawkoRoadStudio | Apache-2.0 | 2026-11-15 |
 | `assets/prawko/blender/prawko_kokpit_wiper.glb` | Original separate 3D wiper | PrawkoRoadStudio | Apache-2.0 | 2026-11-15 |
 | `assets/prawko/blender/kokpit_layout.json` | Blender mesh offsets and dimensions | PrawkoRoadStudio | Apache-2.0 | 2026-11-15 |
+| `assets/prawko/blender/wiata_przystankowa/create_wiata.py` | Original procedural Blender 5.3 street shelter generator (156 authored objects) | PrawkoRoadStudio | Apache-2.0 | 2026-11-15 |
+| `assets/prawko/blender/wiata_przystankowa/prawko_wiata_przystankowa.blend` | Editable original 3D bus stop shelter with metallic frame, glass, roof, bench and cabinet | PrawkoRoadStudio | Apache-2.0 | 2026-11-15 |
+| `assets/prawko/blender/wiata_przystankowa/prawko_wiata_przystankowa.glb` | GLB 2.0 original model; also copied to active project for testing | PrawkoRoadStudio | Apache-2.0 | 2026-11-15 |
+| `assets/prawko/blender/wiata_przystankowa/prawko_wiata_beton_albedo.png` | Procedurally generated original concrete albedo texture | PrawkoRoadStudio | Apache-2.0 | 2026-11-15 |
+| `assets/prawko/blender/wiata_przystankowa/prawko_wiata_drewno_albedo.png` | Procedurally generated original hardwood albedo texture | PrawkoRoadStudio | Apache-2.0 | 2026-11-15 |
+| `assets/prawko/blender/wiata_przystankowa/render_preview.py` | Original Blender Cycles visual proof generator | PrawkoRoadStudio | Apache-2.0 | 2026-11-15 |
+| `assets/prawko/blender/wiata_przystankowa/prawko_wiata_blender_preview.png` | Blender Cycles rendered visual reference | PrawkoRoadStudio | Apache-2.0 | 2026-11-15 |
+| `assets/prawko/blender/wiata_przystankowa/model-metadata.json` | Physical dimensions, material list and version metadata from Blender | PrawkoRoadStudio | Apache-2.0 | 2026-11-15 |
+| `projects/Prawko-Scenariusze/assets/props/prawko_wiata_przystankowa.glb` | Working copy of the source GLB used by the active project | PrawkoRoadStudio | Apache-2.0 | 2026-11-15 |
+| `projects/Prawko-Scenariusze/assets/library/thumbnails/prawko_wiata_przystankowa.png` | Thumbnail derived from original Blender preview; no third-party imagery | PrawkoRoadStudio | Apache-2.0 | 2026-11-15 |
 | `assets/textures/asphalt/asphalt_02_diff_512.jpg` | [Poly Haven — asphalt_02](https://polyhaven.com/a/asphalt_02) (resized to 512, re-encoded JPEG q85) | Poly Haven (Rob Tuytel, Sergej Majboroda) | CC0 | 2026-07-14 |
 | `assets/textures/asphalt/asphalt_02_nor_gl_512.png` | [Poly Haven — asphalt_02](https://polyhaven.com/a/asphalt_02) (resized to 512, PNG — normals kept lossless) | Poly Haven (Rob Tuytel, Sergej Majboroda) | CC0 | 2026-07-17 |
 | `assets/textures/asphalt/asphalt_02_rough_512.jpg` | [Poly Haven — asphalt_02](https://polyhaven.com/a/asphalt_02) (resized to 512, re-encoded JPEG q85) | Poly Haven (Rob Tuytel, Sergej Majboroda) | CC0 | 2026-07-17 |

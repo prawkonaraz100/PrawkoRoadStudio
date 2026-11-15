@@ -124,6 +124,7 @@ struct RenderMeshData {
   std::vector<std::uint32_t> indices;
   std::array<float, 4> color{0.8F, 0.8F, 0.8F, 1.0F};
   PrimitiveKind kind = PrimitiveKind::Triangles;
+  float roughness = 1.0F; // imported glTF factor; default preserves legacy props
 };
 
 /// Per-item feedback state. Drives the accent emphasis in the mesh shader:

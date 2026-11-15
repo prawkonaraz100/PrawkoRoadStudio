@@ -422,6 +422,8 @@ struct FlatPrimitive {
   std::vector<std::uint32_t> indices;
   std::array<float, 3> color{0.7F, 0.7F, 0.7F};
   std::string name;
+  float opacity = 1.0F;
+  float roughness = 1.0F;
 };
 
 /// Per-face normals for a primitive that shipped without any, area-weighted at
@@ -739,6 +741,20 @@ private:
     FlatPrimitive part;
     part.name = primitive_name(primitive);
     part.color = resolve_color(primitive, where);
+    if (primitive.material >= 0 &&
+        static_cast<std::size_t>(primitive.material) < model_.materials.size()) {
+      const tinygltf::Material& material =
+          model_.materials[static_cast<std::size_t>(primitive.material)];
+      part.roughness = static_cast<float>(
+          std::clamp(material.pbrMetallicRoughness.roughnessFactor, 0.05, 1.0));
+      if (material.alphaMode == "BLEND" &&
+          material.pbrMetallicRoughness.baseColorFactor.size() >= 4) {
+        part.opacity = static_cast<float>(
+            std::clamp(material.pbrMetallicRoughness.baseColorFactor[3], 0.0, 1.0));
+      }
+      // Transmission/refraction and metallic BRDF still require dedicated
+      // shaders. This small import patch only keeps BLEND alpha and roughness.
+    }
 
     // Frame conversion happens HERE, once per vertex, through the one shared
     // definition of the boundary rotation.
@@ -1084,7 +1100,9 @@ Expected<PropImportResult> import_prop_model(const std::filesystem::path& path,
                                  .normals = std::move(flat.normals),
                                  .indices = std::move(flat.indices),
                                  .color = flat.color,
-                                 .name = std::move(flat.name)});
+                                 .name = std::move(flat.name),
+                                 .opacity = flat.opacity,
+                                 .roughness = flat.roughness});
   }
   const std::optional<std::pair<double, double>> extent = normalise_to_base_centre(out.parts);
   if (!extent.has_value()) {
