@@ -1050,7 +1050,10 @@ void ViewportWidget::render_frame(const OrbitCamera& camera, const QSize& size,
       }
     }
   }
+  // Opt-in GPU proof seam: disable ONLY the other vehicle's light for an
+  // identical-frame comparison. Never changes scene files or Ego beams.
   if (environment.headlight_intensity > 0.0F &&
+      !qEnvironmentVariableIsSet("PRAWKO_VIDEO_PROOF_NO_TRAFFIC_LIGHTS") &&
       simulation_frame_->traffic_headlights) {
     environment.traffic_headlights = *simulation_frame_->traffic_headlights;
     environment.traffic_headlights.intensity =

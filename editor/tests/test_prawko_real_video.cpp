@@ -162,6 +162,42 @@ TEST(PrawkoRealVideo, DriverViewStreamsActualTrafficAndMirrorsToMp4) {
     std::cout << "R4B2_NIGHT_ROAD_LIGHT_PASS illuminated_samples="
               << illuminated << '\n';
   }
+  if (night_proof && qEnvironmentVariableIsSet("PRAWKO_VIDEO_PROOF_COMPARE_TRAFFIC")) {
+    // R4b3b: same esmini poses, same camera, same time: only the traffic
+    // vehicle's light toggles. This avoids mistaking movement for lighting.
+    const auto identical_poses = playback.poses_at(2.0);
+    qunsetenv("PRAWKO_VIDEO_PROOF_NO_TRAFFIC_LIGHTS");
+    const QImage traffic_on = view.capture_simulation_frame(
+        kSize, camera, identical_poses, QStringLiteral("Ego"), 2.0);
+    qputenv("PRAWKO_VIDEO_PROOF_NO_TRAFFIC_LIGHTS", "1");
+    const QImage traffic_off = view.capture_simulation_frame(
+        kSize, camera, identical_poses, QStringLiteral("Ego"), 2.0);
+    qunsetenv("PRAWKO_VIDEO_PROOF_NO_TRAFFIC_LIGHTS");
+    ASSERT_FALSE(traffic_on.isNull());
+    ASSERT_EQ(traffic_on.size(), traffic_off.size());
+    const QString on_name = output + ".traffic-on.png";
+    const QString off_name = output + ".traffic-off.png";
+    ASSERT_FALSE(QFileInfo::exists(on_name));
+    ASSERT_FALSE(QFileInfo::exists(off_name));
+    ASSERT_TRUE(traffic_on.save(on_name,"PNG"));
+    ASSERT_TRUE(traffic_off.save(off_name,"PNG"));
+    int brighter = 0, darker = 0, changed = 0;
+    for (int y = 0; y < height; y += 2) {
+      for (int x = 0; x < width; x += 2) {
+        const QRgb on = traffic_on.pixel(x, y);
+        const QRgb off = traffic_off.pixel(x, y);
+        const int delta = (qRed(on) + qGreen(on) + qBlue(on))
+                        - (qRed(off) + qGreen(off) + qBlue(off));
+        if (delta > 12) ++brighter;
+        if (delta < -12) ++darker;
+        if (std::abs(delta) > 12) ++changed;
+      }
+    }
+    std::cout << "R4B3B_TRAFFIC_AB_GPU_PROOF brighter=" << brighter
+              << " darker=" << darker << " changed=" << changed << '\n';
+    EXPECT_GT(brighter, 10) << "Other-car lights are not visibly illuminating the scene";
+    EXPECT_GT(brighter, darker) << "Turning on lights should brighten, not darken";
+  }
   ASSERT_TRUE(before.save(output+".first.png","PNG"));
   ASSERT_TRUE(later.save(output+".moving.png","PNG"));
 
