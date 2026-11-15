@@ -385,6 +385,9 @@ TEST_F(PropAssetImport, PrawkoA1BlenderShelterKeepsAlphaAndRoughnessWhileReporti
       glass_found = true;
       EXPECT_NEAR(part.opacity, 0.23, 0.04);
       EXPECT_LT(part.roughness, 0.2);
+      EXPECT_EQ(part.alpha_mode, 2);
+      EXPECT_NEAR(part.transmission, 0.64F, 0.04F);
+      EXPECT_NEAR(part.ior, 1.45F, 0.03F);
     }
     if (part.name.find("Brushed stainless") != std::string::npos) {
       metal_found = true;

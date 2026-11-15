@@ -18,6 +18,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include <algorithm>
 #include <string>
 
 #include "render/gl_functions.hpp"
@@ -87,6 +88,10 @@ uniform int u_gltf_pbr;            // GGX on imported glTF only
 uniform float u_metallic;          // metallicFactor, 0 legacy
 uniform int u_has_metallic_roughness;
 uniform sampler2D u_metallic_roughness; // G roughness, B metallic
+uniform int u_alpha_mode;
+uniform float u_alpha_cutoff;
+uniform float u_transmission;
+uniform float u_ior;
 uniform float u_vertical_fill;     // diffuse sky bounce on vertical concrete
 uniform vec3 u_camera_pos;      // world-space eye (specular half-vector)
 // Environment lighting (hemisphere ambient + one directional sun). The Sober
@@ -146,6 +151,8 @@ void main() {
   // A default Material carries no texture, so u_has_texture stays 0 and the
   // flat u_color path is used.
   vec4 albedo = u_has_texture == 1 ? texture(u_base_color, uv) * u_tint : u_color;
+  // glTF MASK is a depth-writing opaque cutout, not a semi-transparent pane.
+  if (u_alpha_mode == 1 && albedo.a < u_alpha_cutoff) discard;
   vec3 geom_n = normalize(v_normal);
   vec3 n = u_has_normal == 1 ? perturb_normal(geom_n, uv) : geom_n;
   float rough =
@@ -209,6 +216,21 @@ void main() {
     // glTF baseColor samples decode as sRGB; encode lighting for RGBA8
     // offscreen and screen targets, which are not sRGB-enabled framebuffers.
     base = pow(clamp(linear_color, 0.0, 1.0), vec3(1.0 / 2.2));
+  }
+  if (u_transmission > 0.0 && u_gltf_pbr == 1) {
+    // Glass IOR Fresnel reflected hemisphere, blended over the real opaque
+    // scene via the existing post-opaque GL pass. This is a *straight-through*
+    // transmission approximation, not ray-traced/refraction or screen-space
+    // distortion. No fake reflection on fully opaque, legacy scenery.
+    vec3 V = normalize(u_camera_pos - v_world_pos);
+    float cos_theta = clamp(abs(dot(n, V)), 0.0, 1.0);
+    float f0 = pow((u_ior - 1.0) / (u_ior + 1.0), 2.0);
+    float fresnel = f0 + (1.0 - f0) * pow(1.0 - cos_theta, 5.0);
+    vec3 reflected_ray = reflect(-V, n);
+    vec3 env = mix(u_ground_light, u_sky_light,
+                   clamp(0.5 + 0.5 * reflected_ray.z, 0.0, 1.0));
+    base = mix(base, env * (0.45 + u_ambient * 0.55),
+               clamp(fresnel * (0.25 + 0.75 * u_transmission), 0.0, 0.82));
   }
   if (u_asphalt == 1) {
     // Wet asphalt darkens and receives a broad sky-colored sheen. Road
@@ -471,6 +493,10 @@ bool GLRenderer::init() {
   u_has_metallic_roughness_ =
       gl::GetUniformLocation(program_, "u_has_metallic_roughness");
   u_metallic_roughness_ = gl::GetUniformLocation(program_, "u_metallic_roughness");
+  u_alpha_mode_ = gl::GetUniformLocation(program_, "u_alpha_mode");
+  u_alpha_cutoff_ = gl::GetUniformLocation(program_, "u_alpha_cutoff");
+  u_transmission_ = gl::GetUniformLocation(program_, "u_transmission");
+  u_ior_ = gl::GetUniformLocation(program_, "u_ior");
   u_vertical_fill_ = gl::GetUniformLocation(program_, "u_vertical_fill");
   u_camera_pos_ = gl::GetUniformLocation(program_, "u_camera_pos");
   u_sun_dir_ = gl::GetUniformLocation(program_, "u_sun_dir");
@@ -545,6 +571,21 @@ RenderMeshHandle GLRenderer::upload(const RenderMeshData& data) {
   GpuMesh mesh;
   mesh.color = data.color;
   mesh.roughness = data.roughness;
+  mesh.alpha_mode = data.alpha_mode;
+  mesh.alpha_cutoff = data.alpha_cutoff;
+  mesh.transmission = data.transmission;
+  mesh.ior = data.ior;
+  if (!data.positions.empty()) {
+    std::array<float,3> lower{1e9F,1e9F,1e9F};
+    std::array<float,3> upper{-1e9F,-1e9F,-1e9F};
+    for(std::size_t k=0;k+2<data.positions.size();k+=3) {
+      for(int axis=0;axis<3;++axis) {
+        lower[axis]=std::min(lower[axis],data.positions[k+axis]);
+        upper[axis]=std::max(upper[axis],data.positions[k+axis]);
+      }
+    }
+    for(int axis=0;axis<3;++axis) mesh.center[axis]=0.5F*(lower[axis]+upper[axis]);
+  }
   mesh.kind = data.kind;
   mesh.index_count = static_cast<std::int32_t>(data.indices.size());
 
@@ -811,20 +852,52 @@ void GLRenderer::render(const std::vector<DrawItem>& items,
   gl::Uniform1i(u_roughness_map_, 2); // roughness map on unit 2
   gl::Uniform1i(u_metallic_roughness_, 3); // GLB metal/rough map, G and B channels
 
-  // Transparent glTF parts are drawn AFTER all opaque road/prop meshes. Blend
-  // with depth testing but without depth writes, so glass reveals the bench,
-  // sidewalk and other scene geometry. Opaque assets retain the exact old pass.
-  // This is alpha BLEND only: it is not physical transmission or refraction.
+  // Render solid and alpha-MASK depth writers first. Sort BLEND draw-items
+  // back-to-front by their farthest instance center. Sorting individual faces
+  // of overlapping translucent instanced meshes is not provided by OpenGL 3.3;
+  // separate nearby panes remain an approximation, documented in HANDOFF.
+  std::vector<std::size_t> order;
+  order.reserve(items.size());
+  std::vector<float> distances(items.size(), 0.0F);
+  for (std::size_t i = 0; i < items.size(); ++i) {
+    order.push_back(i);
+    const auto found = meshes_.find(items[i].mesh.id);
+    if (found == meshes_.end()) continue;
+    const auto& c = found->second.center;
+    auto dist = [&](float x, float y, float z) {
+      const float dx = x - camera.eye[0];
+      const float dy = y - camera.eye[1];
+      const float dz = z - camera.eye[2];
+      return dx * dx + dy * dy + dz * dz;
+    };
+    if (items[i].instances.empty()) {
+      distances[i] = dist(c[0], c[1], c[2]);
+    } else {
+      for (const auto& transform : items[i].instances) {
+        const auto& m = transform.model;
+        distances[i] = std::max(distances[i], dist(
+            m[0] * c[0] + m[4] * c[1] + m[8] * c[2] + m[12],
+            m[1] * c[0] + m[5] * c[1] + m[9] * c[2] + m[13],
+            m[2] * c[0] + m[6] * c[1] + m[10] * c[2] + m[14]));
+      }
+    }
+  }
   for (int pass = 0; pass < 2; ++pass) {
     if (pass == 1) {
       gl::DepthMask(0);
       gl::Enable(gl::kBlend);
       gl::BlendFunc(gl::kSrcAlpha, gl::kOneMinusSrcAlpha);
+      std::stable_sort(order.begin(), order.end(),
+        [&](std::size_t a, std::size_t b) { return distances[a] > distances[b]; });
     }
-    for (const DrawItem& item : items) {
+    for (std::size_t ordered_index : order) {
+      const DrawItem& item = items[ordered_index];
       const auto found = meshes_.find(item.mesh.id);
       if (found == meshes_.end()) continue;
-      if ((found->second.color[3] < 0.999F) != (pass == 1)) continue;
+      const bool alpha_blend = found->second.alpha_mode == 2 ||
+                              (found->second.alpha_mode == 0 &&
+                               found->second.color[3] < 0.999F);
+      if (alpha_blend != (pass == 1)) continue;
     // Non-const: the instanced path lazily creates mesh.instance_vbo on first use.
     GpuMesh& mesh = found->second;
 
@@ -865,6 +938,10 @@ void GLRenderer::render(const std::vector<DrawItem>& items,
     }
     gl::Uniform1i(u_gltf_pbr_, mat.gltf_pbr ? 1 : 0);
     gl::Uniform1f(u_metallic_, mat.metallic_value);
+    gl::Uniform1i(u_alpha_mode_, mesh.alpha_mode);
+    gl::Uniform1f(u_alpha_cutoff_, mesh.alpha_cutoff);
+    gl::Uniform1f(u_transmission_, mesh.transmission);
+    gl::Uniform1f(u_ior_, mesh.ior);
     // Scalar roughness fallback/modulator: default 1.0 → zero specular, so an
     // untextured/default Material stays pixel-identical to the pre-PBR output.
     gl::Uniform1f(u_roughness_, mat.roughness_value * mesh.roughness);

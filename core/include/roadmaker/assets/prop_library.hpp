@@ -56,6 +56,12 @@ struct PropPart {
   int metallic_roughness_texture = -1; // glTF G=roughness, B=metallic
   int normal_texture = -1; // tangent-space normal map
   float normal_strength = 1.0F;
+  // glTF alphaMode: 0=OPAQUE, 1=MASK, 2=BLEND. Legacy props use OPAQUE.
+  int alpha_mode = 0;
+  float alpha_cutoff = 0.5F;
+  // KHR_materials_transmission and KHR_materials_ior, scalar first.
+  float transmission = 0.0F;
+  float ior = 1.5F;
 };
 
 /// Decoded once per imported model and shared across every placed instance.

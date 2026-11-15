@@ -135,6 +135,10 @@ struct RenderMeshData {
   int metallic_roughness_texture = -1;
   int normal_texture = -1;
   float normal_strength = 1.0F;
+  int alpha_mode = 0; // glTF 0 OPAQUE, 1 MASK, 2 BLEND
+  float alpha_cutoff = 0.5F;
+  float transmission = 0.0F;
+  float ior = 1.5F;
 };
 
 /// Per-item feedback state. Drives the accent emphasis in the mesh shader:

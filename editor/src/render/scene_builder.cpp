@@ -274,6 +274,10 @@ void append_model_items(std::string_view model_id,
       mesh.metallic_roughness_texture = part.metallic_roughness_texture;
       mesh.normal_texture = part.normal_texture;
       mesh.normal_strength = part.normal_strength;
+      mesh.alpha_mode = part.alpha_mode;
+      mesh.alpha_cutoff = part.alpha_cutoff;
+      mesh.transmission = part.transmission;
+      mesh.ior = part.ior;
       mesh.uvs.reserve(part.texcoords.size());
       for (double v : part.texcoords) mesh.uvs.push_back(static_cast<float>(v));
       created.parts.push_back(std::move(mesh));

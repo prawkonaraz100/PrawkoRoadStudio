@@ -478,6 +478,10 @@ struct FlatPrimitive {
   int metallic_roughness_texture = -1;
   int normal_texture = -1;
   float normal_strength = 1.0F;
+  int alpha_mode = 0;
+  float alpha_cutoff = 0.5F;
+  float transmission = 0.0F;
+  float ior = 1.5F;
 };
 
 /// Per-face normals for a primitive that shipped without any, area-weighted at
@@ -852,10 +856,39 @@ private:
           warn(where, "normalTexture UV0 missing or unsupported; geometric normals used");
         }
       }
-      if (material->alphaMode == "BLEND" &&
+      part.alpha_mode = material->alphaMode == "MASK" ? 1
+                        : material->alphaMode == "BLEND" ? 2 : 0;
+      part.alpha_cutoff = static_cast<float>(
+          std::clamp(material->alphaCutoff, 0.0, 1.0));
+      if (part.alpha_mode != 0 &&
           material->pbrMetallicRoughness.baseColorFactor.size() >= 4) {
         part.opacity = static_cast<float>(
             std::clamp(material->pbrMetallicRoughness.baseColorFactor[3], 0.0, 1.0));
+      }
+      if (const auto ext = material->extensions.find("KHR_materials_transmission");
+          ext != material->extensions.end() && ext->second.IsObject() &&
+          ext->second.Has("transmissionFactor")) {
+        const auto& factor = ext->second.Get("transmissionFactor");
+        if (factor.IsNumber()) {
+          part.transmission = static_cast<float>(
+              std::clamp(factor.GetNumberAsDouble(), 0.0, 1.0));
+        }
+      }
+      if (const auto ext = material->extensions.find("KHR_materials_ior");
+          ext != material->extensions.end() && ext->second.IsObject() &&
+          ext->second.Has("ior")) {
+        const auto& number = ext->second.Get("ior");
+        if (number.IsNumber()) {
+          part.ior = static_cast<float>(
+              std::clamp(number.GetNumberAsDouble(), 1.0, 2.5));
+        }
+      }
+      // glTF can describe transmissive glass in alphaMode OPAQUE. Approximate
+      // the scalar straight-through light via BLEND, and keep the material's
+      // Fresnel for grazing angles; full physical refraction remains future.
+      if (part.transmission > 0.0F && part.alpha_mode == 0) {
+        part.alpha_mode = 2;
+        part.opacity = 1.0F - part.transmission;
       }
     }
 
@@ -1305,7 +1338,11 @@ Expected<PropImportResult> import_prop_model(const std::filesystem::path& path,
                                  .metallic = flat.metallic,
                                  .metallic_roughness_texture = flat.metallic_roughness_texture,
                                  .normal_texture = flat.normal_texture,
-                                 .normal_strength = flat.normal_strength});
+                                 .normal_strength = flat.normal_strength,
+                                 .alpha_mode = flat.alpha_mode,
+                                 .alpha_cutoff = flat.alpha_cutoff,
+                                 .transmission = flat.transmission,
+                                 .ior = flat.ior});
   }
   out.textures = std::move(reader.textures());
   const std::optional<std::pair<double, double>> extent = normalise_to_base_centre(out.parts);

@@ -87,6 +87,21 @@ def write_png(width: int, height: int, rgb: tuple[int, int, int]) -> bytes:
             + _png_chunk(b"IEND", b""))
 
 
+def write_png_rgba_checker(width: int, height: int) -> bytes:
+    """Transparent cutout, 4 channels: verifies alpha MASK really discards."""
+    rows = []
+    for y in range(height):
+        row = bytearray(b"\x00")
+        for x in range(width):
+            row.extend((130, 210, 235, 0 if (x + y) % 2 == 0 else 255))
+        rows.append(bytes(row))
+    raw = b"".join(rows)
+    return (b"\x89PNG\r\n\x1a\n"
+            + _png_chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0))
+            + _png_chunk(b"IDAT", zlib.compress(raw, 9))
+            + _png_chunk(b"IEND", b""))
+
+
 # --------------------------------------------------------------------------- #
 # glTF assembly
 # --------------------------------------------------------------------------- #
@@ -278,6 +293,25 @@ def well_formed() -> None:
                 {"bufferView": normal_view, "mimeType": "image/png"}],
         textures=[{"source": 0}, {"source": 1}, {"source": 2}])
     write("pbr_metal_box.glb", glb_bytes(doc, b.blob))
+
+    # Opaque alpha MASK cutoff: must punch real 0-alpha holes but write depth
+    # for retained texels (not be drawn in the BLEND pass).
+    b = Builder()
+    p, n, t, i = b.vec3(pos), b.vec3(nrm), b.vec2(uv), b.indices(idx)
+    image_view = b.image_from_bytes(write_png_rgba_checker(4, 4))
+    doc = assemble(
+        b,
+        [{"name": "mask_cutout", "primitives": [{
+            "attributes": {"POSITION": p, "NORMAL": n, "TEXCOORD_0": t},
+            "indices": i, "material": 0, "mode": MODE_TRIANGLES}]}],
+        materials=[{"name": "cutout_panel", "alphaMode": "MASK",
+                    "alphaCutoff": 0.45,
+                    "pbrMetallicRoughness": {
+                        "baseColorFactor": [1.0, 1.0, 1.0, 1.0],
+                        "baseColorTexture": {"index": 0}}}],
+        images=[{"bufferView": image_view, "mimeType": "image/png"}],
+        textures=[{"source": 0}])
+    write("mask_cutout_box.glb", glb_bytes(doc, b.blob))
 
     # 2. The same box with a plain baseColorFactor and no texture at all, so a
     #    test can tell "flattened a texture" from "read a factor".

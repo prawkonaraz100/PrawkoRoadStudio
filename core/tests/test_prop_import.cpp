@@ -252,6 +252,23 @@ TEST(PropImportColor, TextureBesideGltfIsKeptWithTheSameBytesAsEmbeddedGlb) {
   EXPECT_EQ(external.model.parts.front().texcoords, embedded.model.parts.front().texcoords);
 }
 
+TEST(PropImportGlass, AlphaMaskCutoutAndTransmissionMetadataArePreserved) {
+  const PropImportResult imported = import_or_fail("mask_cutout_box.glb");
+  ASSERT_EQ(imported.model.parts.size(), 1U);
+  ASSERT_EQ(imported.model.textures.size(), 1U);
+  const auto& part = imported.model.parts.front();
+  EXPECT_TRUE(part.gltf_pbr);
+  EXPECT_EQ(part.alpha_mode, 1); // glTF MASK: opaque-depth cutout
+  EXPECT_NEAR(part.alpha_cutoff, 0.45F, 0.001F);
+  EXPECT_FLOAT_EQ(part.opacity, 1.0F);
+  EXPECT_EQ(part.base_color_texture, 0);
+  const auto& image = imported.model.textures.front();
+  ASSERT_GE(image.rgba.size(), 8U);
+  EXPECT_EQ(image.rgba[3], 0);
+  EXPECT_EQ(image.rgba[7], 255);
+  EXPECT_FLOAT_EQ(part.transmission, 0.0F);
+}
+
 TEST(PropImportPbr, PreservesCombinedMetallicRoughnessAndNormalAsLinearMaps) {
   const PropImportResult imported = import_or_fail("pbr_metal_box.glb");
   ASSERT_EQ(imported.model.parts.size(), 1U);

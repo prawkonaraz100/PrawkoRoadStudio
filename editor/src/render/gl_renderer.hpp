@@ -66,6 +66,11 @@ private:
     std::int32_t index_count = 0;
     std::array<float, 4> color{};
     float roughness = 1.0F;
+    int alpha_mode = 0;
+    float alpha_cutoff = 0.5F;
+    float transmission = 0.0F;
+    float ior = 1.5F;
+    std::array<float,3> center{}; // local mesh bounds center for glass sorting
     PrimitiveKind kind = PrimitiveKind::Triangles;
   };
 
@@ -103,6 +108,10 @@ private:
   std::int32_t u_metallic_ = -1;
   std::int32_t u_has_metallic_roughness_ = -1;
   std::int32_t u_metallic_roughness_ = -1;
+  std::int32_t u_alpha_mode_ = -1;
+  std::int32_t u_alpha_cutoff_ = -1;
+  std::int32_t u_transmission_ = -1;
+  std::int32_t u_ior_ = -1;
   std::int32_t u_vertical_fill_ = -1;
   std::int32_t u_camera_pos_ = -1;
   // Environment lighting uniforms (driven by set_environment).
