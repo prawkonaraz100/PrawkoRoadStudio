@@ -105,6 +105,35 @@ TEST(SceneSidecar, TimeOfDayPresetsRoundTripAndOldScenesDefaultToDay) {
   EXPECT_FALSE(scene_sidecar::to_json(*unrecognized).contains("midnight-blue"));
 }
 
+TEST(SceneSidecar, WeatherAndSeasonPersistAndOldFilesStayCompatible) {
+  auto bare = scene_sidecar::parse(R"({"scene_version":1})");
+  ASSERT_TRUE(bare);
+  EXPECT_TRUE(bare->weather.isEmpty());
+  EXPECT_TRUE(bare->season.isEmpty());
+  for (const char* weather : {"clear", "rain", "fog", "snow"}) {
+    for (const char* season : {"summer", "autumn", "winter"}) {
+      SceneState scene = *bare;
+      scene.weather = QString::fromLatin1(weather);
+      scene.season = QString::fromLatin1(season);
+      const auto bytes = scene_sidecar::to_json(scene);
+      auto restored = scene_sidecar::parse(bytes);
+      ASSERT_TRUE(restored);
+      EXPECT_EQ(restored->weather, scene.weather);
+      EXPECT_EQ(restored->season, scene.season);
+      EXPECT_EQ(scene_sidecar::to_json(*restored), bytes);
+    }
+  }
+  auto bad = scene_sidecar::parse(
+      R"({"scene_version":1,"weather":"tornado","season":"spring","keep":"yes"})");
+  ASSERT_TRUE(bad);
+  EXPECT_TRUE(bad->weather.isEmpty());
+  EXPECT_TRUE(bad->season.isEmpty());
+  const auto roundtrip = scene_sidecar::to_json(*bad);
+  EXPECT_FALSE(roundtrip.contains("tornado"));
+  EXPECT_FALSE(roundtrip.contains("spring"));
+  EXPECT_TRUE(roundtrip.contains("keep"));
+}
+
 TEST(SceneSidecar, DriverViewActorRoundTripsAndCanBeCleared) {
   auto parsed = scene_sidecar::parse(R"({"scene_version":1,"driver_view_actor":"Auto"})");
   ASSERT_TRUE(parsed);

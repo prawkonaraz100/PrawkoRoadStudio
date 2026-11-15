@@ -82,6 +82,7 @@ struct Material {
   // material and almost zero on horizontal sidewalk tops.
   float vertical_fill = 0.0F;
   bool unlit = false;           ///< markings/sky bypass lighting
+  bool asphalt = false;        ///< asphalt responds to wet road reflections/snow cover
 };
 
 /// Per-instance transform for prop instancing (many props share one mesh).
@@ -178,6 +179,13 @@ struct Environment {
   std::array<float, 3> ground_color{0.4F, 0.38F, 0.35F}; ///< hemisphere down
   float sun_intensity = 1.0F;
   float ambient = 0.35F;
+  // Weather/seasons are shared across all GL cameras, including three mirror FBOs.
+  // Zero values preserve the existing daylight image exactly.
+  float fog_density = 0.0F;
+  std::array<float, 3> fog_color{0.67F, 0.71F, 0.75F};
+  float wetness = 0.0F;
+  float snow_cover = 0.0F;
+  float season = 0.0F; // 0 summer, 1 autumn, 2 winter (ground shader palette)
 };
 
 /// S3.3: shared time-of-day presets for all cameras, including mirror FBOs
@@ -247,6 +255,83 @@ enum class TimeOfDay { Day, Dawn, Dusk, Night };
     backdrop.sky_horizon = {0.024F, 0.039F, 0.079F};
     break;
   case TimeOfDay::Day: break;
+  }
+  return backdrop;
+}
+
+/// S3.3 scene-local weather and seasonal environment. Defaults are neutral
+/// to protect old scenes and Sober renders.
+enum class WeatherPreset { Clear, Rain, Fog, Snow };
+enum class SeasonPreset { Summer, Autumn, Winter };
+
+[[nodiscard]] constexpr std::string_view weather_key(WeatherPreset preset) {
+  switch (preset) {
+  case WeatherPreset::Rain: return "rain";
+  case WeatherPreset::Fog: return "fog";
+  case WeatherPreset::Snow: return "snow";
+  case WeatherPreset::Clear: break;
+  }
+  return "clear";
+}
+
+[[nodiscard]] constexpr std::string_view season_key(SeasonPreset season) {
+  switch (season) {
+  case SeasonPreset::Autumn: return "autumn";
+  case SeasonPreset::Winter: return "winter";
+  case SeasonPreset::Summer: break;
+  }
+  return "summer";
+}
+
+[[nodiscard]] inline Environment conditioned_lighting(TimeOfDay time,
+                                                       WeatherPreset weather,
+                                                       SeasonPreset season) {
+  Environment env = time_of_day_lighting(time);
+  if (season == SeasonPreset::Autumn) {
+    env.season = 1.0F;
+    env.sun_intensity *= 0.90F;
+  } else if (season == SeasonPreset::Winter) {
+    env.season = 2.0F;
+    env.snow_cover = 0.18F;
+    env.sun_intensity *= 0.75F;
+  }
+  switch (weather) {
+  case WeatherPreset::Rain:
+    env.wetness = 0.85F;
+    env.fog_density = 0.005F;
+    env.fog_color = {0.40F, 0.48F, 0.55F};
+    env.sun_intensity *= 0.28F;
+    env.ambient *= 0.75F;
+    break;
+  case WeatherPreset::Fog:
+    env.fog_density = 0.031F; // approximately 60m of severe visual limitation
+    env.fog_color = {0.65F, 0.69F, 0.71F};
+    env.sun_intensity *= 0.48F;
+    break;
+  case WeatherPreset::Snow:
+    env.snow_cover = 0.77F;
+    env.fog_density = 0.012F;
+    env.fog_color = {0.76F, 0.80F, 0.84F};
+    env.sun_intensity *= 0.50F;
+    break;
+  case WeatherPreset::Clear: break;
+  }
+  return env;
+}
+
+[[nodiscard]] inline BackdropColors conditioned_backdrop(BackdropColors backdrop,
+                                                          TimeOfDay time,
+                                                          WeatherPreset weather) {
+  backdrop = time_of_day_backdrop(backdrop, time);
+  if (weather == WeatherPreset::Fog) {
+    backdrop.sky_top = {0.57F, 0.62F, 0.66F};
+    backdrop.sky_horizon = {0.65F, 0.69F, 0.71F};
+  } else if (weather == WeatherPreset::Rain) {
+    backdrop.sky_top = {0.12F, 0.17F, 0.23F};
+    backdrop.sky_horizon = {0.31F, 0.38F, 0.44F};
+  } else if (weather == WeatherPreset::Snow) {
+    backdrop.sky_top = {0.40F, 0.49F, 0.58F};
+    backdrop.sky_horizon = {0.70F, 0.77F, 0.83F};
   }
   return backdrop;
 }

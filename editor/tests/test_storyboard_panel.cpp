@@ -32,6 +32,9 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <QComboBox>
+#include <QDoubleSpinBox>
+#include <QPushButton>
 #include <string>
 #include <variant>
 #include <vector>
@@ -109,6 +112,49 @@ std::string written(const Document& document) {
 }
 
 } // namespace
+
+TEST(StoryboardPanel, EmergencyBrakeIsARealTimedXoscEventWithOneUndo) {
+  Document document;
+  SelectionModel selection(document);
+  author_scenario(document);
+  StoryboardPanel panel(document, selection);
+  auto* button = panel.findChild<QPushButton*>(QStringLiteral("storyboard_emergency_stop"));
+  auto* actor = panel.findChild<QComboBox*>(QStringLiteral("storyboard_emergency_actor"));
+  auto* time = panel.findChild<QDoubleSpinBox*>(QStringLiteral("storyboard_emergency_time"));
+  ASSERT_NE(button, nullptr);
+  ASSERT_NE(actor, nullptr);
+  ASSERT_NE(time, nullptr);
+  ASSERT_TRUE(button->isEnabled());
+  actor->setCurrentIndex(actor->findData(QStringLiteral("Target")));
+  time->setValue(4.5);
+  const int undo_before = document.undo_stack()->count();
+  button->click();
+  ASSERT_EQ(document.scenario().storyboard.stories.size(), 1U);
+  const auto& act = document.scenario().storyboard.stories.front().acts.front();
+  const auto& group = act.maneuver_groups.front();
+  ASSERT_EQ(group.actors.size(), 1U);
+  EXPECT_EQ(group.actors[0].entity_ref, "Target");
+  const auto& event = group.maneuvers.front().events.front();
+  ASSERT_TRUE(event.start_trigger.has_value());
+  ASSERT_TRUE(event.start_trigger->condition_groups.front().conditions.front()
+                  .simulation_time.has_value());
+  EXPECT_DOUBLE_EQ(event.start_trigger->condition_groups.front()
+                       .conditions.front().simulation_time->value, 4.5);
+  ASSERT_EQ(event.actions.size(), 1U);
+  const auto* entry = std::get_if<osc::PrivateAction>(&event.actions.front().action);
+  ASSERT_NE(entry, nullptr);
+  ASSERT_TRUE(entry->longitudinal.has_value());
+  ASSERT_TRUE(entry->longitudinal->speed.has_value());
+  ASSERT_TRUE(entry->longitudinal->speed->absolute_target.has_value());
+  EXPECT_DOUBLE_EQ(entry->longitudinal->speed->absolute_target->value, 0.0);
+  EXPECT_TRUE(osc::validate_scenario(document.scenario()).empty());
+  EXPECT_FALSE(written(document).empty());
+  EXPECT_EQ(document.undo_stack()->count(), undo_before + 1);
+  document.undo_stack()->undo();
+  EXPECT_TRUE(document.scenario().storyboard.stories.empty());
+  document.undo_stack()->redo();
+  EXPECT_EQ(document.scenario().storyboard.stories.size(), 1U);
+}
 
 TEST(StoryboardPanel, AddCreatesAWritableStoryAndIsOneUndoEntry) {
   Document document;

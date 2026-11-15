@@ -48,6 +48,8 @@ struct SimulationActorPose {
   double heading = 0.0;
   double pitch = 0.0;
   double roll = 0.0;
+  // Derived from adjacent recorded positions; not a guessed engine speed.
+  double speed_mps = 0.0;
 };
 
 /// Time-indexed actor transforms shared by playback and frame capture.

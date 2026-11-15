@@ -137,6 +137,9 @@ struct SceneState {
   /// S3.3: optional scene-local daylight preset: day/dawn/dusk/night.
   /// Empty in older scenes => day; never stored in OpenDRIVE.
   QString time_of_day;
+  /// Visual-only S3.3 conditions saved per scene, independent of XODR/XOSC.
+  QString weather;
+  QString season;
 
   /// The editing mode this scene was last in (p8-s2, #246): Map or Scenario.
   ///

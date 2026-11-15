@@ -76,6 +76,34 @@ TEST(TimeOfDay, PresetsModifyLightingAndSkyWithoutChangingDayBaseline) {
             default_sky.sky_top);
 }
 
+TEST(WeatherSeason, WeatherModifiesVisibilityAndWetRoadWithoutChangingClearDay) {
+  const Environment baseline = textured_lighting();
+  const auto clear = conditioned_lighting(TimeOfDay::Day, WeatherPreset::Clear,
+                                           SeasonPreset::Summer);
+  const auto rain = conditioned_lighting(TimeOfDay::Day, WeatherPreset::Rain,
+                                          SeasonPreset::Summer);
+  const auto fog = conditioned_lighting(TimeOfDay::Day, WeatherPreset::Fog,
+                                         SeasonPreset::Summer);
+  const auto snow = conditioned_lighting(TimeOfDay::Day, WeatherPreset::Snow,
+                                          SeasonPreset::Winter);
+  EXPECT_EQ(clear.sun_intensity, baseline.sun_intensity);
+  EXPECT_EQ(clear.fog_density, 0.0F);
+  EXPECT_EQ(clear.wetness, 0.0F);
+  EXPECT_EQ(clear.snow_cover, 0.0F);
+  EXPECT_GT(rain.wetness, 0.0F);
+  EXPECT_GT(rain.fog_density, 0.0F);
+  EXPECT_GT(fog.fog_density, rain.fog_density);
+  EXPECT_GT(snow.snow_cover, 0.5F);
+  EXPECT_EQ(snow.season, 2.0F);
+  EXPECT_EQ(weather_key(WeatherPreset::Snow), "snow");
+  EXPECT_EQ(season_key(SeasonPreset::Winter), "winter");
+  const BackdropColors backdrop;
+  EXPECT_EQ(conditioned_backdrop(backdrop, TimeOfDay::Day, WeatherPreset::Clear).sky_top,
+            backdrop.sky_top);
+  EXPECT_NE(conditioned_backdrop(backdrop, TimeOfDay::Day, WeatherPreset::Fog).sky_horizon,
+            backdrop.sky_horizon);
+}
+
 TEST(DriverCamera, ThreeMirrorsFollowVehicleAndLookBehind) {
   const DriverCamera driver{.eye = {10.0F, 20.0F, 2.0F},
                             .forward = {1.0F, 0.0F, 0.0F},

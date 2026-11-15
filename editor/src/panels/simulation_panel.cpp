@@ -114,7 +114,8 @@ SimulationPanel::SimulationPanel(Document& document, Settings& settings, QWidget
       export_video_(new QPushButton(tr("Export MP4…"), this)),
       timeline_(new TimelineSlider(this)), time_label_(new QLabel(this)),
       events_(new QComboBox(this)), camera_(new QComboBox(this)),
-      time_of_day_(new QComboBox(this)) {
+      time_of_day_(new QComboBox(this)), weather_(new QComboBox(this)),
+      season_(new QComboBox(this)) {
   auto* buttons = new QHBoxLayout;
   buttons->addWidget(run_);
   buttons->addWidget(cancel_);
@@ -131,6 +132,14 @@ SimulationPanel::SimulationPanel(Document& document, Settings& settings, QWidget
   day_label->setBuddy(time_of_day_);
   conditions->addWidget(day_label);
   conditions->addWidget(time_of_day_);
+  auto* weather_label = new QLabel(tr("Pogoda"), this);
+  weather_label->setBuddy(weather_);
+  conditions->addWidget(weather_label);
+  conditions->addWidget(weather_);
+  auto* season_label = new QLabel(tr("Pora roku"), this);
+  season_label->setBuddy(season_);
+  conditions->addWidget(season_label);
+  conditions->addWidget(season_);
   conditions->addStretch();
   layout->addLayout(conditions);
   auto* transport = new QHBoxLayout;
@@ -175,6 +184,17 @@ SimulationPanel::SimulationPanel(Document& document, Settings& settings, QWidget
   time_of_day_->addItem(tr("Świt"), QStringLiteral("dawn"));
   time_of_day_->addItem(tr("Zmierzch"), QStringLiteral("dusk"));
   time_of_day_->addItem(tr("Noc"), QStringLiteral("night"));
+  weather_->setObjectName(QStringLiteral("simulation_weather"));
+  weather_->setAccessibleName(tr("Pogoda i widoczność"));
+  weather_->addItem(tr("Bez opadów"), QStringLiteral("clear"));
+  weather_->addItem(tr("Deszcz"), QStringLiteral("rain"));
+  weather_->addItem(tr("Mgła"), QStringLiteral("fog"));
+  weather_->addItem(tr("Śnieg"), QStringLiteral("snow"));
+  season_->setObjectName(QStringLiteral("simulation_season"));
+  season_->setAccessibleName(tr("Pora roku"));
+  season_->addItem(tr("Lato"), QStringLiteral("summer"));
+  season_->addItem(tr("Jesień"), QStringLiteral("autumn"));
+  season_->addItem(tr("Zima"), QStringLiteral("winter"));
   timer_.setInterval(16);
   timer_.setTimerType(Qt::PreciseTimer);
 
@@ -197,6 +217,12 @@ SimulationPanel::SimulationPanel(Document& document, Settings& settings, QWidget
     document_.undo_stack()->resetClean(); // same save-dirty convention as camera
     emit time_of_day_changed(time_of_day());
   });
+  const auto changed = [this](int) {
+    document_.undo_stack()->resetClean();
+    emit conditions_changed(weather(), season());
+  };
+  connect(weather_, &QComboBox::currentIndexChanged, this, changed);
+  connect(season_, &QComboBox::currentIndexChanged, this, changed);
   connect(camera_, &QComboBox::currentIndexChanged, this, [this](int) {
     driver_actor_ = camera_->currentData().toString();
     document_.undo_stack()->resetClean();
@@ -220,6 +246,8 @@ SimulationPanel::SimulationPanel(Document& document, Settings& settings, QWidget
   });
   connect(&document_, &Document::loaded, this, [this] {
     set_time_of_day(document_.scene_state().time_of_day);
+    set_weather(document_.scene_state().weather);
+    set_season(document_.scene_state().season);
     driver_actor_ = document_.scene_state().driver_view_actor;
     mark_scene_changed();
     refresh_camera_choices();
@@ -251,6 +279,21 @@ void SimulationPanel::set_time_of_day(const QString& key) {
   const int index = time_of_day_->findData(key.isEmpty() ? QStringLiteral("day") : key);
   const QSignalBlocker block(time_of_day_);
   time_of_day_->setCurrentIndex(index >= 0 ? index : 0);
+}
+
+QString SimulationPanel::weather() const { return weather_->currentData().toString(); }
+QString SimulationPanel::season() const { return season_->currentData().toString(); }
+
+void SimulationPanel::set_weather(const QString& key) {
+  const int idx = weather_->findData(key.isEmpty() ? QStringLiteral("clear") : key);
+  const QSignalBlocker block(weather_);
+  weather_->setCurrentIndex(idx >= 0 ? idx : 0);
+}
+
+void SimulationPanel::set_season(const QString& key) {
+  const int idx = season_->findData(key.isEmpty() ? QStringLiteral("summer") : key);
+  const QSignalBlocker block(season_);
+  season_->setCurrentIndex(idx >= 0 ? idx : 0);
 }
 
 void SimulationPanel::run(bool play_when_ready) {

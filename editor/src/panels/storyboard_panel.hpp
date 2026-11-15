@@ -141,6 +141,8 @@ public:
   /// produce a document `write_xosc` refuses, i.e. an edit that appears to
   /// succeed and then makes the scenario unsavable.
   void add_child();
+  /// One-click real XOSC event: emergency braking of a chosen vehicle at time T.
+  void add_emergency_stop();
 
   /// Removes the selected node. Removing the last child of a parent that
   /// requires one removes the PARENT too, for the reason above; removing the
@@ -231,6 +233,9 @@ private:
   QTreeWidget* tree_;
   QPushButton* add_button_;
   QPushButton* remove_button_;
+  QPushButton* emergency_button_;
+  QComboBox* emergency_actor_;
+  QDoubleSpinBox* emergency_time_;
 
   QLineEdit* name_edit_;
   QComboBox* priority_combo_;

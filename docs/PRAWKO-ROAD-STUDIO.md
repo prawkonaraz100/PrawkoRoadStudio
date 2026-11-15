@@ -533,11 +533,25 @@ i usuniętych z katalogu aktywnych projektów. Nowa praca rozpoczyna
 się od pustej sceny, a kolejne składniki powstaną jako własne
 modele PrawkoNaRaz.
 
+### S3.3 — pogoda, sezon, pierwszy kokpit i zdarzenie hamowania (15.11.2026)
+
+Panel **Symulacja** ma dodatkowe wybory **Pogoda** (Bez opadów, Deszcz, Mgła, Śnieg) i **Pora roku** (Lato, Jesień, Zima). Wybór działa przez istniejący renderer OpenGL, nie przez statyczny filtr naklejony na zrzut: mgła jest odległościowa i wpływa na widoczność w każdej kamerze; deszcz przyciemnia asfalt i dodaje przebiegające smugi; śnieg dodaje opad oraz pokrywę nawierzchni. Grunt ma sezonowe barwy i śnieżną pokrywę. Trzy oddzielne FBO lusterek korzystają z identycznej atmosfery, z indywidualnym renderem opadu. Zwykły dzień w lecie bez opadów zachowuje poprzedni wygląd. Sober pozostaje niezależny.
+
+Warunki są polami scene sidecar `weather` i `season` w .rmscene.json — XODR/XOSC, siatka dróg, trasy aktorów i agent Python nie są zmieniane. Brak pola oznacza Bez opadów / Lato, a nieznana wartość jest ignorowana. Animator opadu pracuje w podglądzie Qt. Eksport PNG i MP4 korzysta z `capture_simulation_frame`, ale osobnego dynamicznego odbioru nagrania MP4 dla pogody jeszcze nie wykonano.
+
+Pierwszy **wektorowy kokpit** jest rysowany tylko w widoku kierowcy: dolny fragment deski, obrys kierownicy i analogowy/cyfrowy prędkościomierz km/h. Prędkość jest wyliczana z kolejnych próbek pozycji aktora w telemetrii, z kontrolą przerw w próbkach. Kierownica jest na razie statyczną grafiką, bez sterowania i danych kąta skrętu. To nie jest pełne wnętrze samochodu 3D i nie ma jeszcze wycieraczek, świateł mijania, obrotomierza czy kontrolek.
+
+W panelu **Storyboard** przycisk **Nagłe hamowanie** tworzy zdarzenie XOSC dla wybranego pojazdu i czasu, z warunkiem `SimulationTimeCondition` oraz akcją `SpeedAction` z prędkością docelową 0 m/s. Korzysta z istniejącej infrastruktury `osc::edit::set_story`, więc operacja jest jednolitym wpisem Undo/Redo. Wcześniejsze zdarzenia, ich wyzwalacze i nieobsługiwane elementy OpenSCENARIO pozostają zachowane. To tylko jeden ułatwiony szablon zdarzenia, a nie uniwersalny generator incydentów drogowych.
+
+Odbiór rzeczywistego renderera: sześć klatek `clear.png`, `rain.png`, `fog.png`, `snow.png`, `autumn.png`, `winter.png` po 1026×883 px, na kopii sceny z barierą w `archive/s33-weather-20261115/`; wszystkie zostały utworzone z prawdziwego EXE, miały odrębne SHA256. Wizualnie obejrzano mgłę, deszcz i śnieg, w tym trzy lusterka. Testy i pełny Quality Gate wymienione w `HANDOFF.md`.
+
+**Otwarte:** realizm opadów/odbicia i kałuże, trójwymiarowe sezonowe modele drzew, oświetlenie reflektorami w nocy, wycieraczki, pełny kokpit 3D ze sterowaniem, interaktywna edycja zdarzeń, wiele typów incydentów, odbiór dynamiczny esmini i MP4/FPS. Żadnego z tych podzadań nie oznaczono jako gotowe.
+
 ### S3.3 — dzień, świt, zmierzch i noc (15.11.2026)
 
 Panel **Symulacja → Pora dnia** udostępnia cztery presety oświetlenia: Dzień, Świt, Zmierzch i Noc. Korzystają z istniejącego renderera OpenGL: każdy preset określa kierunek i barwę światła, intensywność słońca, oświetlenie otoczenia i kolory nieba. Zwykły dzień zachowuje dotychczasowe parametry renderera; Sober nadal działa niezależnie. Zmiana pory dnia włącza tryb Textured, aby była widoczna.
 
-Wybór jest stanem konkretnej sceny (pole SceneState::time_of_day w atomowo zapisywanym pliku .rmscene.json, nie w pliku drogi .xodr), więc nie zmienia preferencji innych projektów. Starsza scena bez pola time_of_day otwiera się z presetem Dzień. Kamera edytora, kamera kierowcy i trzy kamery lusterek korzystają ze wspólnego środowiska, tak samo jak zapis klatek przez capture_simulation_frame do PNG/MP4. Presety nie tworzą jeszcze reflektorów, fizycznego rozpraszania światła, opadów ani zmian zachowania pojazdów. Testy obrazowe wykonuje się na kopii projektu; oryginalne sceny nie są modyfikowane.
+Wybór jest stanem konkretnej sceny (pole SceneState::time_of_day w atomowo zapisywanym pliku .rmscene.json, nie w pliku drogi .xodr), więc nie zmienia preferencji innych projektów. Starsza scena bez pola time_of_day otwiera się z presetem Dzień. Kamera edytora, kamera kierowcy i trzy kamery lusterek korzystają ze wspólnego środowiska, tak samo jak zapis klatek przez capture_simulation_frame do PNG/MP4. Presety czasu doby same nie tworzą reflektorów ani zmian zachowania pojazdów; uproszczone opady i mgła zostały dodane oddzielnie w sekcji S3.3 powyżej. Testy obrazowe wykonuje się na kopii projektu; oryginalne sceny nie są modyfikowane.
 
 ### S3.3 — lusterka w aktywnej kamerze kierowcy (14.11.2026)
 

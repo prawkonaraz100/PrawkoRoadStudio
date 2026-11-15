@@ -94,6 +94,11 @@ uniform float u_sun_intensity;
 uniform vec3 u_sky_light;
 uniform vec3 u_ground_light;
 uniform float u_ambient;
+uniform float u_fog_density;
+uniform vec3 u_fog_color;
+uniform float u_wetness;
+uniform float u_snow_cover;
+uniform int u_asphalt;
 out vec4 frag_color;
 
 // Per-fragment cotangent frame from screen-space derivatives (design doc §5:
@@ -162,7 +167,21 @@ void main() {
   vec3 lighting = hemi + direct + fill;         // colored light multiplier
   vec3 shade = mix(vec3(1.0), lighting, u_lit); // lines (u_lit=0) stay unlit
   vec3 base = albedo.rgb * shade;
-  frag_color = vec4(mix(base, u_accent, u_highlight), albedo.a);
+  if (u_asphalt == 1) {
+    // Wet asphalt darkens and receives a broad sky-colored sheen. Road
+    // markings stay bright because their material does not set u_asphalt.
+    base = mix(base, base * 0.58 + u_sky_light * 0.12, u_wetness);
+    float grains = fract(sin(dot(v_world_pos.xy, vec2(12.9898, 78.233))) * 43758.5453);
+    float cover = u_snow_cover * (0.65 + 0.35 * grains);
+    base = mix(base, vec3(0.83, 0.88, 0.91) * max(0.25, u_ambient + 0.35),
+               clamp(cover, 0.0, 1.0));
+  }
+  base = mix(base, u_accent, u_highlight);
+  // Beer-Lambert distance fog: main camera and each mirror sample the same
+  // world-space density, without painting a fake grey screen over the scene.
+  float distance_m = length(v_world_pos - u_camera_pos);
+  float fog = 1.0 - exp(-u_fog_density * distance_m);
+  frag_color = vec4(mix(base, u_fog_color, clamp(fog, 0.0, 1.0)), albedo.a);
 }
 )";
 
@@ -274,6 +293,10 @@ uniform vec3 u_sun_color;
 uniform float u_sun_intensity;
 uniform vec3 u_sky;            // hemisphere sky (up) color
 uniform float u_ambient;
+uniform float u_season;
+uniform float u_snow;
+uniform float u_fog_density;
+uniform vec3 u_fog_color;
 out vec4 frag_color;
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -292,18 +315,27 @@ void main() {
   // Two octaves of value noise (~1 m and ~5 m) for subtly mottled grass.
   float n = 0.65 * value_noise(v_world) + 0.35 * value_noise(v_world * 0.2);
   vec3 grass = mix(vec3(0.20, 0.32, 0.15), vec3(0.34, 0.46, 0.22), n);
+  if (u_season > 0.5 && u_season < 1.5) {
+    grass = mix(vec3(0.29, 0.24, 0.11), vec3(0.48, 0.37, 0.18), n);
+  } else if (u_season >= 1.5) {
+    grass = mix(vec3(0.29, 0.32, 0.28), vec3(0.43, 0.46, 0.38), n);
+  }
 
   // Flat +Z surface lit by the scene environment (matches the mesh shader for
   // an up-facing normal): hemisphere sky ambient + one directional sun.
   vec3 lighting = (u_sky * u_ambient) +
                   (u_sun_color * (u_sun_intensity * max(normalize(u_sun_dir).z, 0.0)));
   vec3 color = grass * lighting;
+  color = mix(color, vec3(0.85, 0.89, 0.93) * max(0.22, u_ambient + 0.4),
+              clamp(u_snow * (0.72 + 0.28 * n), 0.0, 1.0));
 
   // Melt into the sky horizon with distance so the infinite plane has no hard
   // tiling edge; scaled by eye height so it adapts to zoom.
   float dist = distance(v_world, u_eye.xy);
   float fade = 1.0 - exp(-dist / (max(u_eye.z, 4.0) * 12.0));
-  frag_color = vec4(mix(color, u_horizon, fade), 1.0);
+  color = mix(color, u_horizon, fade);
+  float fog = 1.0 - exp(-u_fog_density * dist);
+  frag_color = vec4(mix(color, u_fog_color, clamp(fog, 0.0, 1.0)), 1.0);
 }
 )";
 
@@ -399,6 +431,11 @@ bool GLRenderer::init() {
   u_sky_light_ = gl::GetUniformLocation(program_, "u_sky_light");
   u_ground_light_ = gl::GetUniformLocation(program_, "u_ground_light");
   u_ambient_ = gl::GetUniformLocation(program_, "u_ambient");
+  u_fog_density_ = gl::GetUniformLocation(program_, "u_fog_density");
+  u_fog_color_ = gl::GetUniformLocation(program_, "u_fog_color");
+  u_wetness_ = gl::GetUniformLocation(program_, "u_wetness");
+  u_snow_cover_ = gl::GetUniformLocation(program_, "u_snow_cover");
+  u_asphalt_ = gl::GetUniformLocation(program_, "u_asphalt");
   u_sky_top_ = gl::GetUniformLocation(sky_program_, "u_sky_top");
   u_sky_horizon_ = gl::GetUniformLocation(sky_program_, "u_sky_horizon");
   u_grid_view_ = gl::GetUniformLocation(grid_program_, "u_view");
@@ -418,6 +455,10 @@ bool GLRenderer::init() {
   u_ground_sun_intensity_ = gl::GetUniformLocation(ground_program_, "u_sun_intensity");
   u_ground_sky_ = gl::GetUniformLocation(ground_program_, "u_sky");
   u_ground_ambient_ = gl::GetUniformLocation(ground_program_, "u_ambient");
+  u_ground_season_ = gl::GetUniformLocation(ground_program_, "u_season");
+  u_ground_snow_ = gl::GetUniformLocation(ground_program_, "u_snow");
+  u_ground_fog_ = gl::GetUniformLocation(ground_program_, "u_fog_density");
+  u_ground_fog_color_ = gl::GetUniformLocation(ground_program_, "u_fog_color");
   gl::GenVertexArrays(1, &empty_vao_);
   ready_ = true;
   return true;
@@ -648,6 +689,11 @@ void GLRenderer::draw_ground(const CameraMatrices& camera) {
                 environment_.sky_color[1],
                 environment_.sky_color[2]);
   gl::Uniform1f(u_ground_ambient_, environment_.ambient);
+  gl::Uniform1f(u_ground_season_, environment_.season);
+  gl::Uniform1f(u_ground_snow_, environment_.snow_cover);
+  gl::Uniform1f(u_ground_fog_, environment_.fog_density);
+  gl::Uniform3f(u_ground_fog_color_, environment_.fog_color[0],
+                environment_.fog_color[1], environment_.fog_color[2]);
   gl::DrawArrays(gl::kTriangleStrip, 0, 4);
   gl::BindVertexArray(0);
 }
@@ -689,6 +735,11 @@ void GLRenderer::render(const std::vector<DrawItem>& items,
                 environment_.ground_color[1],
                 environment_.ground_color[2]);
   gl::Uniform1f(u_ambient_, environment_.ambient);
+  gl::Uniform1f(u_fog_density_, environment_.fog_density);
+  gl::Uniform3f(u_fog_color_, environment_.fog_color[0],
+                environment_.fog_color[1], environment_.fog_color[2]);
+  gl::Uniform1f(u_wetness_, environment_.wetness);
+  gl::Uniform1f(u_snow_cover_, environment_.snow_cover);
   // World-space eye for the specular half-vector (fed the same way sun_dir is).
   gl::Uniform3f(u_camera_pos_, camera.eye[0], camera.eye[1], camera.eye[2]);
 
@@ -750,6 +801,7 @@ void GLRenderer::render(const std::vector<DrawItem>& items,
     // untextured/default Material stays pixel-identical to the pre-PBR output.
     gl::Uniform1f(u_roughness_, mat.roughness_value);
     gl::Uniform1f(u_vertical_fill_, mat.vertical_fill);
+    gl::Uniform1i(u_asphalt_, mat.asphalt ? 1 : 0);
 
     const bool has_tex = base_tex != 0;
     gl::Uniform1i(u_has_texture_, has_tex ? 1 : 0);

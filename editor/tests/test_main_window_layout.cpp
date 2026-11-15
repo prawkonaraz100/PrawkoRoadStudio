@@ -901,6 +901,35 @@ TEST_F(SceneStateWindowTest, TimeOfDayRestoresAndUiChangesReachViewport) {
   EXPECT_EQ(window_->viewport()->time_of_day(), TimeOfDay::Day);
 }
 
+TEST_F(SceneStateWindowTest, WeatherAndSeasonRestoreAndChangeViewportWithUi) {
+  window_->load_file(make_scene(
+      "rain.xodr",
+      R"({"scene_version":1,"textured":true,"time_of_day":"dusk","weather":"rain","season":"autumn"})"));
+  auto* weather = window_->findChild<QComboBox*>(QStringLiteral("simulation_weather"));
+  auto* season = window_->findChild<QComboBox*>(QStringLiteral("simulation_season"));
+  ASSERT_NE(weather, nullptr);
+  ASSERT_NE(season, nullptr);
+  EXPECT_EQ(weather->currentData().toString(), QStringLiteral("rain"));
+  EXPECT_EQ(season->currentData().toString(), QStringLiteral("autumn"));
+  EXPECT_EQ(window_->viewport()->weather(), WeatherPreset::Rain);
+  EXPECT_EQ(window_->viewport()->season(), SeasonPreset::Autumn);
+
+  const int fog_index = weather->findData(QStringLiteral("fog"));
+  const int winter_index = season->findData(QStringLiteral("winter"));
+  ASSERT_GE(fog_index, 0);
+  ASSERT_GE(winter_index, 0);
+  weather->setCurrentIndex(fog_index);
+  season->setCurrentIndex(winter_index);
+  EXPECT_EQ(window_->viewport()->weather(), WeatherPreset::Fog);
+  EXPECT_EQ(window_->viewport()->season(), SeasonPreset::Winter);
+
+  window_->load_file(make_scene("old-weather.xodr", nullptr));
+  EXPECT_EQ(weather->currentData().toString(), QStringLiteral("clear"));
+  EXPECT_EQ(season->currentData().toString(), QStringLiteral("summer"));
+  EXPECT_EQ(window_->viewport()->weather(), WeatherPreset::Clear);
+  EXPECT_EQ(window_->viewport()->season(), SeasonPreset::Summer);
+}
+
 TEST_F(SceneStateWindowTest, SavingAndOpeningAProjectRemembersItsLastScene) {
   auto project = Project::create(root(), QStringLiteral("Downtown"));
   ASSERT_TRUE(project.has_value());

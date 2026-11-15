@@ -183,6 +183,8 @@ MainWindow::MainWindow(QWidget* parent, bool restore_saved_layout)
     state.textured = viewport_->textured_rendering();
     state.driver_view_actor = simulation_panel_->driver_actor();
     state.time_of_day = simulation_panel_->time_of_day();
+    state.weather = simulation_panel_->weather();
+    state.season = simulation_panel_->season();
   });
   // The viewport restores the camera itself; the render mode is the app's to
   // apply, because the View menu has to agree with it.
@@ -1314,6 +1316,16 @@ void MainWindow::build_docks() {
               textured_action_->setChecked(true);
             }
           });
+  connect(simulation_panel_, &SimulationPanel::conditions_changed, this,
+          [this](const QString& weather, const QString& season) {
+            viewport_->set_textured_rendering(true);
+            viewport_->set_weather(weather);
+            viewport_->set_season(season);
+            if (textured_action_ != nullptr) {
+              const QSignalBlocker blocker(textured_action_);
+              textured_action_->setChecked(true);
+            }
+          });
   connect(simulation_panel_,
           &SimulationPanel::preview_frame,
           viewport_,
@@ -2046,6 +2058,10 @@ void MainWindow::apply_scene_state() {
   const QString phase = document_.scene_state().time_of_day;
   simulation_panel_->set_time_of_day(phase);
   viewport_->set_time_of_day(phase);
+  simulation_panel_->set_weather(document_.scene_state().weather);
+  simulation_panel_->set_season(document_.scene_state().season);
+  viewport_->set_weather(document_.scene_state().weather);
+  viewport_->set_season(document_.scene_state().season);
   if (textured_action_ != nullptr) {
     // Without the block the menu toggle would fire and push this scene's mode
     // back into Settings as the new application default.

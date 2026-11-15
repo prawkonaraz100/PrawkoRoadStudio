@@ -245,6 +245,7 @@ Material ViewportWidget::material_for(SurfaceKind surface, const std::string& ma
   // on horizontal tops (shader multiplies by 1 - abs(geometric normal.z)).
   // Only Textured mode reaches this branch; Sober look remains unchanged.
   result.vertical_fill = surface == SurfaceKind::Concrete ? 0.38F : 0.0F;
+  result.asphalt = surface == SurfaceKind::Asphalt;
   return result;
 }
 
@@ -525,10 +526,17 @@ QImage ViewportWidget::capture_simulation_frame(const QSize& size,
                                         std::optional{simulation_frame(poses, driver_actor)});
       render_frame(camera, size);
       image = target.toImage();
-      if (simulation_frame_ && simulation_frame_->driver && !image.isNull()) {
-        const auto mirrors = capture_driver_mirrors(size);
-        QPainter painter(&image);
-        draw_driver_mirrors(painter, size, mirrors);
+      if (!image.isNull()) {
+        if (simulation_frame_ && simulation_frame_->driver) {
+          const auto mirrors = capture_driver_mirrors(size);
+          QPainter painter(&image);
+          draw_precipitation(painter, size, weather_, clock_.elapsed() / 60);
+          draw_driver_dashboard(painter, size, simulation_frame_->driver_speed_kmh);
+          draw_driver_mirrors(painter, size, mirrors);
+        } else {
+          QPainter painter(&image);
+          draw_precipitation(painter, size, weather_, clock_.elapsed() / 60);
+        }
       }
     }
   }
@@ -673,6 +681,8 @@ ViewportWidget::simulation_frame(const QVector<SimulationActorPose>& poses,
         if (pose.actor_name == driver_actor &&
             std::holds_alternative<osc::Vehicle>(object->entity_object)) {
           frame.driver = driver_camera(pose, *box);
+          frame.driver_speed_kmh =
+              static_cast<float>(std::clamp(pose.speed_mps * 3.6, 0.0, 250.0));
         } else {
           frame.actors.push_back(actor_transform(pose.position, pose.heading, *box,
                                                  pose.pitch, pose.roll));
@@ -859,7 +869,7 @@ void ViewportWidget::render_frame(const OrbitCamera& camera, const QSize& size,
   if (clean_capture_ || driver_view) {
     BackdropColors backdrop = theme::current().backdrop();
     if (textured_rendering_) {
-      backdrop = time_of_day_backdrop(backdrop, time_of_day_);
+      backdrop = conditioned_backdrop(backdrop, time_of_day_, weather_);
     }
     backdrop.grid_major[3] = 0.0F;
     backdrop.grid_minor[3] = 0.0F;
@@ -896,6 +906,10 @@ std::array<QImage, 3> ViewportWidget::capture_driver_mirrors(const QSize& output
     const DriverCamera mirror = driver_mirror_camera(*simulation_frame_->driver, mirrors[i]);
     render_frame(camera_, resolution, &mirror);
     images[i] = target.toImage().mirrored(true, false);
+    if (!images[i].isNull()) {
+      QPainter painter(&images[i]);
+      draw_precipitation(painter, resolution, weather_, clock_.elapsed() / 60);
+    }
     target.release();
   }
   // QOpenGLWidget's default framebuffer is NOT 0. Restore it before using
@@ -940,6 +954,112 @@ void ViewportWidget::draw_driver_mirrors(QPainter& painter, const QSize& output_
   }
 }
 
+void ViewportWidget::draw_driver_dashboard(QPainter& painter, const QSize& size,
+                                          float speed_kmh) {
+  if (size.isEmpty()) return;
+  painter.save();
+  painter.setRenderHint(QPainter::Antialiasing);
+  painter.setRenderHint(QPainter::TextAntialiasing);
+  const qreal w = size.width();
+  const qreal h = size.height();
+  const qreal top = h * 0.805;
+  // Vector cockpit is intentionally contained within the bottom of the
+  // first-person view. Side mirrors stay above it; it never obscures the road
+  // centre or changes the three separately rendered mirror cameras.
+  QPainterPath dashboard;
+  dashboard.moveTo(0, h);
+  dashboard.lineTo(0, top + h * 0.025);
+  dashboard.quadTo(w * 0.5, top - h * 0.055, w, top + h * 0.025);
+  dashboard.lineTo(w, h);
+  dashboard.closeSubpath();
+  painter.fillPath(dashboard, QColor(18, 23, 30, 246));
+  painter.setPen(QPen(QColor(87, 99, 110), std::max<qreal>(1.0, h * 0.002)));
+  painter.drawPath(dashboard);
+
+  const QPointF center(w * 0.51, h * 0.905);
+  const qreal radius = std::min(w * 0.070, h * 0.085);
+  painter.setBrush(QColor(7, 11, 17));
+  painter.setPen(QPen(QColor(118, 128, 141), std::max<qreal>(1.8, radius * 0.065)));
+  painter.drawEllipse(center, radius, radius);
+  painter.setPen(QPen(QColor(176, 188, 198), std::max<qreal>(1.0, radius * 0.025)));
+  for (int i = 0; i <= 8; ++i) {
+    const double angle = (215.0 - i * 32.5) * std::numbers::pi / 180.0;
+    const QPointF inside(center.x() + radius * 0.77 * std::cos(angle),
+                         center.y() - radius * 0.77 * std::sin(angle));
+    const QPointF outside(center.x() + radius * 0.90 * std::cos(angle),
+                          center.y() - radius * 0.90 * std::sin(angle));
+    painter.drawLine(inside, outside);
+  }
+  const float speed = std::clamp(speed_kmh, 0.0F, 200.0F);
+  const double angle = (215.0 - speed / 200.0 * 260.0) * std::numbers::pi / 180.0;
+  painter.setPen(QPen(QColor(231, 190, 70), std::max<qreal>(1.3, radius * 0.047)));
+  painter.drawLine(center,
+                   QPointF(center.x() + radius * 0.72 * std::cos(angle),
+                           center.y() - radius * 0.72 * std::sin(angle)));
+  painter.setBrush(QColor(231, 190, 70));
+  painter.drawEllipse(center, radius * 0.067, radius * 0.067);
+  QFont speed_font = painter.font();
+  speed_font.setBold(true);
+  speed_font.setPixelSize(std::max(12, static_cast<int>(radius * 0.39)));
+  painter.setFont(speed_font);
+  painter.setPen(QColor(233, 238, 244));
+  painter.drawText(QRectF(center.x() - radius * 0.55, center.y() + radius * 0.11,
+                          radius * 1.1, radius * 0.46),
+                   Qt::AlignCenter, QString::number(static_cast<int>(std::lround(speed))));
+  QFont unit_font = painter.font();
+  unit_font.setBold(false);
+  unit_font.setPixelSize(std::max(8, static_cast<int>(radius * 0.16)));
+  painter.setFont(unit_font);
+  painter.setPen(QColor(154, 169, 180));
+  painter.drawText(QRectF(center.x() - radius * 0.5, center.y() + radius * 0.53,
+                          radius, radius * 0.24), Qt::AlignCenter,
+                   QStringLiteral("km/h"));
+
+  // A restrained steering-wheel rim gives the cabin its first mechanical
+  // reference. The wheel is decorative for now; no fabricated steering data.
+  const QPointF wheel(w * 0.29, h * 0.965);
+  const qreal wr = h * 0.12;
+  painter.setPen(QPen(QColor(55, 64, 72), std::max<qreal>(7, wr * 0.16)));
+  painter.setBrush(Qt::NoBrush);
+  painter.drawEllipse(wheel, wr, wr);
+  painter.setPen(QPen(QColor(71, 82, 93), std::max<qreal>(4, wr * 0.12)));
+  painter.drawLine(QPointF(wheel.x() - wr * 0.72, wheel.y() - wr * 0.18),
+                   QPointF(wheel.x() + wr * 0.65, wheel.y() + wr * 0.25));
+  painter.setBrush(QColor(45, 54, 63));
+  painter.drawEllipse(wheel, wr * 0.28, wr * 0.28);
+  painter.restore();
+}
+
+void ViewportWidget::draw_precipitation(QPainter& painter, const QSize& size,
+                                        WeatherPreset weather, qint64 tick) {
+  if (weather != WeatherPreset::Rain && weather != WeatherPreset::Snow) return;
+  const int w = size.width();
+  const int h = size.height();
+  if (w <= 0 || h <= 0) return;
+  painter.save();
+  painter.setRenderHint(QPainter::Antialiasing, weather == WeatherPreset::Snow);
+  painter.setClipRect(QRect(QPoint(0, 0), size));
+  const bool rain = weather == WeatherPreset::Rain;
+  painter.setPen(QPen(rain ? QColor(176, 203, 220, 120) : QColor(245, 250, 255, 210),
+                      rain ? 1.2 : 1.6));
+  const int count = std::clamp((w * h) / (rain ? 3000 : 4000), 65, 420);
+  for (int i = 0; i < count; ++i) {
+    const std::uint32_t hash = (static_cast<std::uint32_t>(i) + 17U) * 2654435761U;
+    const int x = static_cast<int>((hash >> 9) % static_cast<std::uint32_t>(w));
+    const int initial_y = static_cast<int>((hash >> 19) % static_cast<std::uint32_t>(h));
+    const int speed = rain ? (13 + i % 7) : (2 + i % 4);
+    const int y = static_cast<int>((initial_y +
+                     (tick % static_cast<qint64>(h)) * speed) % h);
+    if (rain) {
+      painter.drawLine(x, y, x - 4, y + 16);
+    } else {
+      const qreal diameter = 1.8 + static_cast<qreal>(i % 4) * 0.7;
+      painter.drawEllipse(QPointF(x, y), diameter, diameter);
+    }
+  }
+  painter.restore();
+}
+
 void ViewportWidget::paintGL() {
   // Framebuffer pixels, not widget units (HiDPI rule).
   const QSize size{static_cast<int>(std::lround(width() * devicePixelRatioF())),
@@ -949,11 +1069,17 @@ void ViewportWidget::paintGL() {
     const auto mirrors = capture_driver_mirrors(size);
     QPainter painter(this);
     // QWidget uses logical pixels; the FBO renders use physical pixels.
+    draw_precipitation(painter, this->size(), weather_, clock_.elapsed() / 60);
+    draw_driver_dashboard(painter, this->size(), simulation_frame_->driver_speed_kmh);
     draw_driver_mirrors(painter, this->size(), mirrors);
     return;
   }
   if (clean_capture_ || simulation_frame_) {
     return;
+  }
+  if (weather_ == WeatherPreset::Rain || weather_ == WeatherPreset::Snow) {
+    QPainter precipitation(this);
+    draw_precipitation(precipitation, this->size(), weather_, clock_.elapsed() / 60);
   }
 
   // QPainter overlays (handle sprites + the tool hint), painted over the GL
@@ -1229,7 +1355,8 @@ void ViewportWidget::refresh_overlay_animation() {
   if (overlay_timer_ == nullptr) {
     return;
   }
-  const bool animating = !toasts_.active(now_ms()).empty() || hint_visible();
+  const bool animating = !toasts_.active(now_ms()).empty() || hint_visible() ||
+                         weather_ == WeatherPreset::Rain || weather_ == WeatherPreset::Snow;
   if (animating && !overlay_timer_->isActive()) {
     overlay_timer_->start();
   } else if (!animating && overlay_timer_->isActive()) {
@@ -2183,15 +2310,16 @@ void ViewportWidget::wheelEvent(QWheelEvent* event) {
 }
 
 void ViewportWidget::apply_render_mode() {
-  renderer_->set_environment(textured_rendering_ ? time_of_day_lighting(time_of_day_)
-                                                : sober_lighting());
+  renderer_->set_environment(textured_rendering_
+                                 ? conditioned_lighting(time_of_day_, weather_, season_)
+                                 : sober_lighting());
 
   // In textured mode the reference grid is scenery-competing clutter, so fade
   // it heavily (the daytime surfaces carry the scene); sober mode keeps the
   // full-strength grid it has always had.
   BackdropColors backdrop = theme::current().backdrop();
   if (textured_rendering_) {
-    backdrop = time_of_day_backdrop(backdrop, time_of_day_);
+    backdrop = conditioned_backdrop(backdrop, time_of_day_, weather_);
     backdrop.grid_major[3] *= 0.35F;
     backdrop.grid_minor[3] *= 0.35F;
   }
@@ -2216,6 +2344,35 @@ void ViewportWidget::set_time_of_day(const QString& key) {
     apply_render_mode();
     update();
   }
+}
+
+void ViewportWidget::set_weather(const QString& key) {
+  WeatherPreset preset = WeatherPreset::Clear;
+  if (key == QLatin1String("rain")) {
+    preset = WeatherPreset::Rain;
+  } else if (key == QLatin1String("fog")) {
+    preset = WeatherPreset::Fog;
+  } else if (key == QLatin1String("snow")) {
+    preset = WeatherPreset::Snow;
+  }
+  if (preset == weather_) return;
+  weather_ = preset;
+  apply_render_mode();
+  refresh_overlay_animation();
+  update();
+}
+
+void ViewportWidget::set_season(const QString& key) {
+  SeasonPreset preset = SeasonPreset::Summer;
+  if (key == QLatin1String("autumn")) {
+    preset = SeasonPreset::Autumn;
+  } else if (key == QLatin1String("winter")) {
+    preset = SeasonPreset::Winter;
+  }
+  if (preset == season_) return;
+  season_ = preset;
+  apply_render_mode();
+  update();
 }
 
 void ViewportWidget::set_textured_rendering(bool textured) {

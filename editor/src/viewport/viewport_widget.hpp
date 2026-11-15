@@ -130,6 +130,10 @@ public slots:
   [[nodiscard]] bool textured_rendering() const { return textured_rendering_; }
   void set_time_of_day(const QString& key);
   [[nodiscard]] TimeOfDay time_of_day() const { return time_of_day_; }
+  void set_weather(const QString& key);
+  void set_season(const QString& key);
+  [[nodiscard]] WeatherPreset weather() const { return weather_; }
+  [[nodiscard]] SeasonPreset season() const { return season_; }
 
   /// The camera pose as Layer-2 scene state (fmt-s1, #325) — what MainWindow's
   /// provider stamps onto the sidecar a save writes. The camera itself stays
@@ -351,9 +355,13 @@ private:
   [[nodiscard]] std::array<QImage, 3> capture_driver_mirrors(const QSize& output_size);
   static void draw_driver_mirrors(QPainter& painter, const QSize& output_size,
                                   const std::array<QImage, 3>& images);
+  static void draw_precipitation(QPainter& painter, const QSize& size,
+                                 WeatherPreset weather, qint64 tick);
+  static void draw_driver_dashboard(QPainter& painter, const QSize& size, float speed_kmh);
   struct SimulationFrame {
     std::vector<InstanceData> actors;
     std::optional<DriverCamera> driver;
+    float driver_speed_kmh = 0.0F;
   };
   [[nodiscard]] SimulationFrame simulation_frame(const QVector<SimulationActorPose>& poses,
                                                   const QString& driver_actor) const;
@@ -556,6 +564,8 @@ private:
   /// Drives the renderer Environment/ground/grid via apply_render_mode().
   bool textured_rendering_ = false;
   TimeOfDay time_of_day_ = TimeOfDay::Day;
+  WeatherPreset weather_ = WeatherPreset::Clear;
+  SeasonPreset season_ = SeasonPreset::Summer;
 
   /// Compiled-in material definitions (surface code → textures + PBR params).
   MaterialCatalog material_catalog_;

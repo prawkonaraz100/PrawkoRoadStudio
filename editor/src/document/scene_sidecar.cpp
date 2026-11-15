@@ -35,6 +35,8 @@ constexpr auto kViewKey = "view";
 constexpr auto kDriverViewActorKey = "driver_view_actor";
 constexpr auto kTexturedKey = "textured";
 constexpr auto kTimeOfDayKey = "time_of_day";
+constexpr auto kWeatherKey = "weather";
+constexpr auto kSeasonKey = "season";
 constexpr auto kModeKey = "mode";
 constexpr auto kWorkspaceKey = "workspace";
 constexpr auto kReferenceLayersKey = "reference_layers";
@@ -407,6 +409,27 @@ Expected<SceneState> parse(const QByteArray& json) {
     spdlog::warn("scene sidecar: 'time_of_day' is not a string - using day");
   }
 
+  const QJsonValue weather = root.value(QLatin1String(kWeatherKey));
+  if (weather.isString()) {
+    const QString key = weather.toString();
+    if (key == QLatin1String("clear") || key == QLatin1String("rain") ||
+        key == QLatin1String("fog") || key == QLatin1String("snow")) {
+      state.weather = key;
+    } else {
+      spdlog::warn("scene sidecar: unknown weather '{}' - using clear", key.toStdString());
+    }
+  }
+  const QJsonValue season = root.value(QLatin1String(kSeasonKey));
+  if (season.isString()) {
+    const QString key = season.toString();
+    if (key == QLatin1String("summer") || key == QLatin1String("autumn") ||
+        key == QLatin1String("winter")) {
+      state.season = key;
+    } else {
+      spdlog::warn("scene sidecar: unknown season '{}' - using summer", key.toStdString());
+    }
+  }
+
   // The editing mode (p8-s2, #246). An unknown spelling degrades to Map with a
   // warning rather than failing the load — a sidecar from a newer build must
   // never cost a scene. Note the ACTIVE SCENARIO FILE is deliberately not
@@ -476,6 +499,16 @@ QByteArray to_json(const SceneState& state) {
     root.remove(QLatin1String(kTimeOfDayKey));
   } else {
     root.insert(QLatin1String(kTimeOfDayKey), state.time_of_day);
+  }
+  if (state.weather.isEmpty()) {
+    root.remove(QLatin1String(kWeatherKey));
+  } else {
+    root.insert(QLatin1String(kWeatherKey), state.weather);
+  }
+  if (state.season.isEmpty()) {
+    root.remove(QLatin1String(kSeasonKey));
+  } else {
+    root.insert(QLatin1String(kSeasonKey), state.season);
   }
   if (state.mode) {
     root.insert(QLatin1String(kModeKey),

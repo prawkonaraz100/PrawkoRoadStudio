@@ -33,6 +33,10 @@ public:
   [[nodiscard]] QString driver_actor() const { return driver_actor_; }
   [[nodiscard]] QString time_of_day() const;
   void set_time_of_day(const QString& key);
+  [[nodiscard]] QString weather() const;
+  [[nodiscard]] QString season() const;
+  void set_weather(const QString& key);
+  void set_season(const QString& key);
 
   [[nodiscard]] const std::optional<SimulationRun>& result() const { return simulation_.result(); }
   [[nodiscard]] const SimulationPlayback* playback() const {
@@ -46,6 +50,7 @@ signals:
   void run_availability_changed(bool available);
   void video_export_requested();
   void time_of_day_changed(const QString& key);
+  void conditions_changed(const QString& weather, const QString& season);
 
 private:
   void update_controls();
@@ -73,6 +78,8 @@ private:
   QComboBox* events_;
   QComboBox* camera_;
   QComboBox* time_of_day_;
+  QComboBox* weather_;
+  QComboBox* season_;
   QString driver_actor_;
   std::optional<SimulationPlayback> playback_;
   QTimer timer_;

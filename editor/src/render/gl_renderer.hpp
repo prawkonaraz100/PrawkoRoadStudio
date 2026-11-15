@@ -107,6 +107,11 @@ private:
   std::int32_t u_sky_light_ = -1;
   std::int32_t u_ground_light_ = -1;
   std::int32_t u_ambient_ = -1;
+  std::int32_t u_fog_density_ = -1;
+  std::int32_t u_fog_color_ = -1;
+  std::int32_t u_wetness_ = -1;
+  std::int32_t u_snow_cover_ = -1;
+  std::int32_t u_asphalt_ = -1;
 
   // Backdrop passes (sky gradient + ground grid), both attributeless draws
   // through one shared empty VAO (core profile requires a bound VAO).
@@ -138,6 +143,10 @@ private:
   std::int32_t u_ground_sun_intensity_ = -1;
   std::int32_t u_ground_sky_ = -1;
   std::int32_t u_ground_ambient_ = -1;
+  std::int32_t u_ground_season_ = -1;
+  std::int32_t u_ground_snow_ = -1;
+  std::int32_t u_ground_fog_ = -1;
+  std::int32_t u_ground_fog_color_ = -1;
 
   bool ready_ = false;
 };

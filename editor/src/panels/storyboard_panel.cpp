@@ -315,7 +315,10 @@ std::string unique_name(std::string name, const std::vector<std::string>& taken)
 StoryboardPanel::StoryboardPanel(Document& document, SelectionModel& selection, QWidget* parent)
     : QWidget(parent), document_(document), selection_(selection), tree_(new QTreeWidget(this)),
       add_button_(new QPushButton(tr("Add"), this)),
-      remove_button_(new QPushButton(tr("Remove"), this)), name_edit_(new QLineEdit(this)),
+      remove_button_(new QPushButton(tr("Remove"), this)),
+      emergency_button_(new QPushButton(tr("Nagłe hamowanie"), this)),
+      emergency_actor_(new QComboBox(this)), emergency_time_(new QDoubleSpinBox(this)),
+      name_edit_(new QLineEdit(this)),
       priority_combo_(new QComboBox(this)), action_kind_combo_(new QComboBox(this)),
       condition_kind_combo_(new QComboBox(this)), entity_combo_(new QComboBox(this)),
       rule_combo_(new QComboBox(this)), value_spin_(new QDoubleSpinBox(this)),
@@ -329,6 +332,15 @@ StoryboardPanel::StoryboardPanel(Document& document, SelectionModel& selection, 
 
   add_button_->setObjectName(QStringLiteral("storyboard_add"));
   remove_button_->setObjectName(QStringLiteral("storyboard_remove"));
+  emergency_button_->setObjectName(QStringLiteral("storyboard_emergency_stop"));
+  emergency_button_->setToolTip(tr("Dodaj zdarzenie XOSC: zatrzymaj wybrany pojazd we wskazanej sekundzie"));
+  emergency_actor_->setObjectName(QStringLiteral("storyboard_emergency_actor"));
+  emergency_time_->setObjectName(QStringLiteral("storyboard_emergency_time"));
+  emergency_time_->setRange(0.0, 3600.0);
+  emergency_time_->setDecimals(1);
+  emergency_time_->setSingleStep(0.5);
+  emergency_time_->setSuffix(tr(" s"));
+  emergency_time_->setValue(3.0);
 
   // The literal spellings are the SCHEMA's, not display labels: they are
   // written into the file, so translating them would corrupt it.
@@ -367,6 +379,12 @@ StoryboardPanel::StoryboardPanel(Document& document, SelectionModel& selection, 
   buttons->addWidget(add_button_);
   buttons->addWidget(remove_button_);
   buttons->addStretch();
+  auto* emergency_row = new QHBoxLayout;
+  emergency_row->addWidget(new QLabel(tr("Pojazd"), this));
+  emergency_row->addWidget(emergency_actor_, 1);
+  emergency_row->addWidget(new QLabel(tr("Po czasie"), this));
+  emergency_row->addWidget(emergency_time_);
+  emergency_row->addWidget(emergency_button_);
 
   auto* form = new QFormLayout;
   form->addRow(tr("Name"), name_edit_);
@@ -391,9 +409,11 @@ StoryboardPanel::StoryboardPanel(Document& document, SelectionModel& selection, 
 
   auto* root = new QVBoxLayout(this);
   root->addLayout(buttons);
+  root->addLayout(emergency_row);
   root->addLayout(columns);
 
   connect(add_button_, &QPushButton::clicked, this, &StoryboardPanel::add_child);
+  connect(emergency_button_, &QPushButton::clicked, this, &StoryboardPanel::add_emergency_stop);
   connect(remove_button_, &QPushButton::clicked, this, &StoryboardPanel::remove_selected);
   connect(tree_, &QTreeWidget::itemSelectionChanged, this, [this] {
     if (populating_) {
@@ -522,6 +542,19 @@ int StoryboardPanel::row_count() const {
 
 void StoryboardPanel::rebuild() {
   populating_ = true;
+  const QString chosen_actor = emergency_actor_->currentData().toString();
+  {
+    const QSignalBlocker block(emergency_actor_);
+    emergency_actor_->clear();
+    for (const osc::ScenarioObject& object : document_.scenario().entities.scenario_objects) {
+      if (std::holds_alternative<osc::Vehicle>(object.entity_object)) {
+        emergency_actor_->addItem(q(object.name), q(object.name));
+      }
+    }
+    const int old_index = emergency_actor_->findData(chosen_actor);
+    if (old_index >= 0) emergency_actor_->setCurrentIndex(old_index);
+  }
+  emergency_button_->setEnabled(emergency_actor_->count() > 0);
   tree_->clear();
 
   const osc::Storyboard& storyboard = document_.scenario().storyboard;
@@ -732,6 +765,54 @@ std::vector<QString> StoryboardPanel::phase_choices(const QString& controller_od
 }
 
 // --- structural edits ----------------------------------------------------------
+
+void StoryboardPanel::add_emergency_stop() {
+  const QString actor = emergency_actor_->currentData().toString();
+  if (actor.isEmpty()) return;
+  const osc::Scenario& scenario = document_.scenario();
+  const auto found = std::find_if(
+      scenario.entities.scenario_objects.begin(), scenario.entities.scenario_objects.end(),
+      [&](const osc::ScenarioObject& object) {
+        return object.name == actor.toStdString() &&
+               std::holds_alternative<osc::Vehicle>(object.entity_object);
+      });
+  if (found == scenario.entities.scenario_objects.end()) return;
+
+  std::vector<std::string> names;
+  for (const osc::Story& existing : scenario.storyboard.stories)
+    names.push_back(existing.name);
+  Seed seed = seed_from(scenario, actor);
+  seed.first_entity = actor;
+  osc::Story story;
+  story.name = unique_name("awaryjne_hamowanie", names);
+  story.acts.push_back(default_act(seed));
+  osc::Event& event = story.acts[0].maneuver_groups[0].maneuvers[0].events[0];
+  event.name = "hamowanie_awaryjne";
+  event.actions.clear();
+  osc::Action action = default_action(ActionKind::Speed, seed);
+  action.name = "zwolnij_do_zera";
+  auto* entry = std::get_if<osc::PrivateAction>(&action.action);
+  if (entry == nullptr || !entry->longitudinal.has_value() ||
+      !entry->longitudinal->speed.has_value() ||
+      !entry->longitudinal->speed->absolute_target.has_value()) return;
+  entry->longitudinal->speed->absolute_target->value = 0.0;
+  event.actions.push_back(std::move(action));
+  osc::Condition condition = default_condition(ConditionKind::SimulationTime, seed);
+  condition.name = "czas_hamowania";
+  condition.simulation_time->value = emergency_time_->value();
+  osc::ConditionGroup group;
+  group.conditions.push_back(std::move(condition));
+  osc::Trigger trigger;
+  trigger.condition_groups.push_back(std::move(group));
+  event.start_trigger = std::move(trigger);
+
+  const std::size_t index = scenario.storyboard.stories.size();
+  if (document_.push_scenario_command(
+          osc::edit::set_story(scenario, index, std::move(story))).has_value()) {
+    path_ = {.level = StoryboardLevel::Story, .story = index};
+    rebuild();
+  }
+}
 
 void StoryboardPanel::add_child() {
   const osc::Scenario& scenario = document_.scenario();

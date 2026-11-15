@@ -123,8 +123,24 @@ QVector<SimulationActorPose> SimulationPlayback::poses_at(double time) const {
                                  track.frames.cend(),
                                  time - epsilon,
                                  [](const Keyframe& frame, double t) { return frame.time < t; });
+    const auto track_speed = [&](const Keyframe& a, const Keyframe& b) {
+      const double duration = b.time - a.time;
+      if (duration <= epsilon || duration > 1.5 * timestep_) return 0.0;
+      double sq = 0.0;
+      for (std::size_t axis = 0; axis < a.position.size(); ++axis) {
+        const double dx = b.position[axis] - a.position[axis];
+        sq += dx * dx;
+      }
+      return std::sqrt(sq) / duration;
+    };
     if (next != track.frames.cend() && std::abs(next->time - time) <= epsilon) {
-      poses.push_back({track.name, next->position, next->heading, next->pitch, next->roll});
+      SimulationActorPose pose{track.name, next->position, next->heading, next->pitch, next->roll};
+      if (next != track.frames.cbegin()) {
+        pose.speed_mps = track_speed(*std::prev(next), *next);
+      } else if (std::next(next) != track.frames.cend()) {
+        pose.speed_mps = track_speed(*next, *std::next(next));
+      }
+      poses.push_back(pose);
       continue;
     }
     if (next == track.frames.cbegin()) {
@@ -150,6 +166,7 @@ QVector<SimulationActorPose> SimulationPlayback::poses_at(double time) const {
     pose.heading = angle(previous.heading, next->heading);
     pose.pitch = angle(previous.pitch, next->pitch);
     pose.roll = angle(previous.roll, next->roll);
+    pose.speed_mps = track_speed(previous, *next);
     poses.push_back(pose);
   }
   return poses;

@@ -223,10 +223,12 @@ TEST(SimulationPlayback, InterpolatesOnlyBetweenSamplesOfTheSameActor) {
   EXPECT_DOUBLE_EQ(middle.front().position[0], 2.0);
   EXPECT_DOUBLE_EQ(middle.front().position[1], 1.0);
   EXPECT_DOUBLE_EQ(middle.front().position[2], 0.5);
+  EXPECT_NEAR(middle.front().speed_mps, std::sqrt(21.0) / 0.05, 1e-8);
   EXPECT_NEAR(middle.front().heading, std::numbers::pi + 3.2, 1e-12);
   const auto exact = playback.poses_at(0.05);
   ASSERT_EQ(exact.size(), 2);
   EXPECT_DOUBLE_EQ(exact.front().heading, 0.2);
+  EXPECT_NEAR(exact.front().speed_mps, std::sqrt(21.0) / 0.05, 1e-8);
   EXPECT_TRUE(playback.poses_at(0.18).isEmpty());
   const auto end = playback.poses_at(10.0);
   ASSERT_EQ(end.size(), 1);
