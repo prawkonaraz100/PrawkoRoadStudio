@@ -122,6 +122,7 @@ add_library(roadmaker_editor_lib STATIC
   src/panels/width_panel.cpp
   src/render/gl_functions.cpp
   src/render/gl_renderer.cpp
+  src/render/gl_shadow.cpp
   src/render/cockpit.cpp
   src/render/material_catalog.cpp
   src/render/scene_builder.cpp

@@ -184,7 +184,7 @@ struct BackdropColors {
 
 /// Scene lighting + sky description (all plain floats — theme/render boundary
 /// stays Qt- and GL-free). Hemisphere ambient (sky/ground lerp by normal.z) +
-/// one directional sun; no shadow maps (M3a decision 3). The DEFAULT values are
+/// one directional sun; R4 shadow maps are enabled only for Textured mode. The DEFAULT values are
 /// the daytime "Textured" preset (the new default render mode); `sober_lighting`
 /// below reproduces the flat M2 look for the Sober toggle.
 struct Environment {
@@ -201,6 +201,7 @@ struct Environment {
   float wetness = 0.0F;
   float snow_cover = 0.0F;
   float season = 0.0F; // 0 summer, 1 autumn, 2 winter (ground shader palette)
+  bool shadows_enabled = false; // legacy + Sober unchanged; Textured enables R4
 };
 
 /// S3.3: shared time-of-day presets for all cameras, including mirror FBOs
@@ -219,7 +220,9 @@ enum class TimeOfDay { Day, Dawn, Dusk, Night };
 
 /// The daytime "Textured" render mode: hemisphere sky/ground + a warm sun.
 [[nodiscard]] inline Environment textured_lighting() {
-  return Environment{};
+  Environment env{};
+  env.shadows_enabled = true;
+  return env;
 }
 
 [[nodiscard]] inline Environment time_of_day_lighting(TimeOfDay phase) {

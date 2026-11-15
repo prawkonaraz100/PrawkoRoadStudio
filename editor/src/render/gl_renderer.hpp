@@ -77,6 +77,10 @@ private:
   void destroy(GpuMesh& mesh);
   void draw_backdrop(const CameraMatrices& camera);
   void draw_ground(const CameraMatrices& camera);
+  bool init_shadow_resources();
+  void release_shadow_resources();
+  void draw_shadow_map(const std::vector<DrawItem>& items,
+                       const CameraMatrices& camera, int width, int height);
 
   std::unordered_map<std::uint32_t, GpuMesh> meshes_;
   std::uint32_t next_id_ = 1;
@@ -126,6 +130,27 @@ private:
   std::int32_t u_wetness_ = -1;
   std::int32_t u_snow_cover_ = -1;
   std::int32_t u_asphalt_ = -1;
+  std::int32_t u_shadow_enabled_ = -1;
+  std::int32_t u_shadow_light_matrix_ = -1;
+  std::int32_t u_shadow_map_ = -1;
+  std::int32_t u_shadow_texel_ = -1;
+  std::uint32_t shadow_program_ = 0;
+  std::uint32_t shadow_fbo_ = 0;
+  std::uint32_t shadow_depth_ = 0;
+  bool shadow_ready_ = false;
+  bool shadow_active_ = false;
+  static constexpr int kShadowSize = 1024;
+  std::array<float,16> shadow_light_matrix_{};
+  std::int32_t u_depth_light_ = -1;
+  std::int32_t u_depth_model_ = -1;
+  std::int32_t u_depth_instancing_ = -1;
+  std::int32_t u_depth_mode_ = -1;
+  std::int32_t u_depth_cutoff_ = -1;
+  std::int32_t u_depth_has_tex_ = -1;
+  std::int32_t u_depth_tex_ = -1;
+  std::int32_t u_depth_uv_scale_ = -1;
+  std::int32_t u_depth_tint_ = -1;
+  std::int32_t u_depth_color_ = -1;
 
   // Backdrop passes (sky gradient + ground grid), both attributeless draws
   // through one shared empty VAO (core profile requires a bound VAO).
@@ -161,6 +186,10 @@ private:
   std::int32_t u_ground_snow_ = -1;
   std::int32_t u_ground_fog_ = -1;
   std::int32_t u_ground_fog_color_ = -1;
+  std::int32_t u_ground_shadow_enabled_ = -1;
+  std::int32_t u_ground_shadow_light_matrix_ = -1;
+  std::int32_t u_ground_shadow_map_ = -1;
+  std::int32_t u_ground_shadow_texel_ = -1;
 
   bool ready_ = false;
 };

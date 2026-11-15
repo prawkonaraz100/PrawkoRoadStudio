@@ -92,6 +92,10 @@ uniform int u_alpha_mode;
 uniform float u_alpha_cutoff;
 uniform float u_transmission;
 uniform float u_ior;
+uniform int u_shadow_enabled;
+uniform mat4 u_shadow_light_matrix;
+uniform sampler2DShadow u_shadow_map;
+uniform float u_shadow_texel;
 uniform float u_vertical_fill;     // diffuse sky bounce on vertical concrete
 uniform vec3 u_camera_pos;      // world-space eye (specular half-vector)
 // Environment lighting (hemisphere ambient + one directional sun). The Sober
@@ -146,6 +150,20 @@ vec3 perturb_normal(vec3 geom_n, vec2 uv) {
   return normalize(tbn * sample_n);
 }
 
+float sun_visibility(vec3 geom_n) {
+  if (u_shadow_enabled == 0 || u_lit < 0.5 || u_sun_intensity < 0.1) return 1.0;
+  vec4 light = u_shadow_light_matrix * vec4(v_world_pos, 1.0);
+  vec3 p = light.xyz / light.w * 0.5 + 0.5;
+  if (p.z <= 0.0 || p.z >= 1.0 || p.x <= 0.0 || p.x >= 1.0 ||
+      p.y <= 0.0 || p.y >= 1.0) return 1.0;
+  float bias = max(0.0002, 0.0012 * (1.0 - max(dot(geom_n,normalize(u_sun_dir)), 0.0)));
+  float visibility = 0.0;
+  for(int y=-1;y<=1;++y)
+    for(int x=-1;x<=1;++x)
+      visibility += texture(u_shadow_map,vec3(p.xy+vec2(x,y)*u_shadow_texel,p.z-bias));
+  return visibility/9.0;
+}
+
 void main() {
   vec2 uv = v_uv * u_uv_scale;
   // A default Material carries no texture, so u_has_texture stays 0 and the
@@ -154,6 +172,7 @@ void main() {
   // glTF MASK is a depth-writing opaque cutout, not a semi-transparent pane.
   if (u_alpha_mode == 1 && albedo.a < u_alpha_cutoff) discard;
   vec3 geom_n = normalize(v_normal);
+  float sun_shadow = sun_visibility(geom_n);
   vec3 n = u_has_normal == 1 ? perturb_normal(geom_n, uv) : geom_n;
   float rough =
       u_has_roughness == 1 ? texture(u_roughness_map, uv).r * u_roughness : u_roughness;
@@ -169,6 +188,7 @@ void main() {
   vec3 half_v = normalize(sun_dir + normalize(u_camera_pos - v_world_pos));
   float spec = pow(max(dot(n, half_v), 0.0), mix(8.0, 96.0, gloss)) * gloss;
   direct += u_sun_color * (u_sun_intensity * spec);
+  direct *= sun_shadow;
 
   // Daylight bounces off the road onto vertical concrete; the plain
   // hemisphere-only model otherwise draws a 15-cm curb as a black stripe.
@@ -204,7 +224,7 @@ void main() {
     vec3 brdf = (1.0 - fresnel) * (1.0 - pbr_metal) *
                 albedo.rgb / 3.14159265 +
                 (distribution * masking * fresnel) / (4.0 * nL * nV + 1e-4);
-    vec3 sun = brdf * u_sun_color * (u_sun_intensity * nL);
+    vec3 sun = brdf * u_sun_color * (u_sun_intensity * nL * sun_shadow);
     vec3 ambient_diffuse = albedo.rgb * hemi * (1.0 - pbr_metal);
     // Low-frequency hemispheric approximation, not an environment cubemap
     // or ray-traced reflection. Metal receives the sky color, not fake plastic.
@@ -362,7 +382,25 @@ uniform float u_season;
 uniform float u_snow;
 uniform float u_fog_density;
 uniform vec3 u_fog_color;
+uniform int u_shadow_enabled;
+uniform float u_base_z;
+uniform mat4 u_shadow_light_matrix;
+uniform sampler2DShadow u_shadow_map;
+uniform float u_shadow_texel;
 out vec4 frag_color;
+
+float ground_visibility() {
+  if(u_shadow_enabled == 0 || u_sun_intensity < 0.1) return 1.0;
+  vec4 light = u_shadow_light_matrix * vec4(v_world, u_base_z, 1.0);
+  vec3 p = light.xyz/light.w*0.5+0.5;
+  if(p.z <= 0.0 || p.z >= 1.0 || p.x <= 0.0 || p.x >= 1.0 ||
+     p.y <= 0.0 || p.y >= 1.0) return 1.0;
+  float visibility=0.0;
+  for(int y=-1;y<=1;++y)
+    for(int x=-1;x<=1;++x)
+      visibility+=texture(u_shadow_map,vec3(p.xy+vec2(x,y)*u_shadow_texel,p.z-0.00035));
+  return visibility/9.0;
+}
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float value_noise(vec2 p) {
@@ -389,7 +427,8 @@ void main() {
   // Flat +Z surface lit by the scene environment (matches the mesh shader for
   // an up-facing normal): hemisphere sky ambient + one directional sun.
   vec3 lighting = (u_sky * u_ambient) +
-                  (u_sun_color * (u_sun_intensity * max(normalize(u_sun_dir).z, 0.0)));
+                   (u_sun_color * (u_sun_intensity * max(normalize(u_sun_dir).z, 0.0)
+                                   * ground_visibility()));
   vec3 color = grass * lighting;
   color = mix(color, vec3(0.85, 0.89, 0.93) * max(0.22, u_ambient + 0.4),
               clamp(u_snow * (0.72 + 0.28 * n), 0.0, 1.0));
@@ -510,6 +549,10 @@ bool GLRenderer::init() {
   u_wetness_ = gl::GetUniformLocation(program_, "u_wetness");
   u_snow_cover_ = gl::GetUniformLocation(program_, "u_snow_cover");
   u_asphalt_ = gl::GetUniformLocation(program_, "u_asphalt");
+  u_shadow_enabled_ = gl::GetUniformLocation(program_, "u_shadow_enabled");
+  u_shadow_light_matrix_ = gl::GetUniformLocation(program_, "u_shadow_light_matrix");
+  u_shadow_map_ = gl::GetUniformLocation(program_, "u_shadow_map");
+  u_shadow_texel_ = gl::GetUniformLocation(program_, "u_shadow_texel");
   u_sky_top_ = gl::GetUniformLocation(sky_program_, "u_sky_top");
   u_sky_horizon_ = gl::GetUniformLocation(sky_program_, "u_sky_horizon");
   u_grid_view_ = gl::GetUniformLocation(grid_program_, "u_view");
@@ -533,7 +576,12 @@ bool GLRenderer::init() {
   u_ground_snow_ = gl::GetUniformLocation(ground_program_, "u_snow");
   u_ground_fog_ = gl::GetUniformLocation(ground_program_, "u_fog_density");
   u_ground_fog_color_ = gl::GetUniformLocation(ground_program_, "u_fog_color");
+  u_ground_shadow_enabled_ = gl::GetUniformLocation(ground_program_, "u_shadow_enabled");
+  u_ground_shadow_light_matrix_ = gl::GetUniformLocation(ground_program_, "u_shadow_light_matrix");
+  u_ground_shadow_map_ = gl::GetUniformLocation(ground_program_, "u_shadow_map");
+  u_ground_shadow_texel_ = gl::GetUniformLocation(ground_program_, "u_shadow_texel");
   gl::GenVertexArrays(1, &empty_vao_);
+  shadow_ready_ = init_shadow_resources();
   ready_ = true;
   return true;
 }
@@ -543,6 +591,7 @@ void GLRenderer::shutdown() {
     return;
   }
   clear_meshes();
+  release_shadow_resources();
   for (const auto& [id, tex] : textures_) {
     gl::DeleteTextures(1, &tex);
   }
@@ -782,6 +831,15 @@ void GLRenderer::draw_ground(const CameraMatrices& camera) {
   gl::Uniform1f(u_ground_season_, environment_.season);
   gl::Uniform1f(u_ground_snow_, environment_.snow_cover);
   gl::Uniform1f(u_ground_fog_, environment_.fog_density);
+  gl::Uniform1i(u_ground_shadow_enabled_,shadow_active_?1:0);
+  gl::UniformMatrix4fv(u_ground_shadow_light_matrix_,1,0,shadow_light_matrix_.data());
+  gl::Uniform1i(u_ground_shadow_map_,4);
+  gl::Uniform1f(u_ground_shadow_texel_,1.0F/static_cast<float>(kShadowSize));
+  if(shadow_active_){
+    gl::ActiveTexture(gl::kTexture4);
+    gl::BindTexture(gl::kTexture2D,shadow_depth_);
+    gl::ActiveTexture(gl::kTexture0);
+  }
   gl::Uniform3f(u_ground_fog_color_, environment_.fog_color[0],
                 environment_.fog_color[1], environment_.fog_color[2]);
   gl::DrawArrays(gl::kTriangleStrip, 0, 4);
@@ -795,6 +853,7 @@ void GLRenderer::render(const std::vector<DrawItem>& items,
   if (!ready_ || width <= 0 || height <= 0) {
     return;
   }
+  draw_shadow_map(items,camera,width,height);
   gl::Viewport(0, 0, width, height);
   gl::ClearColor(
       backdrop_.sky_horizon[0], backdrop_.sky_horizon[1], backdrop_.sky_horizon[2], 1.0F);
@@ -830,6 +889,10 @@ void GLRenderer::render(const std::vector<DrawItem>& items,
                 environment_.fog_color[1], environment_.fog_color[2]);
   gl::Uniform1f(u_wetness_, environment_.wetness);
   gl::Uniform1f(u_snow_cover_, environment_.snow_cover);
+  gl::Uniform1i(u_shadow_enabled_,shadow_active_?1:0);
+  gl::UniformMatrix4fv(u_shadow_light_matrix_,1,0,shadow_light_matrix_.data());
+  gl::Uniform1i(u_shadow_map_,4);
+  gl::Uniform1f(u_shadow_texel_,1.0F/static_cast<float>(kShadowSize));
   // World-space eye for the specular half-vector (fed the same way sun_dir is).
   gl::Uniform3f(u_camera_pos_, camera.eye[0], camera.eye[1], camera.eye[2]);
 

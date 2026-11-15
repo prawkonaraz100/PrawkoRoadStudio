@@ -72,6 +72,18 @@ inline constexpr GLenum kTexture0 = 0x84C0;
 inline constexpr GLenum kTexture1 = 0x84C1; // normal map (PBR-lite)
 inline constexpr GLenum kTexture2 = 0x84C2; // roughness map (PBR-lite)
 inline constexpr GLenum kTexture3 = 0x84C3; // GLB metallic-roughness map
+inline constexpr GLenum kTexture4 = 0x84C4; // directional shadow depth
+inline constexpr GLenum kFramebuffer = 0x8D40;
+inline constexpr GLenum kFramebufferBinding = 0x8CA6;
+inline constexpr GLenum kFramebufferComplete = 0x8CD5;
+inline constexpr GLenum kDepthAttachment = 0x8D00;
+inline constexpr GLenum kDepthComponent = 0x1902;
+inline constexpr GLenum kDepthComponent24 = 0x81A6;
+inline constexpr GLenum kTextureCompareMode = 0x884C;
+inline constexpr GLenum kCompareRefToTexture = 0x884E;
+inline constexpr GLenum kTextureCompareFunc = 0x884D;
+inline constexpr GLenum kLequal = 0x0203;
+inline constexpr GLenum kNone = 0;
 inline constexpr GLenum kRgba = 0x1908;
 inline constexpr GLenum kRgba8 = 0x8058;
 inline constexpr GLenum kSrgb8Alpha8 = 0x8C43;
@@ -99,6 +111,14 @@ inline constexpr GLenum kClampToEdge = 0x812F;
   X(void, ClearColor, GLfloat, GLfloat, GLfloat, GLfloat)                                          \
   X(void, Clear, GLbitfield)                                                                       \
   X(void, Viewport, GLint, GLint, GLsizei, GLsizei)                                                \
+  X(void, GetIntegerv, GLenum, GLint*)                                                             \
+  X(void, GenFramebuffers, GLsizei, GLuint*)                                                       \
+  X(void, BindFramebuffer, GLenum, GLuint)                                                         \
+  X(void, FramebufferTexture2D, GLenum, GLenum, GLenum, GLuint, GLint)                             \
+  X(GLenum, CheckFramebufferStatus, GLenum)                                                        \
+  X(void, DeleteFramebuffers, GLsizei, const GLuint*)                                              \
+  X(void, DrawBuffer, GLenum)                                                                      \
+  X(void, ReadBuffer, GLenum)                                                                      \
   X(void, DepthFunc, GLenum)                                                                       \
   X(void, DepthMask, GLboolean)                                                                    \
   X(void, BlendFunc, GLenum, GLenum)                                                               \
