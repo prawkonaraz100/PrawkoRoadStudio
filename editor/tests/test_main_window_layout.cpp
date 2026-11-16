@@ -604,6 +604,86 @@ TEST_F(MainWindowLayoutTest, BlenderShelterLibraryDropMoveRotateSave) {
   EXPECT_EQ(count, 1) << "The UI drop did not persist a real GLB object";
 }
 
+TEST_F(MainWindowLayoutTest, R6BuildingGlbLibraryDropRotateSaveReload) {
+  // A separate temporary project proves that the REAL authored building GLB
+  // works with the same mouse-drop/editor/model as the shelter (not only CLI).
+  QTemporaryDir temp;
+  ASSERT_TRUE(temp.isValid());
+  const auto root = std::filesystem::path(temp.path().toStdU16String());
+  ASSERT_TRUE(Project::create(root, QStringLiteral("R6 kamienica proof")).has_value());
+  const auto scene = root / "r6-building.xodr";
+  std::filesystem::copy_file(std::filesystem::path(RM_SAMPLES_DIR) / "straight_road.xodr", scene);
+  {
+    std::ofstream state(root / "r6-building.rmscene.json");
+    state << R"({"scene_version":1,"view":{"distance":60,"pitch":1.56,"projection":"orthographic","target":[50,0,0],"yaw":-1.57}})";
+  }
+  AssetImportRequest request;
+  request.source = std::filesystem::path(RM_ASSETS_DIR) /
+      "prawko/blender/kamienica_miejska_r6/r6_kamienica_miejska.glb";
+  request.label = QStringLiteral("Kamienica miejska Prawko R6");
+  request.category = QStringLiteral("Prawko | Obiekty 3D");
+  request.license = QStringLiteral("Autorski model PrawkoNaRaz");
+  const auto imported = import_prop_asset(root, request);
+  ASSERT_TRUE(imported.has_value()) << imported.error().message;
+  const std::string model_id = std::get<1>(*imported).slug.toStdString();
+  LibraryManifest manifest;
+  manifest.upsert(std::get<0>(*imported));
+  const auto manifest_file = root / "assets/library/manifest.json";
+  std::filesystem::create_directories(manifest_file.parent_path());
+  ASSERT_TRUE(manifest.save(manifest_file).has_value());
+  window_.load_file(scene);
+  auto* library = window_.findChild<LibraryPanel*>();
+  ASSERT_NE(library, nullptr);
+  const int cat = library->category_combo()->findData(QStringLiteral("Prawko | Obiekty 3D"));
+  ASSERT_GE(cat,0);
+  library->category_combo()->setCurrentIndex(cat);
+  const auto* proxy = library->view()->model();
+  ASSERT_EQ(proxy->rowCount(),1);
+  const QModelIndex tile = proxy->index(0,0);
+  auto* view = window_.viewport();
+  view->resize(800,500);
+  view->set_camera_preset(QStringLiteral("ortho"));
+  const auto point = project_to_screen(view->camera().matrices(1.6F),44.0,-5.0,0.0,800,500);
+  ASSERT_TRUE(point.has_value());
+  const QPoint pos = QPointF((*point)[0],(*point)[1]).toPoint();
+  ASSERT_TRUE(view->rect().contains(pos));
+  std::unique_ptr<QMimeData> mime(proxy->mimeData({tile}));
+  ASSERT_NE(mime,nullptr);
+  QDragEnterEvent enter(pos,Qt::CopyAction,mime.get(),Qt::LeftButton,Qt::NoModifier);
+  QApplication::sendEvent(view,&enter);
+  ASSERT_TRUE(enter.isAccepted());
+  QDropEvent drop(QPointF(pos),Qt::CopyAction,mime.get(),Qt::LeftButton,Qt::NoModifier);
+  QApplication::sendEvent(view,&drop);
+  ASSERT_TRUE(drop.isAccepted());
+  auto* station = window_.findChild<QDoubleSpinBox*>(QStringLiteral("object_s_spin"));
+  auto* heading = window_.findChild<QDoubleSpinBox*>(QStringLiteral("object_hdg_spin"));
+  ASSERT_NE(station,nullptr);
+  ASSERT_NE(heading,nullptr);
+  const double old_s=station->value();
+  station->setValue(old_s+6.0);
+  QMetaObject::invokeMethod(station,"editingFinished",Qt::DirectConnection);
+  heading->setValue(1.57);
+  QMetaObject::invokeMethod(heading,"editingFinished",Qt::DirectConnection);
+  auto* save=window_.findChild<QAction*>(QStringLiteral("file_save"));
+  if(!save) {
+    const auto actions=window_.menuBar()->actions().front()->menu()->actions();
+    const auto match=std::ranges::find_if(actions,[](const QAction* a){return a->text()==QStringLiteral("&Save");});
+    ASSERT_NE(match,actions.end());
+    save=*match;
+  }
+  save->trigger();
+  const auto parsed=load_xodr(scene);
+  ASSERT_TRUE(parsed.has_value()) << parsed.error().message;
+  int count=0;
+  parsed->network.for_each_object([&](ObjectId,const Object& o){
+    ++count;
+    EXPECT_EQ(o.name,model_id);
+    EXPECT_NEAR(o.s,old_s+6.0,.01);
+    EXPECT_NEAR(o.hdg,1.57,.01);
+  });
+  EXPECT_EQ(count,1) << "R6 building must be persisted by real editor drag/drop";
+}
+
 TEST_F(MainWindowLayoutTest, CuratedLibraryStaysAvailableAcrossMapAndScenarioModes) {
   auto* library = window_.findChild<LibraryPanel*>();
   ASSERT_NE(library, nullptr);

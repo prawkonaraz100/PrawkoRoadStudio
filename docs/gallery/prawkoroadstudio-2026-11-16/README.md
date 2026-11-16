@@ -12,3 +12,6 @@ Wszystkie obrazy zostaĹ‚y wygenerowane przez rzeczywisty program PrawkoRoadSt
 Klatki z Qt i Blendera nie sÄ… parytetem fotometrycznym. Wyniki/testy R5 i R4b3a zapisane w HANDOFF.md, peĹ‚ne materiaĹ‚y ĹşrĂłdĹ‚owe w lokalnym ignorowanym archiwum archive/a1-renderer-20261115.
 
 - r4b3b-reflektory-ruchu-wlaczone.png / r4b3b-reflektory-ruchu-wylaczone.png: identyczne nocne klatki esmini (t=2.0 s) na Windows OpenGL. Tylko swiatla najblizszego pojazdu ruchu sa przelaczane; lampy Ego pozostaja bez zmian. Test A/B: 7663 jasniejszych probek, 0 ciemniejszych co 2 px. Brak jeszcze cieni rzucanych przez te reflektory.
+
+- r6-kamienice-qt-front.png: realne dwa modele kamienicy i wiata na osobnej scenie 06-r6-otoczenie-prototyp, natywny Windows OpenGL 3.3; R6 pozostaje prototypem.
+- r6-kamienica-blender.png: render wlasnego GLB w Blender Cycles 5.3; to niezalezny renderer, nie jest fotometrycznie identyczny z Qt.

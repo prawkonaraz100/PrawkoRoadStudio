@@ -13,6 +13,19 @@
         "license": "Apache-2.0 — autorski model PrawkoNaRaz"
       },
       "thumbnail": "assets/library/thumbnails/prawko_wiata_przystankowa.png"
+    },
+    {
+      "key": "prop.r6_kamienica_miejska",
+      "label": "Kamienica miejska | Prawko R6",
+      "category": "Prawko | Obiekty 3D",
+      "create": {
+        "kind": "tree",
+        "model": "r6_kamienica_miejska",
+        "model_file": "assets/props/r6_kamienica_miejska.glb",
+        "source": "assets/prawko/blender/kamienica_miejska_r6/r6_kamienica_miejska.glb",
+        "license": "Apache-2.0 — autorski model PrawkoNaRaz"
+      },
+      "thumbnail": "assets/library/thumbnails/r6_kamienica_miejska.png"
     }
   ]
 }
