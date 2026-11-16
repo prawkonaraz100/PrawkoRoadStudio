@@ -1,0 +1,14 @@
+{
+  "title": "Brzoza miejska okolo 10 m",
+  "units": "metres",
+  "axes": "Z up",
+  "size_m": [
+    5.696,
+    5.577,
+    9.756
+  ],
+  "parts": 10,
+  "min_height_m": 0.0,
+  "glb_bytes": 1176752,
+  "blender": "5.3.0"
+}

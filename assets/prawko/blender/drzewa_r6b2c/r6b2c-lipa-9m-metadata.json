@@ -1,0 +1,14 @@
+{
+  "title": "Lipa uliczna okolo 9 m",
+  "units": "metres",
+  "axes": "Z up",
+  "size_m": [
+    5.995,
+    6.228,
+    8.917
+  ],
+  "parts": 9,
+  "min_height_m": 0.0,
+  "glb_bytes": 1280636,
+  "blender": "5.3.0"
+}

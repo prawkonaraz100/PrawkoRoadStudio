@@ -53,3 +53,17 @@ Kazdy z trzech assetow jest autorskim modelem Blender, zrodlowy .blend + .glb + 
 - r6b2b-blender-pas-zieleni.png, r6b2b-blender-rabata.png, r6b2b-blender-sciezka.png â€” osobne autorskie rendery Cycles; NIE udawaja ekranow Qt
 
 Nadal nie jest to fotorealizm: brakuje urozmaicenia architektury wszystkich segmentow, trawa w oddali jest shaderem proceduralnym, a korony starszych drzew R6b1 wymagaja osobnej poprawy. Docelowo naturalne otoczenie bedzie wypracowane seria niezaleznych komponentow 3D, bez sztucznego stockowego tla.
+
+## R6b2c - autorskie drzewa i strefa tylnej elewacji (16.11.2026)
+
+Pliki oznaczone r6b2c-qt-* to autentyczne screenshoty PrawkoRoadStudio Windows/OpenGL 3.3, a nie generowane ilustracje. Wariant r6b2c-blender-* to oryginalne Cycles z Blender 5.3 i plikow .blend/.glb w assets/prawko/blender/drzewa_r6b2c/.
+
+- r6b2c-qt-calosc.png â€” nowa scena 06e z lipami i brzozami zamiast powtarzajacych sie kulistych drzew; ta sama kamera jak 06d
+- r6b2c-qt-drzewa.png â€” zblizenie roznorodnych drzew przy ulicy
+- r6b2c-qt-podworka.png â€” zblizenie przejscia przez zabudowe i rabat przy tylnej elewacji
+- r6b2c-porownanie-stare-nowe-drzewa.png â€” zestawienie oryginalnych screenshotow 06d/06e z identycznej kamery
+- r6b2c-blender-lipa.png / r6b2c-blender-brzoza.png / r6b2c-blender-rabata-fundament.png â€” oddzielne renderingi z Blender Cycles
+
+3 nowe edytowalne GLB: lipa 8.83m, brzoza 9.64m, pas rabaty 12m. 06e to osobna kopia 06d; cztery stare drzewa zastapiono tylko w scenie 06e, zachowujac w bibliotece oryginalny model R6b1. Obrocono 2 sciezki 12m tak, aby wspolnie laczyly chodnik z podworkiem miedzy kamienicami, dodano 2 pasy nasadzen przy tylnych elewacjach i 1 brzoze na terenie przy podworku.
+
+Granice jakosci: modele sa autorskimi przyblizeniami geometrycznymi, nie fotorealistyczna fotogrametria; dalsza naturalizacja dotyczy roslinnosci, nawierzchni, skali i otoczenia poza bezposrednia ulica.

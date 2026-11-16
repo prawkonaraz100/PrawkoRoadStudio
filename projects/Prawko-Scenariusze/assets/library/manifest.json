@@ -117,6 +117,45 @@
         "license": "Apache-2.0 — autorski model PrawkoNaRaz"
       },
       "thumbnail": "assets/library/thumbnails/r6b2b-sciezka-zwirowa-12m.png"
+    },
+    {
+      "key": "prop.r6b2c-lipa-9m",
+      "label": "Lipa uliczna 9 m | Prawko R6b2c",
+      "category": "Prawko | Obiekty 3D",
+      "create": {
+        "kind": "tree",
+        "model": "r6b2c-lipa-9m",
+        "model_file": "assets/props/r6b2c-lipa-9m.glb",
+        "source": "assets/prawko/blender/drzewa_r6b2c/r6b2c-lipa-9m.glb",
+        "license": "Apache-2.0 — autorski model PrawkoNaRaz"
+      },
+      "thumbnail": "assets/library/thumbnails/r6b2c-lipa-9m.png"
+    },
+    {
+      "key": "prop.r6b2c-brzoza-10m",
+      "label": "Brzoza miejska 10 m | Prawko R6b2c",
+      "category": "Prawko | Obiekty 3D",
+      "create": {
+        "kind": "tree",
+        "model": "r6b2c-brzoza-10m",
+        "model_file": "assets/props/r6b2c-brzoza-10m.glb",
+        "source": "assets/prawko/blender/drzewa_r6b2c/r6b2c-brzoza-10m.glb",
+        "license": "Apache-2.0 — autorski model PrawkoNaRaz"
+      },
+      "thumbnail": "assets/library/thumbnails/r6b2c-brzoza-10m.png"
+    },
+    {
+      "key": "prop.r6b2c-pas-fundamentowy-12m",
+      "label": "Rabata przy budynku 12 m | Prawko R6b2c",
+      "category": "Prawko | Obiekty 3D",
+      "create": {
+        "kind": "tree",
+        "model": "r6b2c-pas-fundamentowy-12m",
+        "model_file": "assets/props/r6b2c-pas-fundamentowy-12m.glb",
+        "source": "assets/prawko/blender/drzewa_r6b2c/r6b2c-pas-fundamentowy-12m.glb",
+        "license": "Apache-2.0 — autorski model PrawkoNaRaz"
+      },
+      "thumbnail": "assets/library/thumbnails/r6b2c-pas-fundamentowy-12m.png"
     }
   ]
 }
