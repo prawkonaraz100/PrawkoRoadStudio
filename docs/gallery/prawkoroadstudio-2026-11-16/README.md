@@ -119,3 +119,16 @@ Autentyczne zrzuty z PrawkoRoadStudio Windows/OpenGL 3.3, nie obrazy AI. Materia
 - r6b2g-blender-oprawa-emisja.png - osobny autorski Cycles modelu, NIE screen z Qt
 
 Scena testowa 06i-r6b2g-mokry-plac-i-oprawy to nowa kopia 06h, z piecioma zamienionymi na nowy GLB latarniami. Stare sceny i stara latarnia pozostaja bez zmian i sa dostepne.
+
+## R6b2h - kaĹ‚uĹĽe i refleksy PLANARNE rzeczywistego otoczenia (16.11.2026)
+
+Wybrane poprawne zrzuty oznaczone r6b2h-qt-* powstaly bezposrednio w PrawkoRoadStudio Windows OpenGL 3.3, nie sa AI ani stockiem. Dwie nowe autorskie kaĹ‚uĹĽe 3D ze zrodĹ‚ami Blender .blend i GLB sa w assets/prawko/blender/kaluze_r6b2h/. KaĹĽdy model jest w bibliotece assetow i mozna go dodac/przesunac/obrocic/zapisac. Material glTF o prefiksie PrawkoWater. aktywuje osobna scene-reflection: istniejÄ…cy renderer rysuje budynki i inne nieprzezroczyste obiekty jeszcze raz z kamery odbitej wzgledem plaskiej tafli (maksymalnie 512Ă—384), a fragmenty rzeczywistej wody pobieraja kolor z odbicia. Nie jest to statyczne odbicie nieba ani przemalowany obraz.
+
+- r6b2h-porownanie-odbicia-dzien.png / noc.png: identyczna kamera i deszcz, tylko odbicie PLANARNE OFF/ON
+- r6b2h-porownanie-odbicia-podworko.png: identyczne ujÄ™cie podwĂłrza noca
+- r6b2h-porownanie-odbicia-zblizenie.png: ten sam plan wody z bliska
+- r6b2h-qt-path-clear-day-off/on.png: regresja suchych obrazow, efekt wylaczony
+- r6b2h-qt-*.png: 12 surowych screenshotow z Windows
+- r6b2h-kaluza-{nieregularna-240,placowa-140}-blender.png: osobne rendery Cycles oryginalnych modeli
+
+Ograniczenia: jedna plaska wysokoĹ›Ä‡ odbicia na kamera; dopasowanie do pierwszej widocznej kaĹ‚uĹĽy, nie pelny SSR/ray tracing, odbicie pomija przezroczystosci w pomocniczym przebiegu, zmniejszona rozdzielczosc odbicia, brak fizycznej falowania wody i mglistej dyspersji. Efekt aktywny tylko w deszczu, w trybie Textured, i gdy istnieje powierzchnia PrawkoWater.

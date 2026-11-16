@@ -77,6 +77,7 @@ inline constexpr GLenum kFramebuffer = 0x8D40;
 inline constexpr GLenum kFramebufferBinding = 0x8CA6;
 inline constexpr GLenum kFramebufferComplete = 0x8CD5;
 inline constexpr GLenum kDepthAttachment = 0x8D00;
+inline constexpr GLenum kColorAttachment0 = 0x8CE0;
 inline constexpr GLenum kDepthComponent = 0x1902;
 inline constexpr GLenum kDepthComponent24 = 0x81A6;
 inline constexpr GLenum kTextureCompareMode = 0x884C;

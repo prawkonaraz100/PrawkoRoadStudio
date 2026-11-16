@@ -309,6 +309,7 @@ void ViewportWidget::rebuild_scene() {
       Material part_material;
       part_material.gltf_pbr = part.gltf_pbr;
       part_material.emissive = part.emissive;
+      part_material.water_surface = part.water_surface;
       part_material.metallic_value = part.metallic;
       part_material.normal_strength = part.normal_strength;
       part_material.uv_scale = 1.0F;
@@ -1067,6 +1068,10 @@ void ViewportWidget::render_frame(const OrbitCamera& camera, const QSize& size,
       !qEnvironmentVariableIsSet("PRAWKO_R6B2G_PROOF_DISABLE_WET_PBR")) {
     environment.pbr_wetness = environment.wetness;
   }
+  // Opt-in reflection is global renderer behaviour, not a fixed scene.
+  environment.planar_puddles_enabled = textured_rendering_ &&
+      environment.pbr_wetness > 0.05F &&
+      !qEnvironmentVariableIsSet("PRAWKO_R6B2H_PROOF_DISABLE_PLANAR");
   if (textured_rendering_ && simulation_frame_ && simulation_frame_->driver &&
       (time_of_day_ == TimeOfDay::Dusk || time_of_day_ == TimeOfDay::Night)) {
     const DriverCamera& driver = *simulation_frame_->driver;
@@ -1237,6 +1242,10 @@ void ViewportWidget::draw_precipitation(QPainter& painter, const QSize& size,
                                         WeatherPreset weather, qint64 tick,
                                         bool windshield_only) {
   if (weather != WeatherPreset::Rain && weather != WeatherPreset::Snow) return;
+  // R6b2h proof-only: same precipitation geometry for precise A/B images.
+  // No effect in normal editor use, MP4 or normal interactive weather.
+  if (qEnvironmentVariableIsSet("PRAWKO_R6B2H_PROOF_FREEZE_PRECIPITATION"))
+    tick = 31;
   const int w = size.width();
   const int h = size.height();
   if (w <= 0 || h <= 0) return;

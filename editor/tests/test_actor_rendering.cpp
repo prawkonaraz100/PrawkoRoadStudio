@@ -123,6 +123,18 @@ TEST(RenderLightingR4b2, SkyBounceAndHeadlightsAreOptIn) {
                                        SeasonPreset::Winter).headlight_intensity,0.0F);
 }
 
+TEST(RenderLightingR6b2h, PlanarReflectionDefaultsOffWithoutRainAndPuddle) {
+  EXPECT_FALSE(Environment{}.planar_puddles_enabled);
+  EXPECT_FALSE(sober_lighting().planar_puddles_enabled);
+  EXPECT_FALSE(textured_lighting().planar_puddles_enabled);
+  EXPECT_FALSE(time_of_day_lighting(TimeOfDay::Night).planar_puddles_enabled);
+  EXPECT_FALSE(Material{}.water_surface);
+  EXPECT_FALSE(RenderMeshData{}.water_surface);
+  Environment rain=time_of_day_lighting(TimeOfDay::Night);
+  rain.pbr_wetness=0.9F;
+  EXPECT_FALSE(rain.planar_puddles_enabled); // viewport deliberately opts in
+}
+
 TEST(RenderLightingR6b2f, StreetlampShadowsRequireExplicitOptIn) {
   EXPECT_FALSE(Environment{}.street_lights.cast_shadows);
   EXPECT_FALSE(sober_lighting().street_lights.cast_shadows);

@@ -90,6 +90,7 @@ struct Material {
   bool unlit = false;           ///< markings/sky bypass lighting
   bool asphalt = false;        ///< asphalt responds to wet road reflections/snow cover
   std::array<float,3> emissive{0.0F,0.0F,0.0F}; // linear RGB from authored GLB
+  bool water_surface = false; // tagged glTF material; opt-in planar reflection
 };
 
 /// Per-instance transform for prop instancing (many props share one mesh).
@@ -143,6 +144,7 @@ struct RenderMeshData {
   float transmission = 0.0F;
   float ior = 1.5F;
   std::array<float,3> emissive{0.0F,0.0F,0.0F};
+  bool water_surface = false;
 };
 
 /// Per-item feedback state. Drives the accent emphasis in the mesh shader:
@@ -264,6 +266,7 @@ struct Environment {
   std::array<float, 3> fog_color{0.67F, 0.71F, 0.75F};
   float wetness = 0.0F;
   float pbr_wetness = 0.0F; // R6b2g: wet GLB PBR, dry default unchanged
+  bool planar_puddles_enabled = false; // R6b2h opt-in rainy Textured mode
   float snow_cover = 0.0F;
   float season = 0.0F; // 0 summer, 1 autumn, 2 winter (ground shader palette)
   bool shadows_enabled = false; // legacy + Sober unchanged; Textured enables R4

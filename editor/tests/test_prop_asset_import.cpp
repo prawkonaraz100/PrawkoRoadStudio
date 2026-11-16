@@ -407,6 +407,30 @@ TEST_F(PropAssetImport, PrawkoA1BlenderShelterKeepsAlphaAndRoughnessWhileReporti
   EXPECT_LT(triangle_count, props::kMaxPropTriangles);
 }
 
+TEST_F(PropAssetImport, R6b2hAuthoredPuddleMaterialIsReusableAndTransparent) {
+  for (const char* stem : {"r6b2h-kaluza-nieregularna-240",
+                           "r6b2h-kaluza-placowa-140"}) {
+    const auto source = std::filesystem::path(RM_ASSETS_DIR) /
+                        "prawko/blender/kaluze_r6b2h" /
+                        (std::string(stem) + ".glb");
+    ASSERT_TRUE(std::filesystem::is_regular_file(source));
+    auto imported = props::import_prop_model(source,stem);
+    ASSERT_TRUE(imported.has_value()) << stem << ": " << imported.error().message;
+    EXPECT_EQ(imported->model.parts.size(),4U);
+    int water = 0;
+    for (const auto& part:imported->model.parts) {
+      if (!part.water_surface) continue;
+      ++water;
+      EXPECT_TRUE(part.gltf_pbr);
+      EXPECT_EQ(part.alpha_mode,2) << "water must render AFTER opaque geometry";
+      EXPECT_GT(part.opacity,0.35F);
+      EXPECT_LT(part.opacity,0.95F);
+      EXPECT_EQ(part.texcoords.size(),part.positions.size()/3U*2U);
+    }
+    EXPECT_EQ(water,1) << "Authored glTF material, not asset filename, marks water";
+  }
+}
+
 TEST_F(PropAssetImport, R6b2gGlbEmissiveLensIsImportedFromAuthorMaterial) {
   const auto source = std::filesystem::path(RM_ASSETS_DIR) /
       "prawko/blender/oprawa_r6b2g/r6b2g-latarnia-emisyjna.glb";

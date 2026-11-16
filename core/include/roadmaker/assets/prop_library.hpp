@@ -63,6 +63,7 @@ struct PropPart {
   float transmission = 0.0F;
   float ior = 1.5F;
   std::array<float,3> emissive{0.0F,0.0F,0.0F}; // standard glTF emissiveFactor
+  bool water_surface = false; // authored material name PrawkoWater.*; reusable on any GLB
 };
 
 /// Decoded once per imported model and shared across every placed instance.

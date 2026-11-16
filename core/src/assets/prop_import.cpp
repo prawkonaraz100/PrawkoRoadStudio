@@ -483,6 +483,7 @@ struct FlatPrimitive {
   float transmission = 0.0F;
   float ior = 1.5F;
   std::array<float,3> emissive{0.0F,0.0F,0.0F};
+  bool water_surface = false;
 };
 
 /// Per-face normals for a primitive that shipped without any, area-weighted at
@@ -836,6 +837,8 @@ private:
     part.color = resolve_color(primitive, where, part.base_color_texture >= 0);
     if (material != nullptr) {
       part.gltf_pbr = true;
+      // Water is an authored glTF material convention, independent of asset ID.
+      part.water_surface = material->name.starts_with("PrawkoWater.");
       // Standard glTF 2.0 emissiveFactor in linear RGB, per-material.
       if (material->emissiveFactor.size() >= 3) {
         for (std::size_t channel=0; channel<3; ++channel) {
@@ -1352,7 +1355,8 @@ Expected<PropImportResult> import_prop_model(const std::filesystem::path& path,
                                  .alpha_cutoff = flat.alpha_cutoff,
                                  .transmission = flat.transmission,
                                  .ior = flat.ior,
-                                 .emissive = flat.emissive});
+                                 .emissive = flat.emissive,
+                                 .water_surface = flat.water_surface});
   }
   out.textures = std::move(reader.textures());
   const std::optional<std::pair<double, double>> extent = normalise_to_base_centre(out.parts);

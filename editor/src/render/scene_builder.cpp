@@ -279,6 +279,7 @@ void append_model_items(std::string_view model_id,
       mesh.transmission = part.transmission;
       mesh.ior = part.ior;
       mesh.emissive = part.emissive;
+      mesh.water_surface = part.water_surface;
       mesh.uvs.reserve(part.texcoords.size());
       for (double v : part.texcoords) mesh.uvs.push_back(static_cast<float>(v));
       created.parts.push_back(std::move(mesh));

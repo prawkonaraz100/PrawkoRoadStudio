@@ -84,6 +84,10 @@ private:
   void draw_depth_casters(const std::vector<DrawItem>& items);
   void draw_street_shadow_maps(const std::vector<DrawItem>& items, int width, int height);
   void set_street_shadow_uniforms(bool ground);
+  bool ensure_planar_resources(int width,int height);
+  void release_planar_resources();
+  void draw_planar_reflection(const std::vector<DrawItem>& items,
+                              const CameraMatrices& camera,int width,int height);
 
   std::unordered_map<std::uint32_t, GpuMesh> meshes_;
   std::uint32_t next_id_ = 1;
@@ -133,6 +137,11 @@ private:
   std::int32_t u_wetness_ = -1;
   std::int32_t u_pbr_wetness_ = -1;
   std::int32_t u_emissive_ = -1;
+  std::int32_t u_water_surface_ = -1;
+  std::int32_t u_planar_enabled_ = -1;
+  std::int32_t u_planar_texture_ = -1;
+  std::int32_t u_planar_vp_ = -1;
+  std::int32_t u_planar_clip_z_ = -1;
   std::int32_t u_snow_cover_ = -1;
   std::int32_t u_asphalt_ = -1;
   std::int32_t u_shadow_enabled_ = -1;
@@ -167,6 +176,15 @@ private:
   std::array<std::array<float,16>,kMaxStreetLamps> street_shadow_matrix_{};
   bool street_shadow_ready_ = false;
   int street_shadow_count_ = 0;
+  std::uint32_t planar_fbo_ = 0;
+  std::uint32_t planar_color_ = 0;
+  std::uint32_t planar_depth_ = 0;
+  int planar_width_ = 0;
+  int planar_height_ = 0;
+  bool planar_ready_ = false;
+  bool planar_rendering_ = false;
+  std::array<float,16> planar_view_projection_{};
+  float planar_surface_height_ = 0.0F;
   std::array<float,16> shadow_light_matrix_{};
   std::int32_t u_depth_light_ = -1;
   std::int32_t u_depth_model_ = -1;
