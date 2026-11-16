@@ -108,6 +108,12 @@ uniform int u_street_count;
 uniform float u_street_intensity;
 uniform vec3 u_street_pos[4];
 uniform vec3 u_street_dir[4];
+uniform int u_street_shadows_enabled;
+uniform mat4 u_street_shadow_matrix[4];
+uniform sampler2DShadow u_street_shadow0;
+uniform sampler2DShadow u_street_shadow1;
+uniform sampler2DShadow u_street_shadow2;
+uniform sampler2DShadow u_street_shadow3;
 uniform float u_shadow_bounce;
 uniform float u_vertical_fill;     // diffuse sky bounce on vertical concrete
 uniform vec3 u_camera_pos;      // world-space eye (specular half-vector)
@@ -210,6 +216,28 @@ vec3 headlight_lighting(vec3 world, vec3 normal) {
 // Real-world source from the 3D luminaire, aimed downward with warm 3000K
 // approximation, bounded radius and distance attenuation. No fake halo.
 // This is DIRECT diffuse lighting, not a streetlamp occlusion shadow map.
+// R6b2f: occlusion is sampled from the SAME physical light source and cone.
+// 2x2 PCF, depth compare against the matching per-light perspective texture.
+// GLSL 3.3 requires compile-time sampler indexing, hence four named uniforms.
+float street_visibility(int i, vec3 world, vec3 surface_normal, vec3 ray) {
+  if (u_street_shadows_enabled == 0) return 1.0;
+  vec4 proj = u_street_shadow_matrix[i] * vec4(world,1.0);
+  if (proj.w <= 0.0) return 0.0;
+  vec3 p = proj.xyz / proj.w * 0.5 + 0.5;
+  if (p.x <= 0.0 || p.x >= 1.0 || p.y <= 0.0 || p.y >= 1.0 ||
+      p.z <= 0.0 || p.z >= 1.0) return 0.0;
+  float bias = max(0.00055,0.0012*(1.0-max(dot(surface_normal,-ray),0.0)));
+  float sum=0.0;
+  for(int j=0; j<2; ++j) for(int k=0; k<2; ++k) {
+    vec3 q = vec3(p.xy+(vec2(float(k),float(j))-0.5)/512.0,p.z-bias);
+    if(i==0) sum += texture(u_street_shadow0,q);
+    else if(i==1) sum += texture(u_street_shadow1,q);
+    else if(i==2) sum += texture(u_street_shadow2,q);
+    else sum += texture(u_street_shadow3,q);
+  }
+  return sum*0.25;
+}
+
 vec3 street_lighting(vec3 world, vec3 normal) {
   if (u_street_count <= 0 || u_street_intensity <= 0.0) return vec3(0.0);
   vec3 result = vec3(0.0);
@@ -220,10 +248,11 @@ vec3 street_lighting(vec3 world, vec3 normal) {
     if (d2 <= 0.01 || d2 >= 576.0) continue;
     float dist = sqrt(d2);
     vec3 ray = from_light / dist;
-    float cone = smoothstep(0.19,0.57,dot(ray,u_street_dir[i]));
+    float cone = smoothstep(0.37,0.61,dot(ray,u_street_dir[i]));
     float distance_falloff = pow(max(0.0,1.0-dist/24.0),1.5) / (1.0+0.05*d2);
     float diffuse = max(dot(normal,-ray),0.0);
-    result += vec3(1.0,0.78,0.52) * (u_street_intensity*cone*distance_falloff*diffuse);
+    result += vec3(1.0,0.78,0.52) * (u_street_intensity*cone*distance_falloff*diffuse *
+                                   street_visibility(i,world,normal,ray));
   }
   return result;
 }
@@ -466,6 +495,12 @@ uniform int u_street_count;
 uniform float u_street_intensity;
 uniform vec3 u_street_pos[4];
 uniform vec3 u_street_dir[4];
+uniform int u_street_shadows_enabled;
+uniform mat4 u_street_shadow_matrix[4];
+uniform sampler2DShadow u_street_shadow0;
+uniform sampler2DShadow u_street_shadow1;
+uniform sampler2DShadow u_street_shadow2;
+uniform sampler2DShadow u_street_shadow3;
 uniform float u_shadow_bounce;
 out vec4 frag_color;
 
@@ -515,6 +550,28 @@ vec3 headlight_lighting(vec3 world, vec3 normal) {
 // Real-world source from the 3D luminaire, aimed downward with warm 3000K
 // approximation, bounded radius and distance attenuation. No fake halo.
 // This is DIRECT diffuse lighting, not a streetlamp occlusion shadow map.
+// R6b2f: occlusion is sampled from the SAME physical light source and cone.
+// 2x2 PCF, depth compare against the matching per-light perspective texture.
+// GLSL 3.3 requires compile-time sampler indexing, hence four named uniforms.
+float street_visibility(int i, vec3 world, vec3 surface_normal, vec3 ray) {
+  if (u_street_shadows_enabled == 0) return 1.0;
+  vec4 proj = u_street_shadow_matrix[i] * vec4(world,1.0);
+  if (proj.w <= 0.0) return 0.0;
+  vec3 p = proj.xyz / proj.w * 0.5 + 0.5;
+  if (p.x <= 0.0 || p.x >= 1.0 || p.y <= 0.0 || p.y >= 1.0 ||
+      p.z <= 0.0 || p.z >= 1.0) return 0.0;
+  float bias = max(0.00055,0.0012*(1.0-max(dot(surface_normal,-ray),0.0)));
+  float sum=0.0;
+  for(int j=0; j<2; ++j) for(int k=0; k<2; ++k) {
+    vec3 q = vec3(p.xy+(vec2(float(k),float(j))-0.5)/512.0,p.z-bias);
+    if(i==0) sum += texture(u_street_shadow0,q);
+    else if(i==1) sum += texture(u_street_shadow1,q);
+    else if(i==2) sum += texture(u_street_shadow2,q);
+    else sum += texture(u_street_shadow3,q);
+  }
+  return sum*0.25;
+}
+
 vec3 street_lighting(vec3 world, vec3 normal) {
   if (u_street_count <= 0 || u_street_intensity <= 0.0) return vec3(0.0);
   vec3 result = vec3(0.0);
@@ -525,10 +582,11 @@ vec3 street_lighting(vec3 world, vec3 normal) {
     if (d2 <= 0.01 || d2 >= 576.0) continue;
     float dist = sqrt(d2);
     vec3 ray = from_light / dist;
-    float cone = smoothstep(0.19,0.57,dot(ray,u_street_dir[i]));
+    float cone = smoothstep(0.37,0.61,dot(ray,u_street_dir[i]));
     float distance_falloff = pow(max(0.0,1.0-dist/24.0),1.5) / (1.0+0.05*d2);
     float diffuse = max(dot(normal,-ray),0.0);
-    result += vec3(1.0,0.78,0.52) * (u_street_intensity*cone*distance_falloff*diffuse);
+    result += vec3(1.0,0.78,0.52) * (u_street_intensity*cone*distance_falloff*diffuse *
+                                   street_visibility(i,world,normal,ray));
   }
   return result;
 }
@@ -712,10 +770,13 @@ bool GLRenderer::init() {
   u_traffic_headlight_intensity_ = gl::GetUniformLocation(program_, "u_traffic_headlight_intensity");
   u_street_count_ = gl::GetUniformLocation(program_, "u_street_count");
   u_street_intensity_ = gl::GetUniformLocation(program_, "u_street_intensity");
+  u_street_shadows_enabled_ = gl::GetUniformLocation(program_, "u_street_shadows_enabled");
   for (std::size_t i=0; i<kMaxStreetLamps; ++i) {
     const std::string index = std::to_string(i);
     u_street_pos_[i] = gl::GetUniformLocation(program_,("u_street_pos["+index+"]").c_str());
     u_street_dir_[i] = gl::GetUniformLocation(program_,("u_street_dir["+index+"]").c_str());
+    u_street_shadow_matrix_[i] = gl::GetUniformLocation(program_,("u_street_shadow_matrix["+index+"]").c_str());
+    u_street_shadow_sampler_[i] = gl::GetUniformLocation(program_,("u_street_shadow"+index).c_str());
   }
   u_sky_top_ = gl::GetUniformLocation(sky_program_, "u_sky_top");
   u_sky_horizon_ = gl::GetUniformLocation(sky_program_, "u_sky_horizon");
@@ -755,10 +816,13 @@ bool GLRenderer::init() {
   u_ground_traffic_headlight_intensity_ = gl::GetUniformLocation(ground_program_, "u_traffic_headlight_intensity");
   u_ground_street_count_ = gl::GetUniformLocation(ground_program_, "u_street_count");
   u_ground_street_intensity_ = gl::GetUniformLocation(ground_program_, "u_street_intensity");
+  u_ground_street_shadows_enabled_ = gl::GetUniformLocation(ground_program_, "u_street_shadows_enabled");
   for (std::size_t i=0; i<kMaxStreetLamps; ++i) {
     const std::string index = std::to_string(i);
     u_ground_street_pos_[i] = gl::GetUniformLocation(ground_program_,("u_street_pos["+index+"]").c_str());
     u_ground_street_dir_[i] = gl::GetUniformLocation(ground_program_,("u_street_dir["+index+"]").c_str());
+    u_ground_street_shadow_matrix_[i] = gl::GetUniformLocation(ground_program_,("u_street_shadow_matrix["+index+"]").c_str());
+    u_ground_street_shadow_sampler_[i] = gl::GetUniformLocation(ground_program_,("u_street_shadow"+index).c_str());
   }
   gl::GenVertexArrays(1, &empty_vao_);
   shadow_ready_ = init_shadow_resources();
@@ -1037,6 +1101,7 @@ void GLRenderer::draw_ground(const CameraMatrices& camera) {
   const auto& street = environment_.street_lights;
   gl::Uniform1i(u_ground_street_count_,street.count);
   gl::Uniform1f(u_ground_street_intensity_,street.intensity);
+  set_street_shadow_uniforms(true);
   for (int i=0; i<street.count; ++i) {
     const auto& lamp = street.lamps[static_cast<std::size_t>(i)];
     gl::Uniform3f(u_ground_street_pos_[i],lamp.position[0],lamp.position[1],lamp.position[2]);
@@ -1053,6 +1118,24 @@ void GLRenderer::draw_ground(const CameraMatrices& camera) {
   gl::BindVertexArray(0);
 }
 
+void GLRenderer::set_street_shadow_uniforms(bool ground) {
+  gl::Uniform1i(ground ? u_ground_street_shadows_enabled_ : u_street_shadows_enabled_,
+                street_shadow_count_ > 0 ? 1 : 0);
+  for (std::size_t i=0; i<kMaxStreetLamps; ++i) {
+    gl::UniformMatrix4fv(ground ? u_ground_street_shadow_matrix_[i]
+                               : u_street_shadow_matrix_[i],
+                         1,0,street_shadow_matrix_[i].data());
+    gl::Uniform1i(ground ? u_ground_street_shadow_sampler_[i]
+                        : u_street_shadow_sampler_[i],
+                  static_cast<int>(5+i));
+    if (street_shadow_count_ > static_cast<int>(i)) {
+      gl::ActiveTexture(gl::kTexture0+static_cast<gl::GLenum>(5+i));
+      gl::BindTexture(gl::kTexture2D,street_shadow_depth_[i]);
+    }
+  }
+  gl::ActiveTexture(gl::kTexture0);
+}
+
 void GLRenderer::render(const std::vector<DrawItem>& items,
                         const CameraMatrices& camera,
                         int width,
@@ -1061,6 +1144,7 @@ void GLRenderer::render(const std::vector<DrawItem>& items,
     return;
   }
   draw_shadow_map(items,camera,width,height);
+  draw_street_shadow_maps(items,width,height);
   gl::Viewport(0, 0, width, height);
   gl::ClearColor(
       backdrop_.sky_horizon[0], backdrop_.sky_horizon[1], backdrop_.sky_horizon[2], 1.0F);
@@ -1122,6 +1206,7 @@ void GLRenderer::render(const std::vector<DrawItem>& items,
   const auto& street = environment_.street_lights;
   gl::Uniform1i(u_street_count_,street.count);
   gl::Uniform1f(u_street_intensity_,street.intensity);
+  set_street_shadow_uniforms(false);
   for (int i=0; i<street.count; ++i) {
     const auto& lamp = street.lamps[static_cast<std::size_t>(i)];
     gl::Uniform3f(u_street_pos_[i],lamp.position[0],lamp.position[1],lamp.position[2]);

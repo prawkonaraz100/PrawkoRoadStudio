@@ -81,6 +81,9 @@ private:
   void release_shadow_resources();
   void draw_shadow_map(const std::vector<DrawItem>& items,
                        const CameraMatrices& camera, int width, int height);
+  void draw_depth_casters(const std::vector<DrawItem>& items);
+  void draw_street_shadow_maps(const std::vector<DrawItem>& items, int width, int height);
+  void set_street_shadow_uniforms(bool ground);
 
   std::unordered_map<std::uint32_t, GpuMesh> meshes_;
   std::uint32_t next_id_ = 1;
@@ -145,6 +148,9 @@ private:
   std::int32_t u_traffic_headlight_intensity_ = -1;
   std::int32_t u_street_count_ = -1;
   std::int32_t u_street_intensity_ = -1;
+  std::int32_t u_street_shadows_enabled_ = -1;
+  std::array<std::int32_t,kMaxStreetLamps> u_street_shadow_matrix_{};
+  std::array<std::int32_t,kMaxStreetLamps> u_street_shadow_sampler_{};
   std::array<std::int32_t,kMaxStreetLamps> u_street_pos_{};
   std::array<std::int32_t,kMaxStreetLamps> u_street_dir_{};
   std::uint32_t shadow_program_ = 0;
@@ -153,6 +159,12 @@ private:
   bool shadow_ready_ = false;
   bool shadow_active_ = false;
   static constexpr int kShadowSize = 1024;
+  static constexpr int kStreetShadowSize = 512;
+  std::array<std::uint32_t,kMaxStreetLamps> street_shadow_fbo_{};
+  std::array<std::uint32_t,kMaxStreetLamps> street_shadow_depth_{};
+  std::array<std::array<float,16>,kMaxStreetLamps> street_shadow_matrix_{};
+  bool street_shadow_ready_ = false;
+  int street_shadow_count_ = 0;
   std::array<float,16> shadow_light_matrix_{};
   std::int32_t u_depth_light_ = -1;
   std::int32_t u_depth_model_ = -1;
@@ -214,6 +226,9 @@ private:
   std::int32_t u_ground_traffic_headlight_intensity_ = -1;
   std::int32_t u_ground_street_count_ = -1;
   std::int32_t u_ground_street_intensity_ = -1;
+  std::int32_t u_ground_street_shadows_enabled_ = -1;
+  std::array<std::int32_t,kMaxStreetLamps> u_ground_street_shadow_matrix_{};
+  std::array<std::int32_t,kMaxStreetLamps> u_ground_street_shadow_sampler_{};
   std::array<std::int32_t,kMaxStreetLamps> u_ground_street_pos_{};
   std::array<std::int32_t,kMaxStreetLamps> u_ground_street_dir_{};
 

@@ -123,6 +123,20 @@ TEST(RenderLightingR4b2, SkyBounceAndHeadlightsAreOptIn) {
                                        SeasonPreset::Winter).headlight_intensity,0.0F);
 }
 
+TEST(RenderLightingR6b2f, StreetlampShadowsRequireExplicitOptIn) {
+  EXPECT_FALSE(Environment{}.street_lights.cast_shadows);
+  EXPECT_FALSE(sober_lighting().street_lights.cast_shadows);
+  EXPECT_FALSE(textured_lighting().street_lights.cast_shadows);
+  EXPECT_FALSE(time_of_day_lighting(TimeOfDay::Night).street_lights.cast_shadows);
+  Environment active = time_of_day_lighting(TimeOfDay::Night);
+  active.street_lights.count=1;
+  active.street_lights.intensity=3.0F;
+  active.street_lights.cast_shadows=true;
+  EXPECT_TRUE(active.street_lights.cast_shadows);
+  EXPECT_EQ(active.street_lights.count,1);
+  EXPECT_LT(kMaxStreetLamps,8U); // bounded GL 3.3 lights + depth maps
+}
+
 TEST(RenderLightingR6b2e, StreetlampEmitterFollowsPhysicalFixtureAndPropRotation) {
   const InstanceData straight = prop_transform({62.0,-8.3,0.0},0.0,1.0);
   const StreetLamp a = street_lamp_from_prop(straight);

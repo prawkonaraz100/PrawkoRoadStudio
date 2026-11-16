@@ -1104,6 +1104,7 @@ void ViewportWidget::render_frame(const OrbitCamera& camera, const QSize& size,
     auto& active = environment.street_lights;
     active.count = static_cast<int>(std::min<std::size_t>(nearby.size(),kMaxStreetLamps));
     active.intensity = time_of_day_ == TimeOfDay::Night ? 3.0F : 1.3F;
+    active.cast_shadows = !qEnvironmentVariableIsSet("PRAWKO_R6B2F_PROOF_DISABLE_SHADOWS");
     for (int i=0; i<active.count; ++i)
       active.lamps[static_cast<std::size_t>(i)] = nearby[static_cast<std::size_t>(i)].second;
   }

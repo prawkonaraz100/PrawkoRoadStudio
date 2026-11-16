@@ -241,6 +241,7 @@ struct StreetLights {
   std::array<StreetLamp,kMaxStreetLamps> lamps{};
   int count = 0;
   float intensity = 0.0F;
+  bool cast_shadows = false; // R6b2f: opt-in; day, Sober and legacy stay unchanged
 };
 
 /// Scene lighting + sky description (all plain floats — theme/render boundary

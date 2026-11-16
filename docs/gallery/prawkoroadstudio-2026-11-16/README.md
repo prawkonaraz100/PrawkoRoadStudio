@@ -1,4 +1,4 @@
-﻿# PrawkoRoadStudio â€” publiczne rendery, 16 listopada 2026
+# PrawkoRoadStudio â€” publiczne rendery, 16 listopada 2026
 
 Wszystkie obrazy zostaĹ‚y wygenerowane przez rzeczywisty program PrawkoRoadStudio pod Windows / OpenGL albo pochodzÄ… z niezaleĹĽnego renderera Blender Cycles. Bez generatywnej podmiany.
 
@@ -94,3 +94,16 @@ Zrodlo jest w rzeczywistym PrawkoRoadStudio Windows/OpenGL 3.3. Lampy wynikaja z
 - r6b2e-qt-path-rain-night-on.png - widok noca podczas deszczu
 
 Granica modelu: ograniczona dyfuzyjna emisja swiatla ze swiata 3D, nie pelne ray-tracing/IES, brak osobnych map cienia od latarni i pelnych refleksow mokrej nawierzchni. Nie deklarowac fotometrycznej poprawnosci.
+
+## R6b2f - mapy cieni latarni (16.11.2026)
+
+Zrzuty wykonane bezposrednio z Windows PrawkoRoadStudio / OpenGL 3.3; NIE sa obrazami AI. Scena 06h jest geometrycznie identyczna z 06g. A/B pokazuje te same oprawy i kolor swiatla w tej samej scenie oraz kamerze. Zmienna eksperymentalna PRAWKO_R6B2F_PROOF_DISABLE_SHADOWS wylacza tylko cienie latarni, nie ich samo swiatlo.
+- r6b2f-porownanie-cienie-ulica.png - realny A/B bez i z mapami cieni dla pelnego widoku
+- r6b2f-porownanie-cienie-przejscie.png - realny A/B dla dojscia pomiedzy kamienicami
+- r6b2f-porownanie-cienie-podworko.png - realny A/B dla zblizenia podworka
+- r6b2f-qt-{wide-night-off,wide-night-on,path-night-off,path-night-on,court-night-off,court-night-on}.png - oryginalne obrazy A/B Qt
+- r6b2f-qt-{path-day-off,path-day-on}.png - dowod zachowania dnia bez zmiany
+- r6b2f-qt-path-dusk-on.png - rzeczywisty shader w zmierzchu
+- r6b2f-qt-path-night-rain-on.png - rzeczywisty shader deszczu i cieni
+
+Ograniczenia: max 4 mapy cieni 512x512, brak fizycznego IES, moga byc artefakty na krawedziach, nie ma ray-tracing ani fizycznych odbic mokrych powierzchni. Wyniki FPS i Quality Gate w HANDOFF.md.

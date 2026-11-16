@@ -127,6 +127,17 @@ M4 light_projection(){
           0,0,-2/(far-near),0, 0,0,-(far+near)/(far-near),1};
 }
 constexpr M4 kIdentity{1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
+// 144-degree downward perspective covers the bounded R6b2f light cone.
+// OpenGL right-handed depth range [-1,1], Z-up world / camera forward -Z.
+M4 street_projection() {
+  constexpr float near=0.35F;
+  constexpr float far=24.0F;
+  const float f=1.0F/std::tan(72.0F*3.14159265358979323846F/180.0F);
+  return {f,0,0,0, 0,f,0,0,
+          0,0,-(far+near)/(far-near),-1,
+          0,0,-2.0F*far*near/(far-near),0};
+}
+
 } // namespace
 
 bool GLRenderer::init_shadow_resources() {
@@ -171,11 +182,53 @@ bool GLRenderer::init_shadow_resources() {
     release_shadow_resources();
     return false;
   }
+  // R6b2f: four extra depth-only targets, lazily used ONLY if streetlights
+  // opted into shadows. Failure does not corrupt the existing directional map.
+  street_shadow_ready_=true;
+  gl::GetIntegerv(gl::kFramebufferBinding,&former_fbo);
+  for (std::size_t i=0; i<kMaxStreetLamps; ++i) {
+    gl::GenTextures(1,&street_shadow_depth_[i]);
+    gl::ActiveTexture(gl::kTexture0+static_cast<gl::GLenum>(5+i));
+    gl::BindTexture(gl::kTexture2D,street_shadow_depth_[i]);
+    gl::TexImage2D(gl::kTexture2D,0,gl::kDepthComponent24,
+                   kStreetShadowSize,kStreetShadowSize,0,
+                   gl::kDepthComponent,gl::kUnsignedInt,nullptr);
+    gl::TexParameteri(gl::kTexture2D,gl::kTextureMinFilter,gl::kLinear);
+    gl::TexParameteri(gl::kTexture2D,gl::kTextureMagFilter,gl::kLinear);
+    gl::TexParameteri(gl::kTexture2D,gl::kTextureWrapS,gl::kClampToEdge);
+    gl::TexParameteri(gl::kTexture2D,gl::kTextureWrapT,gl::kClampToEdge);
+    gl::TexParameteri(gl::kTexture2D,gl::kTextureCompareMode,gl::kCompareRefToTexture);
+    gl::TexParameteri(gl::kTexture2D,gl::kTextureCompareFunc,gl::kLequal);
+    gl::GenFramebuffers(1,&street_shadow_fbo_[i]);
+    gl::BindFramebuffer(gl::kFramebuffer,street_shadow_fbo_[i]);
+    gl::FramebufferTexture2D(gl::kFramebuffer,gl::kDepthAttachment,
+                             gl::kTexture2D,street_shadow_depth_[i],0);
+    gl::DrawBuffer(gl::kNone);
+    gl::ReadBuffer(gl::kNone);
+    if (gl::CheckFramebufferStatus(gl::kFramebuffer)!=gl::kFramebufferComplete) {
+      spdlog::error("R6b2f streetlight shadow depth FBO {} incomplete",i);
+      street_shadow_ready_=false;
+      break;
+    }
+  }
+  gl::BindFramebuffer(gl::kFramebuffer,static_cast<gl::GLuint>(former_fbo));
+  gl::ActiveTexture(gl::kTexture0);
+  gl::BindTexture(gl::kTexture2D,0);
+  if(street_shadow_ready_) spdlog::info("R6b2f shadow maps READY: {} at {}x{}",
+                                        kMaxStreetLamps,kStreetShadowSize,kStreetShadowSize);
   spdlog::info("R4 depth shadow map READY: {}x{}",kShadowSize,kShadowSize);
   return true;
 }
 
 void GLRenderer::release_shadow_resources() {
+
+  for (std::size_t i=0;i<kMaxStreetLamps;++i){
+    if(street_shadow_fbo_[i]!=0) gl::DeleteFramebuffers(1,&street_shadow_fbo_[i]);
+    if(street_shadow_depth_[i]!=0) gl::DeleteTextures(1,&street_shadow_depth_[i]);
+    street_shadow_fbo_[i]=street_shadow_depth_[i]=0;
+  }
+  street_shadow_ready_=false;
+  street_shadow_count_=0;
   if(shadow_fbo_!=0) gl::DeleteFramebuffers(1,&shadow_fbo_);
   if(shadow_depth_!=0) gl::DeleteTextures(1,&shadow_depth_);
   if(shadow_program_!=0) gl::DeleteProgram(shadow_program_);
@@ -183,37 +236,7 @@ void GLRenderer::release_shadow_resources() {
   shadow_ready_=shadow_active_=false;
 }
 
-void GLRenderer::draw_shadow_map(const std::vector<DrawItem>& items,
-                                 const CameraMatrices& camera,int width,int height) {
-  shadow_active_=false;
-  if(!shadow_ready_ || !environment_.shadows_enabled ||
-     environment_.sun_intensity<0.10F) return;
-  const V3 sun=unit(environment_.sun_dir);
-  // A bounded light volume follows each camera, including the driver and all
-  // three mirror FBO views; no assumption that the scene lives near (0,0).
-  const V3 target{camera.eye[0]-camera.view[2]*24.0F,
-                  camera.eye[1]-camera.view[6]*24.0F,
-                  ground_base_z_};
-  const V3 light{target[0]+sun[0]*110.0F,
-                 target[1]+sun[1]*110.0F,
-                 target[2]+sun[2]*110.0F};
-  shadow_light_matrix_=multiply(light_projection(),light_view(light,target));
-
-  gl::GLint original_fbo=0;
-  gl::GetIntegerv(gl::kFramebufferBinding,&original_fbo);
-  gl::BindFramebuffer(gl::kFramebuffer,shadow_fbo_);
-  gl::Viewport(0,0,kShadowSize,kShadowSize);
-  gl::Enable(gl::kDepthTest);
-  gl::DepthFunc(gl::kLess);
-  gl::DepthMask(1);
-  gl::Disable(gl::kBlend);
-  gl::Clear(gl::kDepthBufferBit);
-  gl::Enable(gl::kPolygonOffsetFill);
-  gl::PolygonOffset(1.2F,2.0F);
-  gl::UseProgram(shadow_program_);
-  gl::UniformMatrix4fv(u_depth_light_,1,0,shadow_light_matrix_.data());
-  gl::Uniform1i(u_depth_tex_,0);
-
+void GLRenderer::draw_depth_casters(const std::vector<DrawItem>& items) {
   for(const auto& item:items){
     const auto found=meshes_.find(item.mesh.id);
     if(found==meshes_.end()) continue;
@@ -256,6 +279,40 @@ void GLRenderer::draw_shadow_map(const std::vector<DrawItem>& items,
                                static_cast<gl::GLsizei>(item.instances.size()));
     }
   }
+}
+
+void GLRenderer::draw_shadow_map(const std::vector<DrawItem>& items,
+                                 const CameraMatrices& camera,int width,int height) {
+  shadow_active_=false;
+  if(!shadow_ready_ || !environment_.shadows_enabled ||
+     environment_.sun_intensity<0.10F) return;
+  const V3 sun=unit(environment_.sun_dir);
+  // A bounded light volume follows each camera, including the driver and all
+  // three mirror FBO views; no assumption that the scene lives near (0,0).
+  const V3 target{camera.eye[0]-camera.view[2]*24.0F,
+                  camera.eye[1]-camera.view[6]*24.0F,
+                  ground_base_z_};
+  const V3 light{target[0]+sun[0]*110.0F,
+                 target[1]+sun[1]*110.0F,
+                 target[2]+sun[2]*110.0F};
+  shadow_light_matrix_=multiply(light_projection(),light_view(light,target));
+
+  gl::GLint original_fbo=0;
+  gl::GetIntegerv(gl::kFramebufferBinding,&original_fbo);
+  gl::BindFramebuffer(gl::kFramebuffer,shadow_fbo_);
+  gl::Viewport(0,0,kShadowSize,kShadowSize);
+  gl::Enable(gl::kDepthTest);
+  gl::DepthFunc(gl::kLess);
+  gl::DepthMask(1);
+  gl::Disable(gl::kBlend);
+  gl::Clear(gl::kDepthBufferBit);
+  gl::Enable(gl::kPolygonOffsetFill);
+  gl::PolygonOffset(1.2F,2.0F);
+  gl::UseProgram(shadow_program_);
+  gl::UniformMatrix4fv(u_depth_light_,1,0,shadow_light_matrix_.data());
+  gl::Uniform1i(u_depth_tex_,0);
+
+  draw_depth_casters(items);
   gl::BindVertexArray(0);
   gl::UseProgram(0);
   gl::Disable(gl::kPolygonOffsetFill);
@@ -264,4 +321,45 @@ void GLRenderer::draw_shadow_map(const std::vector<DrawItem>& items,
   gl::Viewport(0,0,width,height);
   shadow_active_=true;
 }
+void GLRenderer::draw_street_shadow_maps(const std::vector<DrawItem>& items,
+                                         int width,int height) {
+  street_shadow_count_=0;
+  const auto& streets=environment_.street_lights;
+  if (!shadow_ready_ || !street_shadow_ready_ ||
+      !streets.cast_shadows || streets.count<=0 || streets.intensity<=0.0F)
+    return;
+  gl::GLint original_fbo=0;
+  gl::GetIntegerv(gl::kFramebufferBinding,&original_fbo);
+  const int count=std::min(streets.count,static_cast<int>(kMaxStreetLamps));
+  for(int i=0;i<count;++i) {
+    const auto& lamp=streets.lamps[static_cast<std::size_t>(i)];
+    const V3 start=lamp.position;
+    const V3 finish{start[0]+6.0F*lamp.direction[0],
+                    start[1]+6.0F*lamp.direction[1],
+                    start[2]+6.0F*lamp.direction[2]};
+    street_shadow_matrix_[static_cast<std::size_t>(i)]=
+       multiply(street_projection(),light_view(start,finish));
+    gl::BindFramebuffer(gl::kFramebuffer,street_shadow_fbo_[static_cast<std::size_t>(i)]);
+    gl::Viewport(0,0,kStreetShadowSize,kStreetShadowSize);
+    gl::Enable(gl::kDepthTest);
+    gl::DepthFunc(gl::kLess);
+    gl::DepthMask(1);
+    gl::Disable(gl::kBlend);
+    gl::Clear(gl::kDepthBufferBit);
+    gl::Enable(gl::kPolygonOffsetFill);
+    gl::PolygonOffset(1.15F,2.1F);
+    gl::UseProgram(shadow_program_);
+    gl::UniformMatrix4fv(u_depth_light_,1,0,
+            street_shadow_matrix_[static_cast<std::size_t>(i)].data());
+    gl::Uniform1i(u_depth_tex_,0);
+    draw_depth_casters(items);
+    gl::BindVertexArray(0);
+    gl::UseProgram(0);
+    gl::Disable(gl::kPolygonOffsetFill);
+    ++street_shadow_count_;
+  }
+  gl::BindFramebuffer(gl::kFramebuffer,static_cast<gl::GLuint>(original_fbo));
+  gl::Viewport(0,0,width,height);
+}
+
 } // namespace roadmaker::editor
