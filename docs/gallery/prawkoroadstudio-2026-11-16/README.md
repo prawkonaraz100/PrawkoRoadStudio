@@ -67,3 +67,17 @@ Pliki oznaczone r6b2c-qt-* to autentyczne screenshoty PrawkoRoadStudio Windows/O
 3 nowe edytowalne GLB: lipa 8.83m, brzoza 9.64m, pas rabaty 12m. 06e to osobna kopia 06d; cztery stare drzewa zastapiono tylko w scenie 06e, zachowujac w bibliotece oryginalny model R6b1. Obrocono 2 sciezki 12m tak, aby wspolnie laczyly chodnik z podworkiem miedzy kamienicami, dodano 2 pasy nasadzen przy tylnych elewacjach i 1 brzoze na terenie przy podworku.
 
 Granice jakosci: modele sa autorskimi przyblizeniami geometrycznymi, nie fotorealistyczna fotogrametria; dalsza naturalizacja dotyczy roslinnosci, nawierzchni, skali i otoczenia poza bezposrednia ulica.
+
+## R6b2d - rzeczywiste przejscia nawierzchni z wlasnymi teksturami PBR (16.11.2026)
+
+Modelami ĹşrĂłdĹ‚owymi sa wlasne .blend/.glb w assets/prawko/blender/styki_r6b2d/. Proceduralne mapy albedo, normal i ORM sa autorstwa PrawkoNaRaz, zapisane jako PNG i osadzone w GLB. Obiekty sa edytowalne myszka po dodaniu przez biblioteke. Nowa scena: 06f-r6b2d-nawierzchnie-pbr.xodr/.xosc/.rmscene.json. Stare sceny nie byly modyfikowane.
+
+- r6b2d-qt-calosc-dzien.png - prawdziwy widok edytora Qt / OpenGL 3.3, ta sama kamera co R6b2c
+- r6b2d-qt-przejscie-dzien.png - zblizenie nowych plyt 12m, fizyczne fugi i odwodnienie
+- r6b2d-qt-przejscie-deszcz.png - rzeczywisty widok Qt z pogoda rain (nie render AI)
+- r6b2d-qt-przejscie-noc.png - rzeczywisty widok Qt z pora night (nie render AI)
+- r6b2d-qt-styk-chodnika.png - nowa krawedz mineralno-glebowa 20m z kepkami trawy
+- r6b2d-porownanie-przed-po.png - R6b2c/R6b2d, ten sam kadr i pogoda day/clear
+- r6b2d-blender-przejscie-pbr.png, r6b2d-blender-styk-pbr.png - osobne rendery Cycles, nie zrzuty Qt
+
+Ograniczenia: nawierzchnie sa proceduralnymi autorskimi materialami PBR oraz wyodrebniona geometria, ale nie fotogrametria. Nie ma docelowych mokrych odbic SSR ani fizycznych kaustyk. Dalsza praca to zgodnosc granic terenu, roznorodnosc budynkow i lokalne mokre materialy.

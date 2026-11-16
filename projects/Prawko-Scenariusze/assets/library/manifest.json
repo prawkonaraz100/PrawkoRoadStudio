@@ -156,6 +156,32 @@
         "license": "Apache-2.0 — autorski model PrawkoNaRaz"
       },
       "thumbnail": "assets/library/thumbnails/r6b2c-pas-fundamentowy-12m.png"
+    },
+    {
+      "key": "prop.r6b2d-przejscie-plyty-12m",
+      "label": "Plyty chodnikowe PBR 12 m",
+      "category": "Prawko | Obiekty 3D",
+      "create": {
+        "kind": "tree",
+        "model": "r6b2d-przejscie-plyty-12m",
+        "model_file": "assets/props/r6b2d-przejscie-plyty-12m.glb",
+        "source": "assets/prawko/blender/styki_r6b2d/r6b2d-przejscie-plyty-12m.glb",
+        "license": "Apache-2.0 â€” autorski model PrawkoNaRaz"
+      },
+      "thumbnail": "assets/library/thumbnails/r6b2d-przejscie-plyty-12m.png"
+    },
+    {
+      "key": "prop.r6b2d-styk-chodnik-ziemia-20m",
+      "label": "Styk chodnika i ziemi PBR 20 m",
+      "category": "Prawko | Obiekty 3D",
+      "create": {
+        "kind": "tree",
+        "model": "r6b2d-styk-chodnik-ziemia-20m",
+        "model_file": "assets/props/r6b2d-styk-chodnik-ziemia-20m.glb",
+        "source": "assets/prawko/blender/styki_r6b2d/r6b2d-styk-chodnik-ziemia-20m.glb",
+        "license": "Apache-2.0 â€” autorski model PrawkoNaRaz"
+      },
+      "thumbnail": "assets/library/thumbnails/r6b2d-styk-chodnik-ziemia-20m.png"
     }
   ]
 }

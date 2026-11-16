@@ -1,0 +1,15 @@
+{
+  "title": "Styk chodnika i zieleni 20m: PBR",
+  "dimensions_m": [
+    20.0,
+    0.798,
+    0.365
+  ],
+  "parts": 5,
+  "units": "metres",
+  "up": "+Z",
+  "uv0": true,
+  "pbr": "embedded baseColor / tangent-space normal / ORM roughness",
+  "blender": "5.3.0",
+  "glb_bytes": 929464
+}

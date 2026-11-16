@@ -407,6 +407,38 @@ TEST_F(PropAssetImport, PrawkoA1BlenderShelterKeepsAlphaAndRoughnessWhileReporti
   EXPECT_LT(triangle_count, props::kMaxPropTriangles);
 }
 
+TEST_F(PropAssetImport, PrawkoR6b2dAuthoredPbrAssetsPreserveUvNormalAndOrm) {
+  for (const char* stem : {"r6b2d-przejscie-plyty-12m",
+                           "r6b2d-styk-chodnik-ziemia-20m"}) {
+    const auto source = std::filesystem::path(RM_ASSETS_DIR) /
+        "prawko/blender/styki_r6b2d" / (std::string(stem) + ".glb");
+    ASSERT_TRUE(std::filesystem::is_regular_file(source)) << stem;
+    auto imported = props::import_prop_model(source, stem);
+    ASSERT_TRUE(imported.has_value()) << stem << ": " << imported.error().message;
+    ASSERT_GE(imported->model.textures.size(), 3U) << stem;
+    std::size_t pbr_parts = 0;
+    for (const auto& part : imported->model.parts) {
+      if (part.base_color_texture < 0) continue;
+      ASSERT_GE(part.normal_texture, 0) << stem << ": missing normal map";
+      ASSERT_GE(part.metallic_roughness_texture, 0)
+          << stem << ": missing glTF ORM roughness map";
+      EXPECT_TRUE(part.gltf_pbr);
+      EXPECT_EQ(part.texcoords.size(), part.positions.size() / 3U * 2U);
+      EXPECT_LT(static_cast<std::size_t>(part.base_color_texture),
+                imported->model.textures.size());
+      EXPECT_LT(static_cast<std::size_t>(part.normal_texture),
+                imported->model.textures.size());
+      EXPECT_LT(static_cast<std::size_t>(part.metallic_roughness_texture),
+                imported->model.textures.size());
+      ++pbr_parts;
+    }
+    EXPECT_GE(pbr_parts, 1U) << stem;
+    for (const auto& diagnostic : imported->diagnostics) {
+      EXPECT_EQ(diagnostic.message.find("flattened"), std::string::npos);
+    }
+  }
+}
+
 // This is the ACTUAL asset authored and exported by Blender 5.3, not a
 // programmatically fabricated fixture. Exercises its real importer, then the
 // same Library-drop and pose commands as the mouse and Properties panel.
