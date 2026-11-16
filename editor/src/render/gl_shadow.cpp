@@ -260,19 +260,7 @@ void GLRenderer::draw_depth_casters(const std::vector<DrawItem>& items) {
       gl::UniformMatrix4fv(u_depth_model_,1,0,kIdentity.data());
       gl::DrawElements(gl::kTriangles,mesh.index_count,gl::kUnsignedInt,nullptr);
     } else {
-      if(mesh.instance_vbo==0) gl::GenBuffers(1,&mesh.instance_vbo);
-      gl::BindBuffer(gl::kArrayBuffer,mesh.instance_vbo);
-      gl::BufferData(gl::kArrayBuffer,
-          static_cast<gl::GLsizeiptr>(item.instances.size()*sizeof(InstanceData)),
-          item.instances.data(),gl::kDynamicDraw);
-      const auto stride=static_cast<gl::GLsizei>(sizeof(InstanceData));
-      for(gl::GLuint col=0;col<4;++col) {
-        const gl::GLuint loc=3+col;
-        gl::EnableVertexAttribArray(loc);
-        gl::VertexAttribPointer(loc,4,gl::kFloat,0,stride,
-            reinterpret_cast<const void*>(static_cast<std::uintptr_t>(col*4*sizeof(float))));
-        gl::VertexAttribDivisor(loc,1);
-      }
+      prepare_instances(mesh, item.instances);
       gl::Uniform1i(u_depth_instancing_,1);
       gl::DrawElementsInstanced(gl::kTriangles,mesh.index_count,
                                gl::kUnsignedInt,nullptr,
@@ -296,6 +284,8 @@ void GLRenderer::draw_shadow_map(const std::vector<DrawItem>& items,
                  target[1]+sun[1]*110.0F,
                  target[2]+sun[2]*110.0F};
   shadow_light_matrix_=multiply(light_projection(),light_view(light,target));
+  if (tuning_.stabilize_sun_shadows)
+    shadow_light_matrix_ = stabilize_shadow_projection(shadow_light_matrix_, kShadowSize);
 
   gl::GLint original_fbo=0;
   gl::GetIntegerv(gl::kFramebufferBinding,&original_fbo);

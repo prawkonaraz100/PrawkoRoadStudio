@@ -165,3 +165,16 @@ Dwa niezalezne rzeczywiste FBO OpenGL 3.3 (kazdy maksymalnie 512x384), a nie now
 - r6b2j-*.png â€” surowe, nieprzerobione zrzuty wlasnego Qt Windows. NIE obrazy AI
 
 Ograniczenia: maksymalnie dwie wysokosci lustra na widok/kamere (trzecia zostaje przypisana do blizszej); brak ray tracingu, SSR dla innych materialow oraz transparentnego szkĹ‚a w odbiciu. FPS odczytuje realny frameSwapped synchronizowany ~60 Hz; nie mierzy maksymalnej wydajnosci GPU.
+
+
+### Optymalizacja renderera — osobna gałąź (16.11.2026)
+
+Wyniki dotyczą tylko gałęzi codex/render-quality-performance, bez połączenia ze zmianami R6b2j. Wszystkie obrazy to rzeczywiste renderowania z Windows/OpenGL, a nie obrazy AI lub stockowe.
+
+- render-quality-street-day.png, render-quality-street-rain-night.png: rzeczywiste zrzuty Qt (866 x 783), ukazujące nadal uproszczoną geometrię oraz nocne oświetlenie.
+- render-quality-gpu-baseline.png, render-quality-gpu-cache.png, render-quality-gpu-aniso4.png: syntetyczny test GPU, nie realistyczna scena uliczna. Przy takim samym filtrowaniu obrazy cache OFF i ON są identyczne pikselowo.
+- render-quality-benchmark.json: pomiary GTX 1050 Ti, OpenGL, 1280 x 720, 1000 instancji / 8 części, cztery latarnie i cień słońca, 15 warmup + 90 klatek. GPU p95 5,976 / 5,302 / 5,311 ms; CPU submission p95 0,656 / 0,466 / 0,455 ms, odpowiednio cache OFF / ON / ON + anizotropia 4x. Statyczne przesłania GPU: 4860 / 0 / 0, 276 514 560 / 0 / 0 bajtów.
+- render-quality-qt-fps.json: QOpenGLWidget, 1600 x 900 MSAA4, 180 próbek, ok. 59,85 FPS na postoju i 60,01 FPS podczas orbitowania, bez klatek powyżej 33,33 ms. Limit odświeżania około 60 Hz, nie maksymalny FPS GPU.
+- render-quality-driver-mirrors.mp4, render-quality-driver-first.png, render-quality-driver-moving.png: rzeczywisty przejazd esmini i trzy niezależne lusterka, 72 klatki / 6 sekund / 12 FPS, test integracyjny PASS.
+
+Build all PASS, Qt 1371 PASS / 7 SKIPPED, C++ 2074 PASS, Python 7 PASS. Stabilizacja słońca sprawdzona matematycznie, bez ilościowego testu migotania przez całą długą jazdę. Scalenie z R6b2j pozostaje otwarte.

@@ -15,6 +15,7 @@
  */
 
 #include "render/gl_renderer.hpp"
+#include <string_view>
 
 #include <spdlog/spdlog.h>
 
@@ -810,6 +811,23 @@ bool GLRenderer::init() {
   // gl_PointSize and every point renders one pixel wide — a lidar cloud would
   // be technically drawn and practically invisible.
   gl::Enable(gl::kProgramPointSize);
+  texture_anisotropy_ = 1.0F;
+  gl::GLint extension_count = 0;
+  gl::GetIntegerv(gl::kNumExtensions, &extension_count);
+  for (gl::GLint i = 0; i < extension_count; ++i) {
+    const auto* name = reinterpret_cast<const char*>(
+        gl::GetStringi(gl::kExtensions, static_cast<gl::GLuint>(i)));
+    if (name && (std::string_view(name) == "GL_EXT_texture_filter_anisotropic" ||
+                 std::string_view(name) == "GL_ARB_texture_filter_anisotropic")) {
+      float maximum = 1.0F;
+      gl::GetFloatv(gl::kMaxTextureMaxAnisotropy, &maximum);
+      const float requested = std::isfinite(tuning_.max_anisotropy)
+          ? std::max(1.0F, tuning_.max_anisotropy) : 1.0F;
+      texture_anisotropy_ = std::clamp(requested, 1.0F, std::max(1.0F, maximum));
+      break;
+    }
+  }
+  spdlog::info("Texture anisotropy: {}x", texture_anisotropy_);
   u_view_ = gl::GetUniformLocation(program_, "u_view");
   u_projection_ = gl::GetUniformLocation(program_, "u_projection");
   u_model_ = gl::GetUniformLocation(program_, "u_model");
@@ -1040,6 +1058,32 @@ RenderMeshHandle GLRenderer::upload(const RenderMeshData& data) {
   return handle;
 }
 
+void GLRenderer::prepare_instances(GpuMesh& mesh,
+                                   std::span<const InstanceData> instances) {
+  // Caller has bound this mesh's VAO. Attribute pointers persist with that VAO.
+  const bool first = mesh.instance_vbo == 0;
+  if (first) gl::GenBuffers(1, &mesh.instance_vbo);
+  const bool changed = tuning_.cache_instance_uploads && mesh.instance_cache.update(instances);
+  if (first || changed || !tuning_.cache_instance_uploads) {
+    gl::BindBuffer(gl::kArrayBuffer, mesh.instance_vbo);
+    gl::BufferData(gl::kArrayBuffer,
+                   static_cast<gl::GLsizeiptr>(instances.size_bytes()),
+                   instances.data(), gl::kDynamicDraw);
+    ++statistics_.instance_uploads;
+    statistics_.instance_bytes += instances.size_bytes();
+  }
+  if (first) {
+    const auto stride = static_cast<gl::GLsizei>(sizeof(InstanceData));
+    for (gl::GLuint col = 0; col < 4; ++col) {
+      const gl::GLuint loc = 3 + col;
+      gl::EnableVertexAttribArray(loc);
+      gl::VertexAttribPointer(loc, 4, gl::kFloat, 0, stride,
+          reinterpret_cast<const void*>(static_cast<std::uintptr_t>(col * 4 * sizeof(float))));
+      gl::VertexAttribDivisor(loc, 1);
+    }
+  }
+}
+
 void GLRenderer::destroy(GpuMesh& mesh) {
   gl::DeleteBuffers(1, &mesh.vbo);
   gl::DeleteBuffers(1, &mesh.ebo);
@@ -1083,6 +1127,10 @@ TextureHandle GLRenderer::upload(const TextureData& data) {
                  gl::kUnsignedByte,
                  data.rgba.data());
   gl::GenerateMipmap(gl::kTexture2D);
+  // Leave depth maps/reflection FBOs alone. Only uploaded material textures
+  // receive filtering, and only on drivers advertising the extension.
+  if (texture_anisotropy_ > 1.0F)
+    gl::TexParameterf(gl::kTexture2D, gl::kTextureMaxAnisotropy, texture_anisotropy_);
   const gl::GLenum wrap = data.wrap == TextureWrap::ClampToEdge ? gl::kClampToEdge : gl::kRepeat;
   gl::TexParameteri(gl::kTexture2D, gl::kTextureWrapS, static_cast<gl::GLint>(wrap));
   gl::TexParameteri(gl::kTexture2D, gl::kTextureWrapT, static_cast<gl::GLint>(wrap));
@@ -1660,33 +1708,7 @@ void GLRenderer::render(const std::vector<DrawItem>& items,
       gl::UniformMatrix4fv(u_model_, 1, 0, kIdentity.data());
       gl::DrawElements(primitive, mesh.index_count, gl::kUnsignedInt, nullptr);
     } else {
-      // Instanced fast path: one glDrawElementsInstanced for the whole span.
-      // Per-instance mat4 columns feed attribs 3-6 (divisor 1). The instance
-      // VBO is created lazily, then re-uploaded per draw (1k instances = 64 KB).
-      static_assert(sizeof(InstanceData) == 64, "instance stride must be a column-major mat4");
-      if (mesh.instance_vbo == 0) {
-        gl::GenBuffers(1, &mesh.instance_vbo);
-      }
-      gl::BindBuffer(gl::kArrayBuffer, mesh.instance_vbo);
-      // Fill the buffer BEFORE enabling attribs 3-6 so they never point at an
-      // empty store.
-      gl::BufferData(gl::kArrayBuffer,
-                     static_cast<gl::GLsizeiptr>(item.instances.size() * sizeof(InstanceData)),
-                     item.instances.data(),
-                     gl::kDynamicDraw);
-      const auto stride = static_cast<gl::GLsizei>(sizeof(InstanceData));
-      for (gl::GLuint col = 0; col < 4; ++col) {
-        const gl::GLuint loc = 3 + col;
-        gl::EnableVertexAttribArray(loc);
-        gl::VertexAttribPointer(
-            loc,
-            4,
-            gl::kFloat,
-            0,
-            stride,
-            reinterpret_cast<const void*>(static_cast<std::uintptr_t>(col * 4 * sizeof(float))));
-        gl::VertexAttribDivisor(loc, 1);
-      }
+      prepare_instances(mesh, item.instances);
       gl::Uniform1i(u_use_instancing_, 1);
       gl::DrawElementsInstanced(primitive,
                                 mesh.index_count,

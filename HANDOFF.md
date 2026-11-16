@@ -1,10 +1,28 @@
 # PrawkoRoadStudio — PRZEKAZANIE PRACY / START TUTAJ
 
-> Stan na 15.11.2026. Przed zmianą kodu przeczytaj ten plik i `AGENTS.md`. Kolejność prac wyznacza **Aktywny plan** na początku pliku.
+> Stan tej gałęzi na 16.11.2026. Przed zmianą kodu przeczytaj ten plik i `AGENTS.md`. Kolejność prac wyznacza **Aktywny plan** na początku pliku.
 
 ## Cel PrawkoNaRaz
 
 Instruktor tworzy i edytuje sytuację drogową, odtwarza ją, wybiera kamerę i eksportuje PNG lub MP4 w jednym programie Windows. Funkcjonalnym punktem odniesienia jest VICOM. **Podstawowy przepływ pracy został już potwierdzony; aktualnym priorytetem jest realistyczne otoczenie drogowe i produkcja własnych modeli 3D w Blenderze, nie dalsza ogólna rozbudowa edytora.** Wspólny model C++ oraz OpenDRIVE i OpenSCENARIO obsługują edytor i agenta. [Zakres funkcji i kryteria produktu](docs/PRAWKO-VICOM.md)
+
+## 16.11.2026 — niezależny etap poprawy renderera (PASS, integracja otwarta)
+
+**Najnowsze polecenie:** poprawić wygląd oraz wydajność silnika. Użytkownik potwierdził, że drugi agent nadal pracuje nad niezacommitowanym R6b2j (dwie wysokości kałuż) w głównym katalogu. Dlatego ten etap powstaje wyłącznie w worktree `F:\PrawkoRoadStudio\archive\render-opt`, na gałęzi `codex/render-quality-performance`, od bazy `73adc800cec2eb6eee3d04dfdc21ff3f0bb87dd9`. NIE nadpisywać głównego katalogu ani jego builda. Zmiany R6b2j nie należą do tej gałęzi. Agent AI bez zmian, HEAD `67a92fa24b4054b7f094c9b667f3634c35ad9210`.
+
+**Plan i stan:**
+1. W tym etapie — cache rzeczywistej zawartości bufora instancji współdzielony przez główny pass, cienie i odbicia. Zmiana macierzy w miejscu, zmiana liczby instancji oraz różne spans dla tej samej siatki muszą unieważniać cache. Osobny test sprzętowy porównuje piksele i zlicza transfery, a nie tylko FPS ograniczone synchronizacją monitora.
+2. W tym etapie — filtrowanie anizotropowe tekstur materiałów do 4x, ograniczone możliwościami karty (bez wymagania rozszerzenia), oraz stabilizacja siatki cienia kierunkowego w pełnych texelach. Nie zmieniać perspektywicznych cieni latarni ani formatów scen.
+3. Następny etap po scaleniu z R6b2j — profilowanie pełnego przejazdu z trzema lusterkami i kałużami, pomijanie obiektów poza bryłą widzenia, oddzielny cache statycznych cieni i budżety detalu LOD. Kryterium to p95 CPU/GPU i poprawność ruchomych uczestników we wszystkich widokach.
+4. Następnie — wspólny liniowy HDR i kontrolowana ekspozycja/tonemapping, odbicia środowiska i lepszy kontakt obiektów z podłożem. Każdy efekt wymaga porównania dzień/noc/deszcz i kontroli kosztu na GTX 1050 Ti. Nie deklarować pełnego fotorealizmu.
+
+**Weryfikacja wejściowa:** główny `prawko-resume.ps1 -Verify` potwierdził zgodność obu HEAD z GitHub, 2074 testy core C++ PASS (10 disabled), 7 Python PASS, QUALITY_GATE_PASS. Ostrzeżenie o dirty worktree jest oczekiwane z powodu pracy drugiego agenta. Pełny osobny build i odbiór nowego kodu zakończono PASS; potwierdzone wyniki zapisano poniżej. Narzędzia `.qt`, `reference`, `toolchain` są współdzielone wyłącznie jako zależności; binaria/build oraz kopia repo agenta są osobne. Testować wyłącznie sceny z tej kopii. Integracja do gałęzi funkcjonalnej dopiero po zakończeniu równoległego etapu, po przeglądzie wspólnych plików gl_renderer i CMakeLists; bez automatycznego merge do brudnego katalogu.
+
+**Odbiór końcowy odizolowanej gałęzi (16.11.2026):** Osobny build Windows all PASS, AGENT_BINDING_SYNC_PASS, Qt 1371 PASS / 7 SKIPPED, C++ 2074 PASS, agent Python 7 PASS, QUALITY_GATE_PASS. Nowy cache macierzy instancji jest współdzielony przez pass główny i cienie, aktualizuje się po zmianie pozycji i oddzielnych spanach tej samej siatki. Stabilizacja cienia słońca w całych tekselach; anizotropia 4x z bezpiecznym fallbackiem 1x. Bez zmian plików XODR/XOSC i paneli GUI.
+
+**Wynik sprzętowy (syntetyczny, nie maksymalne FPS sceny):** GTX 1050 Ti, 1000 instancji po 8 części, cienie słońca i 4 latarni, 1280x720, 15 warmup + 90 próbek. GPU p95 5,976 / 5,302 / 5,311 ms (bez cache / cache / cache z filtrem 4x). CPU submission p95 0,656 / 0,466 / 0,455 ms, niepotrzebne przesłania 4860 / 0 / 0; 276 514 560 / 0 / 0 bajtów. Pixele identyczne dla cache OFF i ON przy 1x; próby ruchu, współdzielonej siatki i zmian instancji PASS. QOpenGLWidget MSAA4 1600x900: 59,85 FPS steady i 60,01 FPS orbit, zero klatek >33,33ms przy synchronizacji ok. 60Hz. Esmini 3.11 + FFmpeg i 3 lusterka PASS: 72 klatki / 6 s, zmienione próbki w lusterkach 190 / 252 / 39. Dowody źródłowe: build/quality-*.log (lokalnie) i docs/gallery/prawkoroadstudio-2026-11-16/render-quality-* (w gałęzi).
+
+**Izolacja:** Wszystkie prace dotyczą wyłącznie worktree F:\PrawkoRoadStudio\archive\render-opt i osobnej gałęzi codex/render-quality-performance od 73adc80. Główna gałąź ma już zakończony etap R6b2j, HEAD 0af977ec8bbdd6252db6884468cd79118bdbcd73, lecz tych zmian NIE scalamy automatycznie. Na przyszły etap integracji pozostają konflikty gl_renderer.cpp/hpp, CMakeLists i HANDOFF; zachować dwie płaszczyzny odbicia oraz ponownie wykonać build/Qt/C++/Python, realną jazdę z lustrem i kałużami, pomiar GPU. Projekt testowy tylko w odizolowanym worktree miał zmienione last_scene przez test GUI; przywrócono jedynie to jedno pole po weryfikacji reszty. Modelowanie otoczenia, HDR/IBL, SSR i ilościowy test migotania cienia nadal otwarte.
 
 ## 15.11.2026 — PrawkoBridge v0.2 — lokalna instalacja PASS / ChatGPT Tunnel PENDING
 
@@ -313,6 +331,8 @@ Dodatkowy pasek `toolbar.options` chowa się w stanie bez kontekstowych opcji; p
 
 ## Aktywny plan
 
+**Aktualny priorytet tej gałęzi (16.11.2026):** etap poprawy renderera opisany na początku dokumentu — cache instancji, filtrowanie tekstur, stabilizacja cienia i niezależny odbiór GPU. Główne R6b2j jest już na HEAD 0af977e; integracja pozostaje otwarta. Po odbiorze tej gałęzi scalić obie prace, a następnie profilować pełną jazdę i wdrażać pomijanie niewidocznej geometrii/LOD. Poniższe zalecenia A1 i historyczne wyniki pozostają kontekstem, nie nakazem ponownego modelowania wiaty.
+
 ### PRIORYTET A1 — Prawko Assets: realistyczne modele drogowe (AKTYWNY, decyzja użytkownika 15.11.2026)
 
 **Decyzja projektowa:** kończymy etap rozwoju **podstawowych funkcjonalności** PrawkoRoadStudio i przechodzimy do systematycznej produkcji **własnych, szczegółowych, realistycznych assetów 3D** dla czterech aktywnych scen `projects/Prawko-Scenariusze/`. To jest **pierwsze zadanie dla każdego kolejnego agenta**. Nie zaczynać od nowych paneli, silników, edytorów siatek, uniwersalnych mechanizmów komponentów ani dodatkowych scenariuszy, jeśli nie blokują importu lub wizualnej jakości modeli. Poniższe etapy VICOM (1–5) są historią i backlogiem dalszym, **nie zastępują priorytetu A1**. S3.3 nie jest globalnie zamknięte; niezakończone funkcje zostają odłożone.
@@ -357,7 +377,7 @@ Punkty wejścia to `MainWindow::export_scenario_video()`, [proces eksportu](edit
 
 ## Gotowe polecenie do nowej rozmowy
 
-> Kontynuuj PrawkoRoadStudio w `F:\PrawkoRoadStudio`. Przeczytaj `HANDOFF.md` i `AGENTS.md`, uruchom `scripts/prawko-resume.ps1 -Verify` i potwierdź stan obu repozytoriów GitHub, ostatnie commity oraz testy. Zacznij od **PRIORYTETU A1 — Prawko Assets** w Aktywnym planie: zbuduj i odbierz wiatę przystankową Blender → GLB → przeciągnięcie na scenę → zapis/odczyt → wizualny odbiór; nie wracaj teraz do backlogu funkcjonalności 5b–5d. Testuj na kopiach i nie nadpisuj niezapisanych scen. Po zakończeniu etapu wykonaj testy, uaktualnij stan i kolejny krok w `HANDOFF.md`, zacommituj, wypchnij i wykonaj `scripts/prawko-git.ps1 -Action finish`.
+> Kontynuuj gałąź codex/render-quality-performance w F:\PrawkoRoadStudio\archive\render-opt. Przeczytaj najnowszy wpis tego HANDOFF i AGENTS. Sprawdź status obu repo, testy i dowody sprzętowe etapu renderera. Główna gałąź feature/realistic-road-surfaces jest rozwijana równolegle przez innego agenta (R6b2j). Nie nadpisuj jej zmian ani scen. Po zakończeniu tamtej pracy przejrzyj i scal oba etapy, następnie profiluj pełny przejazd z lusterkami/odbiciami przed dalszą optymalizacją. Wykonaj testy, commit, push i finish w odpowiednim katalogu roboczym.
 
 ## Historia prac
 
