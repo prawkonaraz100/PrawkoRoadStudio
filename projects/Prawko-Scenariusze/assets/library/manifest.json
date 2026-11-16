@@ -221,6 +221,19 @@
         "license": "Apache-2.0 — autorski model PrawkoNaRaz"
       },
       "thumbnail": "assets/library/thumbnails/r6b2h-kaluza-placowa-140.png"
+    },
+    {
+      "key": "prop.r6b2i-kaluza-przykraweznikowa-700",
+      "label": "Kałuża przy krawężniku 7,0 m",
+      "category": "Prawko | Obiekty 3D",
+      "create": {
+        "kind": "tree",
+        "model": "r6b2i-kaluza-przykraweznikowa-700",
+        "model_file": "assets/props/r6b2i-kaluza-przykraweznikowa-700.glb",
+        "source": "assets/prawko/blender/kaluze_r6b2i/r6b2i-kaluza-przykraweznikowa-700.glb",
+        "license": "Apache-2.0 — autorski model PrawkoNaRaz"
+      },
+      "thumbnail": "assets/library/thumbnails/r6b2i-kaluza-przykraweznikowa-700.png"
     }
   ]
 }

@@ -423,7 +423,7 @@ void main() {
         vec3 reflected_scene = texture(u_planar_texture,screen_uv).rgb;
         vec3 toward_eye = normalize(u_camera_pos-v_world_pos);
         float edge_fresnel = pow(1.0-clamp(abs(dot(n,toward_eye)),0.0,1.0),5.0);
-        float strength = clamp(0.70+0.20*edge_fresnel,0.70,0.91);
+        float strength = clamp(0.88+0.10*edge_fresnel,0.88,0.98);
         base = mix(base,reflected_scene,strength);
       }
     }
@@ -439,7 +439,12 @@ void main() {
   // world-space density, without painting a fake grey screen over the scene.
   float distance_m = length(v_world_pos - u_camera_pos);
   float fog = 1.0 - exp(-u_fog_density * distance_m);
-  frag_color = vec4(mix(base, u_fog_color, clamp(fog, 0.0, 1.0)), albedo.a);
+  // Water is an opaque-looking *reflective* patch under rain, not a tinted
+  // overlay that halves the contrast of real reflected facade/window lines.
+  // Its glTF alphaMode is still BLEND and the dry material remains unchanged.
+  float alpha = (u_water_surface == 1 && u_planar_enabled == 1)
+      ? max(albedo.a, 0.92) : albedo.a;
+  frag_color = vec4(mix(base, u_fog_color, clamp(fog, 0.0, 1.0)), alpha);
 }
 )";
 

@@ -111,7 +111,7 @@ def export(stem,title,seed,rx,ry):
  bpy.ops.object.camera_add(location=(3,-4.6,5.7))
  cam=bpy.context.object
  cam.rotation_euler=(Vector((0,0,0))-cam.location).to_track_quat('-Z','Y').to_euler()
- cam.data.type='ORTHO';cam.data.ortho_scale=5.8 if rx>1.0 else 3.7
+ cam.data.type='ORTHO';cam.data.ortho_scale=max(5.8,2.6*rx) if rx>1.0 else 3.7
  bpy.context.scene.camera=cam
  bpy.ops.mesh.primitive_plane_add(size=2,location=(0,0,-.022))
  floor=bpy.context.object;floor.scale=(5,5,1)
@@ -138,6 +138,7 @@ def export(stem,title,seed,rx,ry):
  assert glb.stat().st_size>15000
  print('R6B2H_BLENDER_GLB_PASS',stem,json.dumps(metadata,ensure_ascii=False))
 
-export('r6b2h-kaluza-nieregularna-240','Kałuża nieregularna 2,4 m',62024,1.04,.60)
-export('r6b2h-kaluza-placowa-140','Kałuża płytka 1,4 m',62025,.61,.34)
-print('R6B2H_TWO_ASSETS_EXPORTED_PASS')
+if __name__=='__main__':
+ export('r6b2h-kaluza-nieregularna-240','Kałuża nieregularna 2,4 m',62024,1.04,.60)
+ export('r6b2h-kaluza-placowa-140','Kałuża płytka 1,4 m',62025,.61,.34)
+ print('R6B2H_TWO_ASSETS_EXPORTED_PASS')

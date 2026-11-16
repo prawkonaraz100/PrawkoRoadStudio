@@ -1,0 +1,20 @@
+{
+  "scene_version": 1,
+  "mode": "scenario",
+  "textured": true,
+  "time_of_day": "day",
+  "weather": "rain",
+  "season": "summer",
+  "driver_view_actor": "Ego",
+  "view": {
+    "projection": "perspective",
+    "target": [
+      68.0,
+      2.4,
+      0.4
+    ],
+    "distance": 6.3,
+    "pitch": 0.32,
+    "yaw": -1.5707963267948966
+  }
+}

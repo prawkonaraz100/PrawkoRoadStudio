@@ -132,3 +132,21 @@ Wybrane poprawne zrzuty oznaczone r6b2h-qt-* powstaly bezposrednio w PrawkoRoadS
 - r6b2h-kaluza-{nieregularna-240,placowa-140}-blender.png: osobne rendery Cycles oryginalnych modeli
 
 Ograniczenia: jedna plaska wysokoĹ›Ä‡ odbicia na kamera; dopasowanie do pierwszej widocznej kaĹ‚uĹĽy, nie pelny SSR/ray tracing, odbicie pomija przezroczystosci w pomocniczym przebiegu, zmniejszona rozdzielczosc odbicia, brak fizycznej falowania wody i mglistej dyspersji. Efekt aktywny tylko w deszczu, w trybie Textured, i gdy istnieje powierzchnia PrawkoWater.
+
+
+## R6b2i — odbicie fasady, witryn i drzwi w rzeczywistej kałuży (16.11.2026)
+
+Autentyczne obrazy aplikacji PrawkoRoadStudio Windows/OpenGL 3.3, nie obrazy AI ani stock. Porównania OFF/ON mają tę samą kamerę, geometrię, porę dnia oraz identyczny układ kropli; zmienia się wyłącznie odbicie planarne. Surowy bufor GPU 424 x 384, przechwycony jedynie diagnostycznie, pokazał odwróconą geometrię kamienicy, rzędy okien i drzwi; kod przechwytywania został usunięty z produkcji.
+
+- r6b2i-porownanie-lustrzana-kamienica-dzien.png — dzień i deszcz, OFF/ON, rozpoznawalne odwrócone drzwi i pionowe struktury fasady.
+- r6b2i-porownanie-lustrzana-kamienica-noc.png — ten sam kadr po zmroku.
+- r6b2i-porownanie-lustrzana-kamienica-kadr.png — szerszy kadr podczas deszczu.
+- r6b2i-porownanie-sucha-kontrola.png — dokładnie ten sam suchy widok OFF/ON, zerowa różnica.
+- r6b2i-qt-*.png — 11 nieprzerobionych screenshotów z programu Windows.
+- r6b2i-kaluza-przykraweznikowa-700-blender.png — osobny render Cycles modelu, NIE screenshot Qt.
+
+Model r6b2i-kaluza-przykraweznikowa-700 (ok. 6,96 x 2,16 m, 4 części GLB) korzysta z istniejącego generatora Blender R6b2h i materiału glTF PrawkoWater.Surface (BLEND, alfa 0,69), ma własny GLB, plik .blend i miniaturę. To osiemnasty model biblioteki, edytowalny metodą przeciągnij-upuść, przesuwania, obracania i zapisu. Nowa osobna scena 06k zawiera 37 obiektów, z czego 5 to kałuże; wcześniejsza 06j nie została zmieniona. Shader wzmacnia tylko prawdziwą teksturę odbicia w tafli przy deszczu.
+
+Realny test A/B (75 429 równych próbek): dzień/deszcz 2681 istotnych zmian, noc/deszcz 1646, szerszy kadr 940, sucha kontrola 0. Przykładowe trzy pasy jasności w tafli: ON 82,42 / 67,57 / 78,95 (ściana-drzwi-ściana); OFF 55,31 / 54,94 / 55,36. R6B2I_PLANAR_FACADE_NATIVE_VISUAL_GATE_PASS. Testy: Qt 1366 PASS / 7 SKIPPED, C++ 2074 PASS, Python 7 PASS, BUILD_PASS. GTX 1050 Ti / MSAA4 / 1600x900: z odbiciem 59,84 FPS steady / 60,00 orbit; bez odbicia 59,83 / 60,00; 0 klatek powyżej 33,33ms. Qt synchronizowane ~60Hz, to nie maksymalny FPS GPU.
+
+Ograniczenia: wizualnie potwierdzono fragmenty fasady i drzwi w danej kompozycji; nie gwarantuje to idealnego odbicia wszystkich pięter we wszystkich kamerach. Renderer korzysta z jednej wysokości lustra na kamerę, ograniczonego FBO do 512x384; brak pełnego SSR, ray tracing i odbicia transparentnego szkła. Sucha scena i materiały inne niż PrawkoWater zachowują dotychczasowy wygląd.

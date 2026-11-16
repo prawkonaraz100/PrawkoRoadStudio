@@ -1,0 +1,17 @@
+{
+  "name": "Kałuża przy krawężniku 7,0 m",
+  "glb": "r6b2i-kaluza-przykraweznikowa-700.glb",
+  "units": "metres",
+  "up": "+Z",
+  "dimensions_m": [
+    6.96,
+    2.158,
+    0.07
+  ],
+  "water_material": "PrawkoWater.Surface | planar reflective glTF",
+  "water_alpha": 0.69,
+  "glb_bytes": 26220,
+  "parts": 4,
+  "license": "Apache-2.0, PrawkoNaRaz authored",
+  "note": "planar reflection is a renderer feature enabled only during rain"
+}

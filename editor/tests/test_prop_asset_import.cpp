@@ -431,6 +431,33 @@ TEST_F(PropAssetImport, R6b2hAuthoredPuddleMaterialIsReusableAndTransparent) {
   }
 }
 
+TEST_F(PropAssetImport, R6b2iSevenMeterPuddleReusesTheSameAuthorWaterPbr) {
+  constexpr auto kName = "r6b2i-kaluza-przykraweznikowa-700";
+  const auto source = std::filesystem::path(RM_ASSETS_DIR) /
+       "prawko/blender/kaluze_r6b2i" / (std::string(kName) + ".glb");
+  ASSERT_TRUE(std::filesystem::is_regular_file(source));
+  auto imported = props::import_prop_model(source,kName);
+  ASSERT_TRUE(imported.has_value()) << imported.error().message;
+  ASSERT_EQ(imported->model.parts.size(),4U);
+  int water=0;
+  double min_x=1.0e9,max_x=-1.0e9;
+  for (const auto& part:imported->model.parts) {
+    for(std::size_t index=0;index<part.positions.size();index+=3) {
+      min_x=std::min(min_x,part.positions[index]);
+      max_x=std::max(max_x,part.positions[index]);
+    }
+    if (!part.water_surface) continue;
+    ++water;
+    EXPECT_TRUE(part.gltf_pbr);
+    EXPECT_EQ(part.alpha_mode,2) << "glTF BLEND is needed for water";
+    EXPECT_NEAR(part.opacity,.69F,.02F);
+    EXPECT_GT(part.texcoords.size(),40U);
+  }
+  EXPECT_EQ(water,1) << "Water is detected from material, never the GLB id";
+  EXPECT_GT(max_x-min_x,5.5) << "Reflective patch must span multiple facade windows";
+  EXPECT_LT(max_x-min_x,8.0);
+}
+
 TEST_F(PropAssetImport, R6b2gGlbEmissiveLensIsImportedFromAuthorMaterial) {
   const auto source = std::filesystem::path(RM_ASSETS_DIR) /
       "prawko/blender/oprawa_r6b2g/r6b2g-latarnia-emisyjna.glb";
