@@ -1,0 +1,22 @@
+{
+  "title": "R6b Chodnik kamienny 20 m",
+  "dimensions_m": [
+    20.0,
+    2.36,
+    0.215
+  ],
+  "parts": 7,
+  "units": "metres",
+  "axes": "Z up",
+  "blender_version": "5.3.0",
+  "materials": [
+    "R6B podbudowa kruszywo",
+    "R6B plyta betonowa 0",
+    "R6B plyta betonowa 3",
+    "R6B plyta betonowa 2",
+    "R6B plyta betonowa 1",
+    "R6B krawedz piaskowca",
+    "R6B wpust grafit"
+  ],
+  "note": "GLB importer centers XY at bounding-box center; z=0 at lowest part"
+}

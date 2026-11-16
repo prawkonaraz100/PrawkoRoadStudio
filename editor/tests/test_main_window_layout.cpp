@@ -684,6 +684,116 @@ TEST_F(MainWindowLayoutTest, R6BuildingGlbLibraryDropRotateSaveReload) {
   EXPECT_EQ(count,1) << "R6 building must be persisted by real editor drag/drop";
 }
 
+TEST_F(MainWindowLayoutTest, R6BStreetAssetsCanBeDraggedMovedRotatedAndSaved) {
+  // Real Qt drag/drop through the SAME UI handlers as manual library placement,
+  // on a disposable test project: no change to the user's five original scenes.
+  QTemporaryDir tmp;
+  ASSERT_TRUE(tmp.isValid());
+  const auto root = std::filesystem::path(tmp.path().toStdU16String());
+  ASSERT_TRUE(Project::create(root, QStringLiteral("R6b street assets GUI proof")).has_value());
+  const auto scene = root / "r6b-street.xodr";
+  std::filesystem::copy_file(std::filesystem::path(RM_SAMPLES_DIR) / "straight_road.xodr",
+                             scene);
+  {
+    std::ofstream state(root / "r6b-street.rmscene.json");
+    state << R"({"scene_version":1,"view":{"distance":60,"pitch":1.56,"projection":"orthographic","target":[50,0,0],"yaw":-1.57}})";
+  }
+  const std::array<const char*, 3> names{
+      "r6b-chodnik-20m", "r6b-drzewo", "r6b-latarnia"};
+  LibraryManifest overlay;
+  std::vector<QString> keys;
+  std::vector<std::string> ids;
+  for (const char* name : names) {
+    AssetImportRequest request;
+    request.source = std::filesystem::path(RM_ASSETS_DIR) /
+                     "prawko/blender/ulica_r6b" / (std::string(name) + ".glb");
+    request.label = QString::fromUtf8(name);
+    request.category = QStringLiteral("Prawko | Obiekty 3D");
+    request.license = QStringLiteral("PrawkoNaRaz original asset, Apache-2.0");
+    auto imported = import_prop_asset(root, request);
+    ASSERT_TRUE(imported.has_value()) << name << ": " << imported.error().message;
+    keys.push_back(std::get<0>(*imported).key);
+    ids.push_back(std::get<1>(*imported).slug.toStdString());
+    overlay.upsert(std::get<0>(*imported));
+  }
+  const auto manifest = root / "assets/library/manifest.json";
+  std::filesystem::create_directories(manifest.parent_path());
+  ASSERT_TRUE(overlay.save(manifest).has_value());
+  window_.load_file(scene);
+  auto* library = window_.findChild<LibraryPanel*>();
+  ASSERT_NE(library, nullptr);
+  const int cat = library->category_combo()->findData(QStringLiteral("Prawko | Obiekty 3D"));
+  ASSERT_GE(cat, 0);
+  library->category_combo()->setCurrentIndex(cat);
+  const auto* proxy = library->view()->model();
+  ASSERT_EQ(proxy->rowCount(), 3);
+  auto* viewport = window_.viewport();
+  viewport->resize(800, 500);
+  viewport->set_camera_preset(QStringLiteral("ortho"));
+  const auto screen = project_to_screen(viewport->camera().matrices(1.6F),
+                                        44.0, -5.0, 0.0, 800, 500);
+  ASSERT_TRUE(screen.has_value());
+  const QPoint where = QPointF((*screen)[0], (*screen)[1]).toPoint();
+  ASSERT_TRUE(viewport->rect().contains(where));
+  auto* station = window_.findChild<QDoubleSpinBox*>(QStringLiteral("object_s_spin"));
+  auto* heading = window_.findChild<QDoubleSpinBox*>(QStringLiteral("object_hdg_spin"));
+  ASSERT_NE(station, nullptr);
+  ASSERT_NE(heading, nullptr);
+  struct ExpectedObject {
+    std::string model;
+    double station;
+    double heading;
+  };
+  std::vector<ExpectedObject> expected;
+  for (std::size_t i = 0; i < keys.size(); ++i) {
+    QModelIndex tile;
+    for (int row = 0; row < proxy->rowCount(); ++row) {
+      const QModelIndex candidate = proxy->index(row, 0);
+      if (proxy->data(candidate, LibraryListModel::KeyRole).toString() == keys[i]) {
+        tile = candidate;
+        break;
+      }
+    }
+    ASSERT_TRUE(tile.isValid()) << "Missing R6b asset in actual Qt library";
+    std::unique_ptr<QMimeData> mime(proxy->mimeData({tile}));
+    ASSERT_NE(mime, nullptr);
+    QDragEnterEvent enter(where, Qt::CopyAction, mime.get(), Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(viewport, &enter);
+    ASSERT_TRUE(enter.isAccepted());
+    QDropEvent drop(QPointF(where), Qt::CopyAction, mime.get(), Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(viewport, &drop);
+    ASSERT_TRUE(drop.isAccepted());
+    const double new_s = station->value() + 6.0 + static_cast<double>(i);
+    const double new_hdg = 0.4 + static_cast<double>(i)*0.45;
+    station->setValue(new_s);
+    QMetaObject::invokeMethod(station, "editingFinished", Qt::DirectConnection);
+    heading->setValue(new_hdg);
+    QMetaObject::invokeMethod(heading, "editingFinished", Qt::DirectConnection);
+    expected.push_back({ids[i], new_s, new_hdg});
+  }
+  auto* save = window_.findChild<QAction*>(QStringLiteral("file_save"));
+  if (!save) {
+    const auto actions = window_.menuBar()->actions().front()->menu()->actions();
+    const auto match = std::ranges::find_if(actions, [](const QAction* action) {
+      return action->text() == QStringLiteral("&Save");
+    });
+    ASSERT_NE(match, actions.end());
+    save = *match;
+  }
+  save->trigger();
+  auto loaded = load_xodr(scene);
+  ASSERT_TRUE(loaded.has_value()) << loaded.error().message;
+  int count = 0;
+  loaded->network.for_each_object([&](ObjectId, const Object& obj) {
+    ++count;
+    const auto it = std::ranges::find(expected, obj.name, &ExpectedObject::model);
+    ASSERT_NE(it, expected.end()) << "Unexpected object persisted in R6b test";
+    EXPECT_NEAR(obj.s, it->station, 0.01);
+    EXPECT_NEAR(obj.hdg, it->heading, 0.01);
+  });
+  EXPECT_EQ(count, 3) << "All R6b GLBs should be mouse-draggable and persist";
+}
+
 TEST_F(MainWindowLayoutTest, CuratedLibraryStaysAvailableAcrossMapAndScenarioModes) {
   auto* library = window_.findChild<LibraryPanel*>();
   ASSERT_NE(library, nullptr);

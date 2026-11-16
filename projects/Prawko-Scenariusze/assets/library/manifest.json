@@ -26,6 +26,45 @@
         "license": "Apache-2.0 — autorski model PrawkoNaRaz"
       },
       "thumbnail": "assets/library/thumbnails/r6_kamienica_miejska.png"
+    },
+    {
+      "key": "prop.r6b-chodnik-20m",
+      "label": "Chodnik miejski 20 m | Prawko R6b",
+      "category": "Prawko | Obiekty 3D",
+      "create": {
+        "kind": "tree",
+        "model": "r6b-chodnik-20m",
+        "model_file": "assets/props/r6b-chodnik-20m.glb",
+        "source": "assets/prawko/blender/ulica_r6b/r6b-chodnik-20m.glb",
+        "license": "Apache-2.0 — autorski model PrawkoNaRaz"
+      },
+      "thumbnail": "assets/library/thumbnails/r6b-chodnik-20m.png"
+    },
+    {
+      "key": "prop.r6b-drzewo",
+      "label": "Drzewo przyuliczne | Prawko R6b",
+      "category": "Prawko | Obiekty 3D",
+      "create": {
+        "kind": "tree",
+        "model": "r6b-drzewo",
+        "model_file": "assets/props/r6b-drzewo.glb",
+        "source": "assets/prawko/blender/ulica_r6b/r6b-drzewo.glb",
+        "license": "Apache-2.0 — autorski model PrawkoNaRaz"
+      },
+      "thumbnail": "assets/library/thumbnails/r6b-drzewo.png"
+    },
+    {
+      "key": "prop.r6b-latarnia",
+      "label": "Latarnia miejska | Prawko R6b",
+      "category": "Prawko | Obiekty 3D",
+      "create": {
+        "kind": "tree",
+        "model": "r6b-latarnia",
+        "model_file": "assets/props/r6b-latarnia.glb",
+        "source": "assets/prawko/blender/ulica_r6b/r6b-latarnia.glb",
+        "license": "Apache-2.0 — autorski model PrawkoNaRaz"
+      },
+      "thumbnail": "assets/library/thumbnails/r6b-latarnia.png"
     }
   ]
 }
