@@ -698,15 +698,17 @@ TEST_F(MainWindowLayoutTest, R6BStreetAssetsCanBeDraggedMovedRotatedAndSaved) {
     std::ofstream state(root / "r6b-street.rmscene.json");
     state << R"({"scene_version":1,"view":{"distance":60,"pitch":1.56,"projection":"orthographic","target":[50,0,0],"yaw":-1.57}})";
   }
-  const std::array<const char*, 3> names{
-      "r6b-chodnik-20m", "r6b-drzewo", "r6b-latarnia"};
+  const std::array<const char*, 4> names{
+      "r6b-chodnik-20m", "r6b-drzewo", "r6b-latarnia", "r6b2-samochod"};
   LibraryManifest overlay;
   std::vector<QString> keys;
   std::vector<std::string> ids;
   for (const char* name : names) {
     AssetImportRequest request;
     request.source = std::filesystem::path(RM_ASSETS_DIR) /
-                     "prawko/blender/ulica_r6b" / (std::string(name) + ".glb");
+                     (std::string(name) == "r6b2-samochod"
+                         ? "prawko/blender/samochod_r6b2"
+                         : "prawko/blender/ulica_r6b") / (std::string(name) + ".glb");
     request.label = QString::fromUtf8(name);
     request.category = QStringLiteral("Prawko | Obiekty 3D");
     request.license = QStringLiteral("PrawkoNaRaz original asset, Apache-2.0");
@@ -726,7 +728,7 @@ TEST_F(MainWindowLayoutTest, R6BStreetAssetsCanBeDraggedMovedRotatedAndSaved) {
   ASSERT_GE(cat, 0);
   library->category_combo()->setCurrentIndex(cat);
   const auto* proxy = library->view()->model();
-  ASSERT_EQ(proxy->rowCount(), 3);
+  ASSERT_EQ(proxy->rowCount(), 4);
   auto* viewport = window_.viewport();
   viewport->resize(800, 500);
   viewport->set_camera_preset(QStringLiteral("ortho"));
@@ -791,7 +793,7 @@ TEST_F(MainWindowLayoutTest, R6BStreetAssetsCanBeDraggedMovedRotatedAndSaved) {
     EXPECT_NEAR(obj.s, it->station, 0.01);
     EXPECT_NEAR(obj.hdg, it->heading, 0.01);
   });
-  EXPECT_EQ(count, 3) << "All R6b GLBs should be mouse-draggable and persist";
+  EXPECT_EQ(count, 4) << "All R6b/R6b2 GLBs should be mouse-draggable and persist";
 }
 
 TEST_F(MainWindowLayoutTest, CuratedLibraryStaysAvailableAcrossMapAndScenarioModes) {

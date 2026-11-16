@@ -710,6 +710,79 @@ const osc::BoundingBox* actor_bounding_box(const osc::ScenarioObject& object) {
   return nullptr;
 }
 
+bool actor_uses_car_model(const osc::ScenarioObject& object) {
+  const auto* vehicle = std::get_if<osc::Vehicle>(&object.entity_object);
+  if (vehicle == nullptr || vehicle->category != "car") {
+    return false; // do not turn a pedestrian, bus or truck into a stretched sedan
+  }
+  const auto* model = props::model(kActorCarPropModelId);
+  return model != nullptr && !model->parts.empty();
+}
+
+std::vector<RenderMeshData> actor_car_meshes() {
+  // The project overlay is loaded before the scene is built. This is the exact
+  // same GLB as the draggable car asset; it is NOT a second hardcoded vehicle.
+  const auto* model = props::model(kActorCarPropModelId);
+  if (model == nullptr || model->parts.empty()) return {};
+  std::array<double, 3> lo{1e10, 1e10, 1e10}, hi{-1e10, -1e10, -1e10};
+  for (const auto& part : model->parts) {
+    for (std::size_t i = 0; i + 2 < part.positions.size(); i += 3) {
+      for (std::size_t axis = 0; axis < 3; ++axis) {
+        const double value = part.positions[i + axis];
+        if (!std::isfinite(value)) return {};
+        lo[axis] = std::min(lo[axis], value);
+        hi[axis] = std::max(hi[axis], value);
+      }
+    }
+  }
+  std::array<double, 3> span{};
+  for (int axis = 0; axis < 3; ++axis) {
+    span[axis] = hi[axis] - lo[axis];
+    if (!std::isfinite(span[axis]) || span[axis] < 0.1) return {};
+  }
+  // GLB imports centered in XY with its bottom at z=0. Normalize its ENTIRE
+  // geometry to the unit OSC actor box; actor_transform then applies the true
+  // per-actor length, width, height, rear-axle offset and animated pose.
+  std::vector<RenderMeshData> parts;
+  parts.reserve(model->parts.size());
+  for (const auto& part : model->parts) {
+    RenderMeshData mesh = to_render_data(
+        part.positions, part.normals, part.indices,
+        {part.color[0], part.color[1], part.color[2], part.opacity}, part.texcoords);
+    mesh.roughness = part.roughness;
+    mesh.gltf_pbr = part.gltf_pbr;
+    mesh.metallic = part.metallic;
+    mesh.base_color_texture = part.base_color_texture;
+    mesh.metallic_roughness_texture = part.metallic_roughness_texture;
+    mesh.normal_texture = part.normal_texture;
+    mesh.normal_strength = part.normal_strength;
+    mesh.alpha_mode = part.alpha_mode;
+    mesh.alpha_cutoff = part.alpha_cutoff;
+    mesh.transmission = part.transmission;
+    mesh.ior = part.ior;
+    for (std::size_t i = 0; i + 2 < mesh.positions.size(); i += 3) {
+      for (std::size_t axis = 0; axis < 3; ++axis) {
+        mesh.positions[i + axis] =
+            static_cast<float>((part.positions[i + axis] - lo[axis]) / span[axis] - .5);
+      }
+      // Inverse-transpose for anisotropic normalization of the vertex frame.
+      if (mesh.normals.size() == mesh.positions.size()) {
+        std::array<double, 3> normal{};
+        for (std::size_t axis = 0; axis < 3; ++axis) {
+          normal[axis] = part.normals[i + axis] * span[axis];
+        }
+        const double len = std::hypot(normal[0], normal[1], normal[2]);
+        if (len > 1e-8) {
+          for (std::size_t axis = 0; axis < 3; ++axis)
+            mesh.normals[i + axis] = static_cast<float>(normal[axis] / len);
+        }
+      }
+    }
+    parts.push_back(std::move(mesh));
+  }
+  return parts;
+}
+
 RenderMeshData actor_box_mesh() {
   // A unit cube on [-0.5, 0.5]^3, with FLAT per-face normals — so the six faces
   // shade distinctly and the box reads as a solid rather than as a smooth blob.
@@ -750,21 +823,22 @@ RenderMeshData actor_box_mesh() {
 void append_scenario_actors(const osc::Scenario& scenario,
                             const RoadNetwork& network,
                             Scene& scene) {
-  // One batch for every actor: they all instance the same unit cube, and the
-  // per-instance transform carries the dimensions. Created lazily so a scene
-  // with no actors uploads nothing at all.
-  ScenePropBatch* batch = nullptr;
+  // One batch for legacy actors; a second opt-in batch uses the SAME authored
+  // GLB as the project's draggable sedan. All transforms still use OSC box
+  // dimensions. Projects without that GLB retain the old box behaviour.
 
   for (const osc::Private& entry : scenario.storyboard.init.actions.privates) {
     // The entity this <Private> places, and its box. An entityRef naming no
     // entity is refused by the writer, so it cannot reach a saved file — but it
     // CAN exist mid-edit, and drawing a box for it would be inventing content.
     const osc::BoundingBox* box = nullptr;
+    bool use_car = false;
     for (const osc::ScenarioObject& object : scenario.entities.scenario_objects) {
       if (object.name != entry.entity_ref) {
         continue;
       }
       box = actor_bounding_box(object);
+      use_car = actor_uses_car_model(object);
       break;
     }
     if (box == nullptr) {
@@ -782,9 +856,24 @@ void append_scenario_actors(const osc::Scenario& scenario,
         continue;
       }
 
+      const std::string model_id = use_car ? kActorCarModelId : kActorBoxModelId;
+      ScenePropBatch* batch = nullptr;
+      for (ScenePropBatch& candidate : scene.prop_batches) {
+        if (candidate.model_id == model_id) {
+          batch = &candidate;
+          break;
+        }
+      }
       if (batch == nullptr) {
-        scene.prop_batches.push_back(ScenePropBatch{
-            .model_id = kActorBoxModelId, .parts = {actor_box_mesh()}, .instances = {}});
+        ScenePropBatch created;
+        created.model_id = model_id;
+        created.parts = use_car ? actor_car_meshes()
+                                : std::vector<RenderMeshData>{actor_box_mesh()};
+        if (created.parts.empty()) { // damaged/unavailable GLB: always display actor
+          created.model_id = kActorBoxModelId;
+          created.parts = {actor_box_mesh()};
+        }
+        scene.prop_batches.push_back(std::move(created));
         batch = &scene.prop_batches.back();
       }
       batch->instances.push_back(

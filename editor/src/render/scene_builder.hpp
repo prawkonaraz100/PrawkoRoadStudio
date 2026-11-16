@@ -151,6 +151,16 @@ actor_transform(const std::array<double, 3>& position,
 
 [[nodiscard]] const osc::BoundingBox* actor_bounding_box(const osc::ScenarioObject& object);
 inline constexpr const char* kActorBoxModelId = "rm:actor_box";
+inline constexpr const char* kActorCarModelId = "rm:actor_car_r6b2";
+inline constexpr const char* kActorCarPropModelId = "r6b2-samochod";
+
+/// Opt-in: only vehicleCategory=car uses the authored project-local GLB.
+/// Other actor categories and projects lacking the GLB retain the box fallback.
+[[nodiscard]] bool actor_uses_car_model(const osc::ScenarioObject& object);
+
+/// Normalize the genuine GLB vertices to the OSC actor unit box [-0.5,0.5]^3.
+/// Uses per-part source material and texcoords, never invents replacement geometry.
+[[nodiscard]] std::vector<RenderMeshData> actor_car_meshes();
 
 /// The shared unit-cube geometry every actor box instances, spanning
 /// [-0.5, 0.5] on each axis with flat per-face normals.

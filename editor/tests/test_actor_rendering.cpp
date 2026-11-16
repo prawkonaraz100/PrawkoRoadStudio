@@ -25,6 +25,7 @@
 //      along its own heading; adding it unrotated would push every actor east,
 //      which looks correct for exactly the one actor heading along +x.
 
+#include "roadmaker/assets/prop_import.hpp"
 #include "roadmaker/edit/operations.hpp"
 #include "roadmaker/osc/catalog.hpp"
 #include "roadmaker/osc/edit.hpp"
@@ -32,6 +33,7 @@
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <filesystem>
 #include <numbers>
 #include <string>
 
@@ -137,6 +139,74 @@ TEST(RenderLightingR4b3a, VehicleHeadlightsFollowWorldHeadingAndDimensions) {
   EXPECT_GT(std::hypot(lamps.positions[0][0] - lamps.positions[1][0],
                        lamps.positions[0][1] - lamps.positions[1][1]), 0.5F);
   EXPECT_FLOAT_EQ(time_of_day_lighting(TimeOfDay::Night).traffic_headlights.intensity, 0.0F);
+}
+
+TEST(ActorRenderingR6b2, ProjectCarGlbReplacesOnlyCarBoxesAndKeepsOscTransform) {
+  // A project overlay is OPTIONAL. Without a valid GLB the legacy cube path
+  // remains usable for old projects and for all non-car actor categories.
+  props::clear_project_models();
+  struct RestoreOverlay { ~RestoreOverlay() { props::clear_project_models(); } } restore;
+  auto car = osc::make_actor(osc::ActorKind::Car, "Car1");
+  auto truck = osc::make_actor(osc::ActorKind::Truck, "Truck1");
+  auto pedestrian = osc::make_actor(osc::ActorKind::Pedestrian, "Walker");
+  EXPECT_FALSE(actor_uses_car_model(car));
+  EXPECT_FALSE(actor_uses_car_model(truck));
+  EXPECT_FALSE(actor_uses_car_model(pedestrian));
+  auto imported = props::import_prop_model(
+      std::filesystem::path(RM_ASSETS_DIR) /
+          "prawko/blender/samochod_r6b2/r6b2-samochod.glb",
+      kActorCarPropModelId);
+  ASSERT_TRUE(imported.has_value()) << imported.error().message;
+  ASSERT_EQ(imported->model.parts.size(), 7U);
+  std::vector<props::PropModel> models;
+  models.push_back(std::move(imported->model));
+  props::register_project_models(std::move(models));
+  EXPECT_TRUE(actor_uses_car_model(car));
+  EXPECT_FALSE(actor_uses_car_model(truck));
+  EXPECT_FALSE(actor_uses_car_model(pedestrian));
+
+  const auto meshes = actor_car_meshes();
+  ASSERT_EQ(meshes.size(), 7U);
+  std::array<float, 3> lo{10, 10, 10}, hi{-10, -10, -10};
+  for (const auto& mesh : meshes) {
+    ASSERT_EQ(mesh.positions.size(), mesh.normals.size());
+    EXPECT_GT(mesh.indices.size(), 100U);
+    for (std::size_t i = 0; i + 2 < mesh.positions.size(); i += 3) {
+      for (std::size_t a = 0; a < 3; ++a) {
+        lo[a] = std::min(lo[a], mesh.positions[i+a]);
+        hi[a] = std::max(hi[a], mesh.positions[i+a]);
+      }
+    }
+  }
+  for (std::size_t axis = 0; axis < 3; ++axis) {
+    EXPECT_NEAR(lo[axis], -.5F, 1e-4F);
+    EXPECT_NEAR(hi[axis], +.5F, 1e-4F);
+  }
+
+  Document doc;
+  author_straight_road(doc);
+  const std::string road = road_odr_id(doc);
+  place(doc, "Car1", lane_at(road, "-1", 50.0));
+  ASSERT_TRUE(doc.push_scenario_command(osc::edit::place_scenario_object(
+      doc.scenario(), truck, lane_at(road, "-1", 75.0))).has_value());
+  const Scene scene = build_with_actors(doc);
+  int car_count = 0, box_count = 0;
+  for (const auto& batch : scene.prop_batches) {
+    if (batch.model_id == kActorCarModelId) {
+      ASSERT_EQ(batch.instances.size(), 1U);
+      EXPECT_EQ(batch.instances.front().actor, "Car1");
+      EXPECT_EQ(batch.parts.size(), 7U);
+      EXPECT_NEAR(batch.instances.front().transform.model[0],
+                  osc::actor_archetype(osc::ActorKind::Car).length, 1e-4);
+      ++car_count;
+    } else if (batch.model_id == kActorBoxModelId) {
+      ASSERT_EQ(batch.instances.size(), 1U);
+      EXPECT_EQ(batch.instances.front().actor, "Truck1");
+      ++box_count;
+    }
+  }
+  EXPECT_EQ(car_count, 1);
+  EXPECT_EQ(box_count, 1);
 }
 
 TEST(ActorRendering, AnEmptyScenarioAddsNoBatchAtAll) {

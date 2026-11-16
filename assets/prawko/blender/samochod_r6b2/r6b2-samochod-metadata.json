@@ -1,0 +1,16 @@
+{
+  "name": "R6b2 compact sedan",
+  "dimensions_m": [
+    4.591,
+    1.919,
+    1.425
+  ],
+  "parts": 7,
+  "units": "metres",
+  "forward": "+X",
+  "up": "+Z",
+  "blender": "5.3.0",
+  "glb_bytes": 658152,
+  "orientation": "fixed normalized actor bounding box",
+  "material_count": 7
+}

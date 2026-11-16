@@ -65,6 +65,19 @@
         "license": "Apache-2.0 — autorski model PrawkoNaRaz"
       },
       "thumbnail": "assets/library/thumbnails/r6b-latarnia.png"
+    },
+    {
+      "key": "prop.r6b2-samochod",
+      "label": "Samochód osobowy | Prawko R6b2",
+      "category": "Prawko | Obiekty 3D",
+      "create": {
+        "kind": "tree",
+        "model": "r6b2-samochod",
+        "model_file": "assets/props/r6b2-samochod.glb",
+        "source": "assets/prawko/blender/samochod_r6b2/r6b2-samochod.glb",
+        "license": "Apache-2.0 — autorski model PrawkoNaRaz"
+      },
+      "thumbnail": "assets/library/thumbnails/r6b2-samochod.png"
     }
   ]
 }

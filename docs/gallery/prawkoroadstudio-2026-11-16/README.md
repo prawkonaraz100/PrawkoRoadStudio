@@ -28,3 +28,16 @@ Wszystkie zrzuty Qt pochodzÄ… bezpoĹ›rednio z PrawkoRoadStudio Windows/Ope
 - r6b-blender-chodnik.png, r6b-blender-drzewo.png, r6b-blender-latarnia.png â€” niezaleĹĽne podglÄ…dy Cycles oryginalnych assetĂłw, NIE zrzuty edytora
 
 WaĹĽne ograniczenia: trawnik/teren pozostaje rozlegĹ‚y i jednorodny, korony drzew sÄ… jeszcze uproszczone, samochody nadal sÄ… zastÄ™pczymi bryĹ‚ami, a latarnie sÄ… wyĹ‚Ä…cznie obiektami 3D bez emitowania Ĺ›wiatĹ‚a w nocy. Nie uznawaÄ‡ tego etapu za koĹ„cowy realizm wizualny.
+
+## R6b2 - rzeczywisty samochod GLB i dynamiczna scena (16.11.2026)
+
+Wszystkie ponizsze zrzuty Qt wykonano w PrawkoRoadStudio na Windows OpenGL 3.3. Model samochodu, jego zrodlo .blend, generator .py i oryginalny GLB sa w assets/prawko/blender/samochod_r6b2/.
+
+- r6b2-qt-ulica-samochod.png: rzeczywisty renderer Qt 866x783, samochod zamiast pomaranczowej bryly na scenie 06c-r6b2-samochody
+- r6b2-qt-samochod-zblizenie.png: zblizenie samochodu na scenie Qt, prawdziwe kola i przeszklenie (866x783)
+- r6b2-porownanie-bryla-samochod.png: dwa oryginalne rendery sceny sprzed i po zmianie, ta sama kamera
+- r6b2-blender-samochod.png: autorski render Blender Cycles, NIE zrzut Qt
+- r6b2-esmini-jazda-6s.mp4: 72 klatki natywnego ruchu esmini OpenGL, 960x540 / 6 sekund / 12 FPS, 3 lusterka
+- r6b2-esmini-kadr-0s.png i r6b2-esmini-kadr-4s.png: dwie klatki pochodzace z rzeczywistego testu MP4
+
+Ograniczenia: to jeszcze niskopoligonowa karoseria, bez animacji obrotu kol i bez fizycznej refrakcji. Dotychczasowe reflektory dynamiczne pozostaja logika silnika, nie modelem lampy. Inne kategorie pojazdow oraz projekty bez tego GLB nadal korzystaja z bryl zastepczych. Teren nadal jest zbyt jednolity.

@@ -290,7 +290,8 @@ void ViewportWidget::rebuild_scene() {
     UploadedPropBatch uploaded;
     uploaded.model_id = batch.model_id;
     uploaded.parts.reserve(batch.parts.size());
-    const props::PropModel* prop_model = props::model(batch.model_id);
+    const props::PropModel* prop_model = props::model(
+        batch.model_id == kActorCarModelId ? kActorCarPropModelId : batch.model_id);
     if (prop_model != nullptr) {
       uploaded.imported_textures.reserve(prop_model->textures.size());
       for (const props::PropTexture& image : prop_model->textures) {
@@ -735,6 +736,10 @@ ViewportWidget::simulation_frame(const QVector<SimulationActorPose>& poses,
   SimulationFrame frame;
   frame.time_seconds = time_seconds;
   frame.actors.reserve(static_cast<std::size_t>(poses.size()));
+  frame.cars.reserve(static_cast<std::size_t>(poses.size()));
+  const bool car_mesh_ready = std::ranges::any_of(prop_batches_, [](const auto& batch) {
+    return batch.model_id == kActorCarModelId && !batch.parts.empty();
+  });
   const auto& objects = document_.scenario().entities.scenario_objects;
   for (const auto& pose : poses) {
     const auto object = std::ranges::find(objects, pose.actor_name.toStdString(),
@@ -749,8 +754,12 @@ ViewportWidget::simulation_frame(const QVector<SimulationActorPose>& poses,
           frame.steering_wheel_rad = static_cast<float>(
               std::clamp(pose.steering_angle_rad, -2.6, 2.6));
         } else {
-          frame.actors.push_back(actor_transform(pose.position, pose.heading, *box,
-                                                 pose.pitch, pose.roll));
+          const InstanceData transform = actor_transform(pose.position, pose.heading, *box,
+                                                         pose.pitch, pose.roll);
+          if (car_mesh_ready && actor_uses_car_model(*object))
+            frame.cars.push_back(transform);
+          else
+            frame.actors.push_back(transform);
         }
       }
     }
@@ -868,6 +877,18 @@ void ViewportWidget::render_frame(const OrbitCamera& camera, const QSize& size,
   };
   for (const UploadedPropBatch& batch : prop_batches_) {
     if (simulation_frame_ && batch.model_id == kActorBoxModelId) {
+      continue; // all transient non-car actors were submitted above
+    }
+    if (simulation_frame_ && batch.model_id == kActorCarModelId) {
+      // The exact authored GLB parts/materials from the static scene, but the
+      // actor pose now comes from the live esmini frame rather than XOSC Init.
+      for (std::size_t i = 0; i < batch.parts.size(); ++i) {
+        if (!simulation_frame_->cars.empty()) {
+          draw_items.push_back(DrawItem{.mesh = batch.parts[i],
+                                        .material = imported_material(batch, i),
+                                        .instances = simulation_frame_->cars});
+        }
+      }
       continue;
     }
     if (!show_editing) {

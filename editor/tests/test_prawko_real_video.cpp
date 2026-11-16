@@ -19,7 +19,10 @@
 #include <set>
 #include <QRect>
 
+#include "roadmaker/assets/prop_library.hpp"
+#include "document/asset_import.hpp"
 #include "document/document.hpp"
+#include "document/library_manifest.hpp"
 #include "document/esmini_simulation.hpp"
 #include "document/scenario_video_export.hpp"
 #include "document/selection_model.hpp"
@@ -38,6 +41,25 @@ TEST(PrawkoRealVideo, DriverViewStreamsActualTrafficAndMirrorsToMp4) {
                                            QStringLiteral("01-miasto-lusterka"));
   const auto src=std::filesystem::path(RM_REPO_ROOT_DIR) /
       "projects/Prawko-Scenariusze" / (base.toStdString()+".xodr");
+  // R6b2 opt-in integration proof loads the same project overlay as MainWindow.
+  // Document::load alone intentionally does not register a project's GLB assets.
+  // Keep existing generic proof behaviour untouched for every other scene.
+  const bool r6b2_car_proof = base == QStringLiteral("06c-r6b2-samochody");
+  struct OverlayCleanup {
+    bool registered = false;
+    ~OverlayCleanup() { if (registered) props::clear_project_models(); }
+  } cleanup;
+  if (r6b2_car_proof) {
+    const auto project_dir = src.parent_path();
+    const auto manifest = LibraryManifest::load(project_dir / "assets/library/manifest.json");
+    ASSERT_TRUE(manifest.has_value()) << manifest.error().message;
+    cleanup.registered = true;
+    const auto diagnostics = register_project_prop_models(project_dir, *manifest);
+    ASSERT_TRUE(props::model("r6b2-samochod") != nullptr)
+        << "R6b2 dynamic proof requires the actual authored GLB";
+    ASSERT_TRUE(diagnostics.empty())
+        << "R6b2 asset catalog must import without diagnostics";
+  }
   const auto exe=std::filesystem::path(RM_REPO_ROOT_DIR) /
       "toolchain/esmini-v3.11.0/esmini/bin/esmini.exe";
   if(!std::filesystem::exists(exe))GTEST_SKIP() << "Install the official esmini binary first";

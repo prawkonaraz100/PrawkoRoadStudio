@@ -365,7 +365,8 @@ private:
                                  bool windshield_only = false);
   static void draw_driver_dashboard(QPainter& painter, const QSize& size, float speed_kmh);
   struct SimulationFrame {
-    std::vector<InstanceData> actors;
+    std::vector<InstanceData> actors; // legacy box proxies: pedestrian/truck/missing GLB
+    std::vector<InstanceData> cars;   // R6b2 opt-in GLB car, same OSC actor_transform
     std::optional<TrafficHeadlights> traffic_headlights;
     std::optional<DriverCamera> driver;
     float driver_speed_kmh = 0.0F;
