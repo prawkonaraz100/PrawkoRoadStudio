@@ -1080,6 +1080,33 @@ void ViewportWidget::render_frame(const OrbitCamera& camera, const QSize& size,
     environment.traffic_headlights.intensity =
         time_of_day_ == TimeOfDay::Night ? 11.0F : 4.8F;
   }
+  // R6b2e: actual editable GLB poles provide world-space light emitters.
+  // No street light in day or Sober. Static night renders and esmini share this.
+  // Capture A/B proof can disable ONLY these lamps without editing the scene.
+  if (textured_rendering_ &&
+      (time_of_day_ == TimeOfDay::Dusk || time_of_day_ == TimeOfDay::Night) &&
+      !qEnvironmentVariableIsSet("PRAWKO_R6B2E_PROOF_DISABLE_STREETLIGHTS")) {
+    std::vector<std::pair<float,StreetLamp>> nearby;
+    for (const UploadedPropBatch& batch : prop_batches_) {
+      if (batch.model_id != "r6b-latarnia") continue;
+      for (const InstanceData& instance : batch.transforms) {
+        const StreetLamp lamp = street_lamp_from_prop(instance);
+        float distance2 = 0.0F;
+        for (int j=0; j<3; ++j) {
+          const float delta = lamp.position[j] - matrices.eye[j];
+          distance2 += delta*delta;
+        }
+        nearby.emplace_back(distance2,lamp);
+      }
+    }
+    std::stable_sort(nearby.begin(), nearby.end(),
+         [](const auto& a, const auto& b) { return a.first < b.first; });
+    auto& active = environment.street_lights;
+    active.count = static_cast<int>(std::min<std::size_t>(nearby.size(),kMaxStreetLamps));
+    active.intensity = time_of_day_ == TimeOfDay::Night ? 3.0F : 1.3F;
+    for (int i=0; i<active.count; ++i)
+      active.lamps[static_cast<std::size_t>(i)] = nearby[static_cast<std::size_t>(i)].second;
+  }
   renderer_->set_environment(environment);
   renderer_->render(draw_items, matrices, size.width(), size.height());
   if (clean_capture_ || driver_view) {

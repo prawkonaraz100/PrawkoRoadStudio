@@ -123,6 +123,26 @@ TEST(RenderLightingR4b2, SkyBounceAndHeadlightsAreOptIn) {
                                        SeasonPreset::Winter).headlight_intensity,0.0F);
 }
 
+TEST(RenderLightingR6b2e, StreetlampEmitterFollowsPhysicalFixtureAndPropRotation) {
+  const InstanceData straight = prop_transform({62.0,-8.3,0.0},0.0,1.0);
+  const StreetLamp a = street_lamp_from_prop(straight);
+  EXPECT_NEAR(a.position[0],62.0F,1e-4F);
+  EXPECT_NEAR(a.position[1],-6.8F,1e-4F);
+  EXPECT_NEAR(a.position[2],5.43F,1e-4F);
+  EXPECT_LT(a.direction[2],-0.99F);
+  const InstanceData turned = prop_transform({62.0,-8.3,0.0},std::numbers::pi/2,1.0);
+  const StreetLamp b = street_lamp_from_prop(turned);
+  EXPECT_NEAR(b.position[0],60.5F,1e-4F);
+  EXPECT_NEAR(b.position[1],-8.3F,1e-4F);
+  EXPECT_NEAR(b.position[2],5.43F,1e-4F);
+  const InstanceData moved = prop_transform({10.,20.,0.},0.,0.5);
+  const StreetLamp c = street_lamp_from_prop(moved);
+  EXPECT_NEAR(c.position[1],20.75F,1e-4F);
+  EXPECT_NEAR(c.position[2],2.715F,1e-4F);
+  EXPECT_EQ(Environment{}.street_lights.count,0);
+  EXPECT_FLOAT_EQ(time_of_day_lighting(TimeOfDay::Night).street_lights.intensity,0.0F);
+}
+
 TEST(RenderLightingR4b3a, VehicleHeadlightsFollowWorldHeadingAndDimensions) {
   const auto car = osc::make_actor(osc::ActorKind::Car, "TrafficCar");
   const auto* box = actor_bounding_box(car);

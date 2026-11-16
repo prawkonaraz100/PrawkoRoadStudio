@@ -81,3 +81,16 @@ Modelami ĹşrĂłdĹ‚owymi sa wlasne .blend/.glb w assets/prawko/blender/styk
 - r6b2d-blender-przejscie-pbr.png, r6b2d-blender-styk-pbr.png - osobne rendery Cycles, nie zrzuty Qt
 
 Ograniczenia: nawierzchnie sa proceduralnymi autorskimi materialami PBR oraz wyodrebniona geometria, ale nie fotogrametria. Nie ma docelowych mokrych odbic SSR ani fizycznych kaustyk. Dalsza praca to zgodnosc granic terenu, roznorodnosc budynkow i lokalne mokre materialy.
+
+## R6b2e - dzialajace nocne latarnie (16.11.2026)
+
+Zrodlo jest w rzeczywistym PrawkoRoadStudio Windows/OpenGL 3.3. Lampy wynikaja z pozycji/obrotu modelu r6b-latarnia, swieca tylko o zmierzchu/noca i oswietlaja rzeczywiste 3D mesh i podloze w shaderach. Scena testowa 06g-r6b2e-latarnie-noc.* to kopia 06f, z dwiema dodatkowymi latarniami przy sciezce; poprzednie sceny sa niezmienione. A/B w tych zdjeciach to IDENTYCZNA scena/kamera/pora, rozniaca sie wylacznie eksperymentalnym wyciszeniem oswietlenia latarni przez zmienna PRAWKO_R6B2E_PROOF_DISABLE_STREETLIGHTS.
+- r6b2e-porownanie-noc-calosc.png - screenshoty Qt NOC OFF i ON z identycznej kamery, nie fotomontaz AI
+- r6b2e-porownanie-noc-przejscie.png - screenshoty Qt przy przejsciu OFF i ON
+- r6b2e-qt-wide-day-off.png / r6b2e-qt-wide-day-on.png - techniczna kontrola ze dzien pozostal niezmieniony
+- r6b2e-qt-wide-night-off.png / r6b2e-qt-wide-night-on.png - surowe screenshoty calej sceny noca
+- r6b2e-qt-path-night-off.png / r6b2e-qt-path-night-on.png - surowe screenshoty przejscia noca
+- r6b2e-qt-path-dusk-on.png - widok o zmierzchu
+- r6b2e-qt-path-rain-night-on.png - widok noca podczas deszczu
+
+Granica modelu: ograniczona dyfuzyjna emisja swiatla ze swiata 3D, nie pelne ray-tracing/IES, brak osobnych map cienia od latarni i pelnych refleksow mokrej nawierzchni. Nie deklarowac fotometrycznej poprawnosci.

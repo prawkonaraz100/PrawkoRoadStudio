@@ -143,6 +143,10 @@ private:
   std::int32_t u_traffic_headlight_right_ = -1;
   std::int32_t u_traffic_headlight_forward_ = -1;
   std::int32_t u_traffic_headlight_intensity_ = -1;
+  std::int32_t u_street_count_ = -1;
+  std::int32_t u_street_intensity_ = -1;
+  std::array<std::int32_t,kMaxStreetLamps> u_street_pos_{};
+  std::array<std::int32_t,kMaxStreetLamps> u_street_dir_{};
   std::uint32_t shadow_program_ = 0;
   std::uint32_t shadow_fbo_ = 0;
   std::uint32_t shadow_depth_ = 0;
@@ -208,6 +212,10 @@ private:
   std::int32_t u_ground_traffic_headlight_right_ = -1;
   std::int32_t u_ground_traffic_headlight_forward_ = -1;
   std::int32_t u_ground_traffic_headlight_intensity_ = -1;
+  std::int32_t u_ground_street_count_ = -1;
+  std::int32_t u_ground_street_intensity_ = -1;
+  std::array<std::int32_t,kMaxStreetLamps> u_ground_street_pos_{};
+  std::array<std::int32_t,kMaxStreetLamps> u_ground_street_dir_{};
 
   bool ready_ = false;
 };

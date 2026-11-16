@@ -217,6 +217,32 @@ struct TrafficHeadlights {
   return lights;
 }
 
+// R6b2e: world-space downward light from the authored r6b-latarnia GLB fixture.
+ // Nothing happens until dusk/night AND a real pole instance exists.
+inline constexpr std::size_t kMaxStreetLamps = 4;
+struct StreetLamp {
+  std::array<float,3> position{};
+  std::array<float,3> direction{0.0F,0.0F,-1.0F};
+};
+[[nodiscard]] inline StreetLamp street_lamp_from_prop(const InstanceData& prop) {
+  StreetLamp lamp;
+  const auto& m = prop.model;
+  float length_sq = 0.0F;
+  for (int j = 0; j < 3; ++j) {
+    lamp.position[j] = m[12+j] + 1.50F*m[4+j] + 5.43F*m[8+j];
+    lamp.direction[j] = -m[8+j] - 0.035F*m[4+j];
+    length_sq += lamp.direction[j]*lamp.direction[j];
+  }
+  const float inv = 1.0F/std::sqrt(std::max(0.001F,length_sq));
+  for (float& v : lamp.direction) v *= inv;
+  return lamp;
+}
+struct StreetLights {
+  std::array<StreetLamp,kMaxStreetLamps> lamps{};
+  int count = 0;
+  float intensity = 0.0F;
+};
+
 /// Scene lighting + sky description (all plain floats — theme/render boundary
 /// stays Qt- and GL-free). Hemisphere ambient (sky/ground lerp by normal.z) +
 /// one directional sun; R4 shadow maps are enabled only for Textured mode. The DEFAULT values are
@@ -244,6 +270,7 @@ struct Environment {
   std::array<float, 3> headlight_forward{1.0F, 0.0F, 0.0F};
   float headlight_intensity = 0.0F;
   TrafficHeadlights traffic_headlights{}; // nearest other vehicle, opt-in
+  StreetLights street_lights{}; // selected actual poles, dusk/night only
 };
 
 /// S3.3: shared time-of-day presets for all cameras, including mirror FBOs
