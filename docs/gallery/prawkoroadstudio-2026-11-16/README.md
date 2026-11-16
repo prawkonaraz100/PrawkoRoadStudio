@@ -41,3 +41,15 @@ Wszystkie ponizsze zrzuty Qt wykonano w PrawkoRoadStudio na Windows OpenGL 3.3. 
 - r6b2-esmini-kadr-0s.png i r6b2-esmini-kadr-4s.png: dwie klatki pochodzace z rzeczywistego testu MP4
 
 Ograniczenia: to jeszcze niskopoligonowa karoseria, bez animacji obrotu kol i bez fizycznej refrakcji. Dotychczasowe reflektory dynamiczne pozostaja logika silnika, nie modelem lampy. Inne kategorie pojazdow oraz projekty bez tego GLB nadal korzystaja z bryl zastepczych. Teren nadal jest zbyt jednolity.
+
+## R6b2b - rzeczywiste zielen i teren 3D (16.11.2026)
+
+Kazdy z trzech assetow jest autorskim modelem Blender, zrodlowy .blend + .glb + generator Python znajduje sie w assets/prawko/blender/teren_r6b2b/. Miniatury i kopie GLB zostaly wpisane do biblioteki Prawko-Scenariusze. Odrebna scena 06d-r6b2b-naturalne-otoczenie zawiera dodatkowe 5 pasow zieleni, 2 rabaty i 2 sciezki. Oryginalne sceny pozostaly nienaruszone.
+
+- r6b2b-qt-calosc.png â€” faktyczny PrawkoRoadStudio Windows/OpenGL, ten sam kadr co 06c w R6b2a
+- r6b2b-qt-pas-zieleni.png â€” rzeczywisty Qt: zblizenie przyulicznych kep i krzewow
+- r6b2b-qt-ogrody.png â€” rzeczywisty Qt: rabaty i mineralne sciezki za kamienicami
+- r6b2b-porownanie-przed-po.png â€” porownanie prawdziwych zrzutow Qt sprzed i po, ta sama kamera; R6b2b korzysta dodatkowo z czterech skal szumu podloza
+- r6b2b-blender-pas-zieleni.png, r6b2b-blender-rabata.png, r6b2b-blender-sciezka.png â€” osobne autorskie rendery Cycles; NIE udawaja ekranow Qt
+
+Nadal nie jest to fotorealizm: brakuje urozmaicenia architektury wszystkich segmentow, trawa w oddali jest shaderem proceduralnym, a korony starszych drzew R6b1 wymagaja osobnej poprawy. Docelowo naturalne otoczenie bedzie wypracowane seria niezaleznych komponentow 3D, bez sztucznego stockowego tla.

@@ -1,0 +1,13 @@
+{
+  "title": "Sciezka zwirowa 12 m",
+  "dimensions_m": [
+    12.0,
+    1.618,
+    0.23
+  ],
+  "mesh_parts": 6,
+  "glb_bytes": 211316,
+  "blender": "5.3.0",
+  "metres_Z_up": true,
+  "pivot": "GLB loader centres XY and base Z"
+}

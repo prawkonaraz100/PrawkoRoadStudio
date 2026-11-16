@@ -1,0 +1,13 @@
+{
+  "title": "Rabata ogrodowa 14 m",
+  "dimensions_m": [
+    14.0,
+    6.493,
+    0.991
+  ],
+  "mesh_parts": 11,
+  "glb_bytes": 824300,
+  "blender": "5.3.0",
+  "metres_Z_up": true,
+  "pivot": "GLB loader centres XY and base Z"
+}

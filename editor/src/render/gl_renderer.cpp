@@ -496,14 +496,27 @@ float value_noise(vec2 p) {
 }
 
 void main() {
-  // Two octaves of value noise (~1 m and ~5 m) for subtly mottled grass.
-  float n = 0.65 * value_noise(v_world) + 0.35 * value_noise(v_world * 0.2);
-  vec3 grass = mix(vec3(0.20, 0.32, 0.15), vec3(0.34, 0.46, 0.22), n);
+  // R6b2b: world-metric, non-tiling ecological variation at four scales.
+  // Large patches (12-30 m), soil/moisture bands (3-5 m), grass blades (<1 m)
+  // and fine roughness (<0.4 m) break the uniform-green lawn without adding
+  // thousands of meshes to the infinite background. The real 3D foreground
+  // is authored separately as moveable GLB verge, flowerbed and gravel path.
+  float broad = value_noise(v_world * 0.055);
+  float moist = value_noise(v_world * 0.24 + vec2(7.9, -13.7));
+  float small = value_noise(v_world * 1.45);
+  float detail = value_noise(v_world * vec2(3.8, 2.9));
+  float n = 0.38*broad + 0.36*moist + 0.19*small + 0.07*detail;
+  vec3 grass = mix(vec3(0.18, 0.30, 0.14), vec3(0.36, 0.455, 0.24), n);
   if (u_season > 0.5 && u_season < 1.5) {
     grass = mix(vec3(0.29, 0.24, 0.11), vec3(0.48, 0.37, 0.18), n);
   } else if (u_season >= 1.5) {
     grass = mix(vec3(0.29, 0.32, 0.28), vec3(0.43, 0.46, 0.38), n);
   }
+  // Irregular muted worn areas, not repeating circular spots or fake paths.
+  // Dryness is subtle and is reduced in winter when ground is snow-covered.
+  float wear = smoothstep(0.56, 0.77, broad*0.62 + moist*0.38);
+  grass = mix(grass, grass*vec3(0.83,0.80,0.70), wear*0.31);
+  grass *= 0.965 + 0.07*detail;
 
   // Flat +Z surface lit by the scene environment (matches the mesh shader for
   // an up-facing normal): hemisphere sky ambient + one directional sun.

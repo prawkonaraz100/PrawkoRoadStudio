@@ -1,0 +1,13 @@
+{
+  "title": "Pas zieleni 20 m",
+  "dimensions_m": [
+    20.0,
+    2.98,
+    0.841
+  ],
+  "mesh_parts": 10,
+  "glb_bytes": 636204,
+  "blender": "5.3.0",
+  "metres_Z_up": true,
+  "pivot": "GLB loader centres XY and base Z"
+}
