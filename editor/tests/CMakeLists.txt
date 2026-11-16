@@ -232,4 +232,5 @@ if(WIN32)
 endif()
 
 gtest_discover_tests(roadmaker_editor_tests
+  DISCOVERY_TIMEOUT 45 # slow Windows CI/debug link: still discover ALL tests, never skip
   PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

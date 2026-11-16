@@ -1072,6 +1072,9 @@ void ViewportWidget::render_frame(const OrbitCamera& camera, const QSize& size,
   environment.planar_puddles_enabled = textured_rendering_ &&
       environment.pbr_wetness > 0.05F &&
       !qEnvironmentVariableIsSet("PRAWKO_R6B2H_PROOF_DISABLE_PLANAR");
+  // Qt owns the proof switch; core GL renderer stays Qt-free.
+  environment.planar_second_level_enabled =
+      !qEnvironmentVariableIsSet("PRAWKO_R6B2J_PROOF_DISABLE_SECOND_LEVEL");
   if (textured_rendering_ && simulation_frame_ && simulation_frame_->driver &&
       (time_of_day_ == TimeOfDay::Dusk || time_of_day_ == TimeOfDay::Night)) {
     const DriverCamera& driver = *simulation_frame_->driver;

@@ -135,6 +135,11 @@ uniform int u_water_surface;
 uniform int u_planar_enabled;
 uniform sampler2D u_planar_texture;
 uniform mat4 u_planar_vp;
+uniform sampler2D u_planar_secondary_texture;
+uniform mat4 u_planar_secondary_vp;
+uniform float u_planar_primary_z;
+uniform float u_planar_secondary_z;
+uniform int u_planar_secondary_active;
 uniform float u_planar_clip_z;
 uniform vec3 u_emissive;
 uniform float u_snow_cover;
@@ -218,14 +223,14 @@ vec3 headlight_lighting(vec3 world, vec3 normal) {
                            u_headlight_intensity)
        + cone_pair_lighting(world, normal, u_traffic_headlight_left,
                            u_traffic_headlight_right, u_traffic_headlight_forward,
-                           u_traffic_headlight_intensity);
+)")
+  + R"(                           u_traffic_headlight_intensity);
 }
 
 // Real-world source from the 3D luminaire, aimed downward with warm 3000K
 // approximation, bounded radius and distance attenuation. No fake halo.
 // This is DIRECT diffuse lighting, not a streetlamp occlusion shadow map.
-)")
-  + R"(// R6b2f: occlusion is sampled from the SAME physical light source and cone.
+// R6b2f: occlusion is sampled from the SAME physical light source and cone.
 // 2x2 PCF, depth compare against the matching per-light perspective texture.
 // GLSL 3.3 requires compile-time sampler indexing, hence four named uniforms.
 float street_visibility(int i, vec3 world, vec3 surface_normal, vec3 ray) {
@@ -358,7 +363,8 @@ void main() {
                         (1.0+0.05*d2);
         float nl = max(dot(n,light_dir),0.0);
         vec3 half_vec = normalize(light_dir+V);
-        float nh = max(dot(n,half_vec),0.0);
+)"
+  + R"(        float nh = max(dot(n,half_vec),0.0);
         float highlight = pow(nh,mix(112.0,17.0,pbr_rough));
         float visibility = street_visibility(i,v_world_pos,n,outgoing);
         wet_lamp_reflection += vec3(1.0,0.78,0.52) *
@@ -366,8 +372,7 @@ void main() {
              (0.35+0.9*wet));
       }
     }
-)"
-  + R"(    // Low-frequency hemispheric approximation, not an environment cubemap
+    // Low-frequency hemispheric approximation, not an environment cubemap
     // or ray-traced reflection. Metal receives the sky color, not fake plastic.
     vec3 reflection_ambient = mix(u_ground_light, u_sky_light,
                                   clamp(0.5 + 0.5 * n.z, 0.0, 1.0)) *
@@ -412,7 +417,13 @@ void main() {
     base = mix(base,vec3(0.055,0.078,0.092),0.63);
   }
   if (u_water_surface == 1 && u_planar_enabled == 1) {
-    vec4 q = u_planar_vp*vec4(v_world_pos,1.0);
+    // This is the actual WATER mesh height. Match to nearest rendered
+    // mirror plane rather than sampling the road-level view on a sidewalk.
+    bool elevated = u_planar_secondary_active == 1 &&
+        abs(v_world_pos.z-u_planar_secondary_z) + 0.018 <
+        abs(v_world_pos.z-u_planar_primary_z);
+    mat4 vp = elevated ? u_planar_secondary_vp : u_planar_vp;
+    vec4 q = vp*vec4(v_world_pos,1.0);
     if (q.w > 0.001) {
       vec2 screen_uv = q.xy/q.w*0.5+0.5;
       vec2 ripple = vec2(sin(v_world_pos.x*17.0+v_world_pos.y*8.0),
@@ -420,7 +431,9 @@ void main() {
       screen_uv += ripple;
       if (screen_uv.x > 0.005 && screen_uv.y > 0.005 &&
           screen_uv.x < 0.995 && screen_uv.y < 0.995) {
-        vec3 reflected_scene = texture(u_planar_texture,screen_uv).rgb;
+        vec3 reflected_scene = elevated
+            ? texture(u_planar_secondary_texture,screen_uv).rgb
+            : texture(u_planar_texture,screen_uv).rgb;
         vec3 toward_eye = normalize(u_camera_pos-v_world_pos);
         float edge_fresnel = pow(1.0-clamp(abs(dot(n,toward_eye)),0.0,1.0),5.0);
         float strength = clamp(0.88+0.10*edge_fresnel,0.88,0.98);
@@ -841,6 +854,11 @@ bool GLRenderer::init() {
   u_planar_enabled_ = gl::GetUniformLocation(program_, "u_planar_enabled");
   u_planar_texture_ = gl::GetUniformLocation(program_, "u_planar_texture");
   u_planar_vp_ = gl::GetUniformLocation(program_, "u_planar_vp");
+  u_planar_secondary_texture_ = gl::GetUniformLocation(program_, "u_planar_secondary_texture");
+  u_planar_secondary_vp_ = gl::GetUniformLocation(program_, "u_planar_secondary_vp");
+  u_planar_primary_z_ = gl::GetUniformLocation(program_, "u_planar_primary_z");
+  u_planar_secondary_z_ = gl::GetUniformLocation(program_, "u_planar_secondary_z");
+  u_planar_secondary_active_ = gl::GetUniformLocation(program_, "u_planar_secondary_active");
   u_planar_clip_z_ = gl::GetUniformLocation(program_, "u_planar_clip_z");
   u_snow_cover_ = gl::GetUniformLocation(program_, "u_snow_cover");
   u_asphalt_ = gl::GetUniformLocation(program_, "u_asphalt");
@@ -1231,110 +1249,149 @@ void GLRenderer::set_street_shadow_uniforms(bool ground) {
 }
 
 void GLRenderer::release_planar_resources() {
-  if (planar_fbo_ != 0) gl::DeleteFramebuffers(1,&planar_fbo_);
-  if (planar_color_ != 0) gl::DeleteTextures(1,&planar_color_);
-  if (planar_depth_ != 0) gl::DeleteTextures(1,&planar_depth_);
+  for (auto texture : {planar_color_,planar_depth_,
+                       planar_second_color_,planar_second_depth_})
+    if (texture != 0) gl::DeleteTextures(1,&texture);
+  for (auto fbo : {planar_fbo_,planar_second_fbo_})
+    if (fbo != 0) gl::DeleteFramebuffers(1,&fbo);
   planar_fbo_=planar_color_=planar_depth_=0;
+  planar_second_fbo_=planar_second_color_=planar_second_depth_=0;
   planar_width_=planar_height_=0;
   planar_ready_=false;
+  planar_active_=false;
+  planar_secondary_active_=false;
 }
 
 bool GLRenderer::ensure_planar_resources(int width,int height) {
   if (planar_ready_ && width==planar_width_ && height==planar_height_)
     return true;
   release_planar_resources();
-  if (width <= 0 || height <= 0) return false;
+  if (width<=0 || height<=0) return false;
   gl::GLint restore=0;
   gl::GetIntegerv(gl::kFramebufferBinding,&restore);
-  gl::GenTextures(1,&planar_color_);
-  gl::ActiveTexture(gl::kTexture0+9);
-  gl::BindTexture(gl::kTexture2D,planar_color_);
-  gl::TexImage2D(gl::kTexture2D,0,gl::kRgba8,width,height,0,
-                 gl::kRgba,gl::kUnsignedByte,nullptr);
-  gl::TexParameteri(gl::kTexture2D,gl::kTextureMinFilter,gl::kLinear);
-  gl::TexParameteri(gl::kTexture2D,gl::kTextureMagFilter,gl::kLinear);
-  gl::TexParameteri(gl::kTexture2D,gl::kTextureWrapS,gl::kClampToEdge);
-  gl::TexParameteri(gl::kTexture2D,gl::kTextureWrapT,gl::kClampToEdge);
-  gl::GenTextures(1,&planar_depth_);
-  gl::BindTexture(gl::kTexture2D,planar_depth_);
-  gl::TexImage2D(gl::kTexture2D,0,gl::kDepthComponent24,width,height,0,
-                 gl::kDepthComponent,gl::kUnsignedInt,nullptr);
-  gl::TexParameteri(gl::kTexture2D,gl::kTextureMinFilter,gl::kLinear);
-  gl::TexParameteri(gl::kTexture2D,gl::kTextureMagFilter,gl::kLinear);
-  gl::TexParameteri(gl::kTexture2D,gl::kTextureWrapS,gl::kClampToEdge);
-  gl::TexParameteri(gl::kTexture2D,gl::kTextureWrapT,gl::kClampToEdge);
-  gl::GenFramebuffers(1,&planar_fbo_);
-  gl::BindFramebuffer(gl::kFramebuffer,planar_fbo_);
-  gl::FramebufferTexture2D(gl::kFramebuffer,gl::kColorAttachment0,
-                           gl::kTexture2D,planar_color_,0);
-  gl::FramebufferTexture2D(gl::kFramebuffer,gl::kDepthAttachment,
-                           gl::kTexture2D,planar_depth_,0);
-  gl::DrawBuffer(gl::kColorAttachment0);
-  gl::ReadBuffer(gl::kColorAttachment0);
-  const bool okay=gl::CheckFramebufferStatus(gl::kFramebuffer)==gl::kFramebufferComplete;
+  // Both resources share one budget: each color/depth pair <=512x384,
+  // no extra CPU copy or screen-space fake image.
+  auto create=[&](std::uint32_t& fbo,std::uint32_t& color,
+                  std::uint32_t& depth,int unit) {
+    gl::GenTextures(1,&color);
+    gl::ActiveTexture(gl::kTexture0+static_cast<gl::GLenum>(unit));
+    gl::BindTexture(gl::kTexture2D,color);
+    gl::TexImage2D(gl::kTexture2D,0,gl::kRgba8,width,height,0,
+                   gl::kRgba,gl::kUnsignedByte,nullptr);
+    gl::TexParameteri(gl::kTexture2D,gl::kTextureMinFilter,gl::kLinear);
+    gl::TexParameteri(gl::kTexture2D,gl::kTextureMagFilter,gl::kLinear);
+    gl::TexParameteri(gl::kTexture2D,gl::kTextureWrapS,gl::kClampToEdge);
+    gl::TexParameteri(gl::kTexture2D,gl::kTextureWrapT,gl::kClampToEdge);
+    gl::GenTextures(1,&depth);
+    gl::BindTexture(gl::kTexture2D,depth);
+    gl::TexImage2D(gl::kTexture2D,0,gl::kDepthComponent24,width,height,0,
+                   gl::kDepthComponent,gl::kUnsignedInt,nullptr);
+    gl::TexParameteri(gl::kTexture2D,gl::kTextureMinFilter,gl::kLinear);
+    gl::TexParameteri(gl::kTexture2D,gl::kTextureMagFilter,gl::kLinear);
+    gl::TexParameteri(gl::kTexture2D,gl::kTextureWrapS,gl::kClampToEdge);
+    gl::TexParameteri(gl::kTexture2D,gl::kTextureWrapT,gl::kClampToEdge);
+    gl::GenFramebuffers(1,&fbo);
+    gl::BindFramebuffer(gl::kFramebuffer,fbo);
+    gl::FramebufferTexture2D(gl::kFramebuffer,gl::kColorAttachment0,
+                             gl::kTexture2D,color,0);
+    gl::FramebufferTexture2D(gl::kFramebuffer,gl::kDepthAttachment,
+                             gl::kTexture2D,depth,0);
+    gl::DrawBuffer(gl::kColorAttachment0);
+    gl::ReadBuffer(gl::kColorAttachment0);
+    return gl::CheckFramebufferStatus(gl::kFramebuffer)==gl::kFramebufferComplete;
+  };
+  const bool first=create(planar_fbo_,planar_color_,planar_depth_,9);
+  const bool second=first && create(planar_second_fbo_,planar_second_color_,
+                                    planar_second_depth_,10);
   gl::BindFramebuffer(gl::kFramebuffer,static_cast<gl::GLuint>(restore));
   gl::ActiveTexture(gl::kTexture0);
-  if (!okay) {
-    spdlog::error("R6b2h planar reflection framebuffer not complete");
+  if (!first || !second) {
+    spdlog::error("R6b2j planar reflection framebuffer setup failed");
     release_planar_resources();
     return false;
   }
   planar_width_=width;planar_height_=height;planar_ready_=true;
-  spdlog::info("R6b2h planar reflection READY {}x{} (real mirrored scene)",width,height);
+  spdlog::info("R6b2j dual-level planar reflection FBO READY {}x{}",width,height);
   return true;
 }
 
 void GLRenderer::draw_planar_reflection(const std::vector<DrawItem>& items,
                                        const CameraMatrices& camera,
                                        int width,int height) {
+  // Reset per viewport/frame even if there is no water or rain. In particular,
+  // never display a stale reflection captured by the previous camera.
+  planar_active_=false;
+  planar_secondary_active_=false;
   if (!environment_.planar_puddles_enabled || planar_rendering_) return;
-  bool found=false;
-  float height_surface=0.0F;
-  float best=1.0e30F;
+  struct WaterHeight {float distance2;float z;};
+  std::vector<WaterHeight> surfaces;
   for (const auto& item:items) {
     if (!item.material.water_surface) continue;
-    const auto m=meshes_.find(item.mesh.id);
-    if (m==meshes_.end()) continue;
-    const auto center=m->second.center;
+    const auto mesh=meshes_.find(item.mesh.id);
+    if (mesh==meshes_.end()) continue;
+    const auto c=mesh->second.center;
     for (const auto& transform:item.instances) {
-      const auto& a=transform.model;
-      const float px=a[0]*center[0]+a[4]*center[1]+a[8]*center[2]+a[12];
-      const float py=a[1]*center[0]+a[5]*center[1]+a[9]*center[2]+a[13];
-      const float pz=a[2]*center[0]+a[6]*center[1]+a[10]*center[2]+a[14];
-      const float dx=px-camera.eye[0],dy=py-camera.eye[1];
-      const float distance=dx*dx+dy*dy;
-      if(distance<best){best=distance;height_surface=pz;found=true;}
+      const auto& m=transform.model;
+      const float x=m[0]*c[0]+m[4]*c[1]+m[8]*c[2]+m[12];
+      const float y=m[1]*c[0]+m[5]*c[1]+m[9]*c[2]+m[13];
+      const float z=m[2]*c[0]+m[6]*c[1]+m[10]*c[2]+m[14];
+      if (camera.eye[2]<=z+0.05F) continue;
+      const float dx=x-camera.eye[0],dy=y-camera.eye[1];
+      surfaces.push_back({dx*dx+dy*dy,z});
     }
   }
-  if (!found || camera.eye[2] <= height_surface+0.05F) return;
-  // <=512x384, preserved camera aspect. One reflection plane per viewport,
-  // which also bounds cost for three driver-view mirror cameras.
+  if (surfaces.empty()) return;
+  std::stable_sort(surfaces.begin(),surfaces.end(),
+                   [](auto a,auto b){return a.distance2<b.distance2;});
+  planar_first_height_=surfaces.front().z;
+  bool second=false;
+  // Two distinct ground levels, not two overlapping puddles on one road.
+  // The test switch removes ONLY this second view for real Windows A/B.
+  if (environment_.planar_second_level_enabled) {
+    for (const auto& candidate:surfaces) {
+      if (std::abs(candidate.z-planar_first_height_) >= 0.075F &&
+          candidate.distance2 < 900.0F) {
+        planar_second_height_=candidate.z;
+        second=true;
+        break;
+      }
+    }
+  }
   const float scale=std::min(1.0F,std::min(
-       512.0F/static_cast<float>(width),384.0F/static_cast<float>(height)));
+      512.0F/static_cast<float>(width),384.0F/static_cast<float>(height)));
   const int rw=std::max(32,static_cast<int>(width*scale));
   const int rh=std::max(32,static_cast<int>(height*scale));
   if (!ensure_planar_resources(rw,rh)) return;
-  std::array<float,16> reflection{
-    1,0,0,0, 0,1,0,0, 0,0,-1,0, 0,0,2.0F*height_surface,1};
-  auto multiply=[](const std::array<float,16>& a,const std::array<float,16>& b){
+  auto multiply=[](const std::array<float,16>& a,
+                   const std::array<float,16>& b) {
     std::array<float,16> out{};
     for(int c=0;c<4;++c) for(int row=0;row<4;++row)
       for(int k=0;k<4;++k) out[c*4+row]+=a[k*4+row]*b[c*4+k];
     return out;
   };
-  CameraMatrices mirrored=camera;
-  mirrored.view=multiply(camera.view,reflection);
-  mirrored.eye[2]=2.0F*height_surface-camera.eye[2];
-  planar_view_projection_=multiply(camera.projection,mirrored.view);
   gl::GLint restore=0;
   gl::GetIntegerv(gl::kFramebufferBinding,&restore);
-  gl::BindFramebuffer(gl::kFramebuffer,planar_fbo_);
-  planar_surface_height_=height_surface;
-  planar_rendering_=true;
-  render(items,mirrored,rw,rh); // existing scene renderer, without recursion
-  planar_rendering_=false;
+  const int total=second?2:1;
+  for (int level=0;level<total;++level) {
+    const float z=level==0?planar_first_height_:planar_second_height_;
+    std::array<float,16> reflection{
+       1,0,0,0, 0,1,0,0, 0,0,-1,0, 0,0,2.0F*z,1};
+    CameraMatrices mirrored=camera;
+    mirrored.view=multiply(camera.view,reflection);
+    mirrored.eye[2]=2.0F*z-camera.eye[2];
+    auto vp=multiply(camera.projection,mirrored.view);
+    if(level==0) planar_view_projection_=vp;
+    else planar_second_view_projection_=vp;
+    planar_surface_height_=z; // clip objects below this particular surface
+    gl::BindFramebuffer(gl::kFramebuffer,level==0?planar_fbo_:planar_second_fbo_);
+    planar_rendering_=true;
+    render(items,mirrored,rw,rh);
+    planar_rendering_=false;
+  }
   gl::BindFramebuffer(gl::kFramebuffer,static_cast<gl::GLuint>(restore));
   gl::Viewport(0,0,width,height);
+  planar_active_=true;
+  planar_secondary_active_=second;
 }
 
 void GLRenderer::render(const std::vector<DrawItem>& items,
@@ -1387,14 +1444,22 @@ void GLRenderer::render(const std::vector<DrawItem>& items,
   gl::Uniform1f(u_planar_clip_z_,
                 planar_rendering_ ? planar_surface_height_+0.003F : -10000.0F);
   gl::Uniform1i(u_planar_enabled_,
-                (!planar_rendering_ && planar_ready_ &&
-                 environment_.planar_puddles_enabled) ? 1 : 0);
+                (!planar_rendering_ && planar_active_) ? 1 : 0);
+  gl::Uniform1i(u_planar_secondary_active_,
+                (!planar_rendering_ && planar_secondary_active_) ? 1 : 0);
   gl::Uniform1i(u_planar_texture_,9);
+  gl::Uniform1i(u_planar_secondary_texture_,10);
+  gl::Uniform1f(u_planar_primary_z_,planar_first_height_);
+  gl::Uniform1f(u_planar_secondary_z_,planar_second_height_);
   gl::UniformMatrix4fv(u_planar_vp_,1,0,planar_view_projection_.data());
-  if (!planar_rendering_ && planar_ready_ &&
-      environment_.planar_puddles_enabled) {
+  gl::UniformMatrix4fv(u_planar_secondary_vp_,1,0,planar_second_view_projection_.data());
+  if (!planar_rendering_ && planar_active_) {
     gl::ActiveTexture(gl::kTexture0+9);
     gl::BindTexture(gl::kTexture2D,planar_color_);
+    if(planar_secondary_active_) {
+      gl::ActiveTexture(gl::kTexture0+10);
+      gl::BindTexture(gl::kTexture2D,planar_second_color_);
+    }
     gl::ActiveTexture(gl::kTexture0);
   }
   gl::Uniform1f(u_snow_cover_, environment_.snow_cover);

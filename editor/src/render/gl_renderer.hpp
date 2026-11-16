@@ -141,6 +141,11 @@ private:
   std::int32_t u_planar_enabled_ = -1;
   std::int32_t u_planar_texture_ = -1;
   std::int32_t u_planar_vp_ = -1;
+  std::int32_t u_planar_secondary_texture_ = -1;
+  std::int32_t u_planar_secondary_vp_ = -1;
+  std::int32_t u_planar_primary_z_ = -1;
+  std::int32_t u_planar_secondary_z_ = -1;
+  std::int32_t u_planar_secondary_active_ = -1;
   std::int32_t u_planar_clip_z_ = -1;
   std::int32_t u_snow_cover_ = -1;
   std::int32_t u_asphalt_ = -1;
@@ -179,12 +184,20 @@ private:
   std::uint32_t planar_fbo_ = 0;
   std::uint32_t planar_color_ = 0;
   std::uint32_t planar_depth_ = 0;
+  std::uint32_t planar_second_fbo_ = 0;
+  std::uint32_t planar_second_color_ = 0;
+  std::uint32_t planar_second_depth_ = 0;
   int planar_width_ = 0;
   int planar_height_ = 0;
   bool planar_ready_ = false;
+  bool planar_active_ = false;
+  bool planar_secondary_active_ = false;
   bool planar_rendering_ = false;
   std::array<float,16> planar_view_projection_{};
-  float planar_surface_height_ = 0.0F;
+  std::array<float,16> planar_second_view_projection_{};
+  float planar_surface_height_ = 0.0F;  // clip height of CURRENT mirror pass
+  float planar_first_height_ = 0.0F;
+  float planar_second_height_ = 0.0F;
   std::array<float,16> shadow_light_matrix_{};
   std::int32_t u_depth_light_ = -1;
   std::int32_t u_depth_model_ = -1;

@@ -150,3 +150,18 @@ Model r6b2i-kaluza-przykraweznikowa-700 (ok. 6,96 x 2,16 m, 4 części GLB) korz
 Realny test A/B (75 429 równych próbek): dzień/deszcz 2681 istotnych zmian, noc/deszcz 1646, szerszy kadr 940, sucha kontrola 0. Przykładowe trzy pasy jasności w tafli: ON 82,42 / 67,57 / 78,95 (ściana-drzwi-ściana); OFF 55,31 / 54,94 / 55,36. R6B2I_PLANAR_FACADE_NATIVE_VISUAL_GATE_PASS. Testy: Qt 1366 PASS / 7 SKIPPED, C++ 2074 PASS, Python 7 PASS, BUILD_PASS. GTX 1050 Ti / MSAA4 / 1600x900: z odbiciem 59,84 FPS steady / 60,00 orbit; bez odbicia 59,83 / 60,00; 0 klatek powyżej 33,33ms. Qt synchronizowane ~60Hz, to nie maksymalny FPS GPU.
 
 Ograniczenia: wizualnie potwierdzono fragmenty fasady i drzwi w danej kompozycji; nie gwarantuje to idealnego odbicia wszystkich pięter we wszystkich kamerach. Renderer korzysta z jednej wysokości lustra na kamerę, ograniczonego FBO do 512x384; brak pełnego SSR, ray tracing i odbicia transparentnego szkła. Sucha scena i materiały inne niż PrawkoWater zachowują dotychczasowy wygląd.
+
+## R6b2j â€” dwa poziomy odbicia / kamera w ruchu / esmini (16.11.2026)
+
+Dwa niezalezne rzeczywiste FBO OpenGL 3.3 (kazdy maksymalnie 512x384), a nie nowy prerender ani mapa z internetu. Odbicia aktualizuja sie przy zmianie kamery, a shader PrawkoWater wybiera najblizsza z dwoch wysokosci Z. Obydwa przebiegi sa ograniczone i uzywaja tej samej geometrii obiektow 3D. Scena 06l-r6b2j-dwie-wysokosci-kaluz stanowi osobna kopie 06k; jezâ€‹dnia 0.0 m, chodnik +0.17 m. Wszystkie 18 assetow biblioteki sa zachowane (nie tworzono nowego modelu tylko ponownie uzyto istniejÄ…cych).
+
+- r6b2j-porownanie-poziomy-dzien.png â€” realny render Qt z jednym i dwoma poziomami, ta sama kamera, te same krople deszczu
+- r6b2j-porownanie-poziomy-noc.png â€” odpowiednik nocny
+- r6b2j-porownanie-chodnik.png â€” zblizenie rzeczywistej powierzchni wody na chodniku
+- r6b2j-porownanie-sucho.png â€” scena sucha identyczna OFF/ON
+- r6b2j-cztery-pozycje-kamery.png â€” CZTERY ODDZIELNE, rzeczywiste statyczne rendery programu z kolejnych pozycji kamery, nie odtwarzanie MP4
+- r6b2j-driver-esmini.mp4 â€” jesli plik obecny: faktyczna symulacja esmini + kamera kierowcy + FFmpeg, nie montaz z obrazow; pliki .first.png, .moving.png i .dual-{on,off}.png z natywnego testu gtest
+- r6b2j-porownanie-esmini-kierowca.png â€” jesli plik obecny: porownanie w tej samej klatce realnego esmini przy 2 poziomach ON/OFF
+- r6b2j-*.png â€” surowe, nieprzerobione zrzuty wlasnego Qt Windows. NIE obrazy AI
+
+Ograniczenia: maksymalnie dwie wysokosci lustra na widok/kamere (trzecia zostaje przypisana do blizszej); brak ray tracingu, SSR dla innych materialow oraz transparentnego szkĹ‚a w odbiciu. FPS odczytuje realny frameSwapped synchronizowany ~60 Hz; nie mierzy maksymalnej wydajnosci GPU.

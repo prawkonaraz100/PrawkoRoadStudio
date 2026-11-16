@@ -44,7 +44,8 @@ TEST(PrawkoRealVideo, DriverViewStreamsActualTrafficAndMirrorsToMp4) {
   // R6b2 opt-in integration proof loads the same project overlay as MainWindow.
   // Document::load alone intentionally does not register a project's GLB assets.
   // Keep existing generic proof behaviour untouched for every other scene.
-  const bool r6b2_car_proof = base == QStringLiteral("06c-r6b2-samochody");
+  const bool r6b2_car_proof = base == QStringLiteral("06c-r6b2-samochody") ||
+      base == QStringLiteral("06l-r6b2j-dwie-wysokosci-kaluz");
   struct OverlayCleanup {
     bool registered = false;
     ~OverlayCleanup() { if (registered) props::clear_project_models(); }
@@ -118,6 +119,37 @@ TEST(PrawkoRealVideo, DriverViewStreamsActualTrafficAndMirrorsToMp4) {
   QImage later=view.capture_simulation_frame(kSize,camera,playback.poses_at(4.0),
                                             QStringLiteral("Ego"),4.0);
   ASSERT_EQ(later.size(),kSize);
+  // R6b2j opt-in: identical ACTUAL esmini driver pose (not orbit-camera
+  // screenshots). Compare the second elevated-water reflection ON/OFF,
+  // keeping cockpit, precipitation, sunlight and vehicle movement fixed.
+  if(qEnvironmentVariableIsSet("PRAWKO_R6B2J_VIDEO_COMPARE_LEVELS")) {
+    const auto poses=playback.poses_at(2.0);
+    qunsetenv("PRAWKO_R6B2J_PROOF_DISABLE_SECOND_LEVEL");
+    const QImage two_levels=view.capture_simulation_frame(
+        kSize,camera,poses,QStringLiteral("Ego"),2.0);
+    qputenv("PRAWKO_R6B2J_PROOF_DISABLE_SECOND_LEVEL","1");
+    const QImage one_level=view.capture_simulation_frame(
+        kSize,camera,poses,QStringLiteral("Ego"),2.0);
+    qunsetenv("PRAWKO_R6B2J_PROOF_DISABLE_SECOND_LEVEL");
+    ASSERT_FALSE(two_levels.isNull());
+    ASSERT_EQ(two_levels.size(),one_level.size());
+    ASSERT_TRUE(two_levels.save(output+".dual-on.png","PNG"));
+    ASSERT_TRUE(one_level.save(output+".dual-off.png","PNG"));
+    int changed=0;
+    for(int y=0;y<two_levels.height();y+=2) {
+      for(int x=0;x<two_levels.width();x+=2) {
+        const QRgb a=two_levels.pixel(x,y),b=one_level.pixel(x,y);
+        const int delta=std::abs(qRed(a)-qRed(b))+
+                        std::abs(qGreen(a)-qGreen(b))+
+                        std::abs(qBlue(a)-qBlue(b));
+        if(delta>18)++changed;
+      }
+    }
+    std::cout<<"R6B2J_REAL_ESMINI_DRIVER_DUAL_LEVEL_AB changed_samples="
+             <<changed<<" samples_at_t=2s"<<std::endl;
+    EXPECT_GT(changed,10)
+        << "Elevated-water reflection must show from real esmini driver pose";
+  }
   EXPECT_NE(std::memcmp(before.constBits(),later.constBits(),before.sizeInBytes()),0)
       << "Actual esmini vehicle and mirror frames cannot be identical";
   // R4b: pin the three actual mirror FBO results, not just the main windshield.

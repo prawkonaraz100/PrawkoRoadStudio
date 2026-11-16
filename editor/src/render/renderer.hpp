@@ -267,6 +267,7 @@ struct Environment {
   float wetness = 0.0F;
   float pbr_wetness = 0.0F; // R6b2g: wet GLB PBR, dry default unchanged
   bool planar_puddles_enabled = false; // R6b2h opt-in rainy Textured mode
+  bool planar_second_level_enabled = true; // R6b2j secondary height, testable OFF
   float snow_cover = 0.0F;
   float season = 0.0F; // 0 summer, 1 autumn, 2 winter (ground shader palette)
   bool shadows_enabled = false; // legacy + Sober unchanged; Textured enables R4
