@@ -107,3 +107,15 @@ Zrzuty wykonane bezposrednio z Windows PrawkoRoadStudio / OpenGL 3.3; NIE sa obr
 - r6b2f-qt-path-night-rain-on.png - rzeczywisty shader deszczu i cieni
 
 Ograniczenia: max 4 mapy cieni 512x512, brak fizycznego IES, moga byc artefakty na krawedziach, nie ma ray-tracing ani fizycznych odbic mokrych powierzchni. Wyniki FPS i Quality Gate w HANDOFF.md.
+
+## R6b2g - emisja klosza glTF i mokre nawierzchnie PBR (16.11.2026)
+
+Autentyczne zrzuty z PrawkoRoadStudio Windows/OpenGL 3.3, nie obrazy AI. Material glTF emissiveFactor z autorskiego GLB w assets/prawko/blender/oprawa_r6b2g/ jest importowany przez core i dodawany do rzeczywistych fragmentow klosza w shaderze. Model jest oddzielnym, edytowalnym elementem biblioteki. R6b2g zmniejsza roughness poziomych powierzchni GLB PBR w deszczu i liczy swiatlo zwierciadlane od rzeczywistych latarni z oslona cieni. Brak pelnego SSR/raytracingu i kalibracji fotometrycznej.
+
+- r6b2g-porownanie-klosz-noc.png - identyczna scena/pora/kamera, material emisyjny OFF/ON, pozostale oswietlenie bez zmian
+- r6b2g-porownanie-mokre-plyty-noc.png - identyczny deszcz i noc, tylko nowa reakcja mokrych GLB PBR OFF/ON
+- r6b2g-porownanie-mokre-plyty-dzien.png - analogiczny test mokrego materialu w dziennym deszczu
+- r6b2g-qt-* - 13 oryginalnych klatek renderera w roznych warunkach
+- r6b2g-blender-oprawa-emisja.png - osobny autorski Cycles modelu, NIE screen z Qt
+
+Scena testowa 06i-r6b2g-mokry-plac-i-oprawy to nowa kopia 06h, z piecioma zamienionymi na nowy GLB latarniami. Stare sceny i stara latarnia pozostaja bez zmian i sa dostepne.

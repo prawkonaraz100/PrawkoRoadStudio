@@ -62,7 +62,8 @@ void main() {
 }
 )";
 
-constexpr const char* kFragmentShader = R"(#version 330 core
+const std::string kFragmentShader =
+    std::string(R"(#version 330 core
 in vec3 v_normal;
 in vec2 v_uv;
 in vec3 v_world_pos;
@@ -129,6 +130,8 @@ uniform float u_ambient;
 uniform float u_fog_density;
 uniform vec3 u_fog_color;
 uniform float u_wetness;
+uniform float u_pbr_wetness;
+uniform vec3 u_emissive;
 uniform float u_snow_cover;
 uniform int u_asphalt;
 out vec4 frag_color;
@@ -232,7 +235,8 @@ float street_visibility(int i, vec3 world, vec3 surface_normal, vec3 ray) {
     vec3 q = vec3(p.xy+(vec2(float(k),float(j))-0.5)/512.0,p.z-bias);
     if(i==0) sum += texture(u_street_shadow0,q);
     else if(i==1) sum += texture(u_street_shadow1,q);
-    else if(i==2) sum += texture(u_street_shadow2,q);
+)")
+  + R"(    else if(i==2) sum += texture(u_street_shadow2,q);
     else sum += texture(u_street_shadow3,q);
   }
   return sum*0.25;
@@ -299,7 +303,16 @@ void main() {
     vec2 map_factors = u_has_metallic_roughness == 1
         ? texture(u_metallic_roughness, uv).gb : vec2(1.0, 1.0);
     float pbr_rough = clamp(rough * map_factors.x, 0.055, 1.0);
+    // R6b2g: rain film on upward-facing imported glTF PBR surfaces.
+    float wet_patch = 0.69 + 0.18 *
+        sin(v_world_pos.x*0.84 + sin(v_world_pos.y*0.51)) *
+        sin(v_world_pos.y*0.93 - v_world_pos.x*0.17);
+    float wet = clamp(u_pbr_wetness * wet_patch *
+                     smoothstep(0.60,0.93,geom_n.z),0.0,0.92);
+    pbr_rough = mix(pbr_rough,clamp(0.115+0.18*(1.0-wet_patch),0.08,0.35),wet);
     float pbr_metal = clamp(u_metallic * map_factors.y, 0.0, 1.0);
+    wet *= (1.0-pbr_metal);
+    vec3 pbr_albedo = albedo.rgb * (1.0-0.22*wet);
     vec3 V = normalize(u_camera_pos - v_world_pos);
     vec3 L = sun_dir;
     vec3 H = normalize(L + V);
@@ -314,20 +327,46 @@ void main() {
     float k = pow(pbr_rough + 1.0, 2.0) / 8.0;
     float masking = (nL / (nL * (1.0 - k) + k + 1e-5)) *
                     (nV / (nV * (1.0 - k) + k + 1e-5));
-    vec3 f0 = mix(vec3(0.04), albedo.rgb, pbr_metal);
+    vec3 f0 = mix(vec3(0.04), pbr_albedo, pbr_metal);
     vec3 fresnel = f0 + (1.0 - f0) * pow(1.0 - vH, 5.0);
     vec3 brdf = (1.0 - fresnel) * (1.0 - pbr_metal) *
-                albedo.rgb / 3.14159265 +
+                pbr_albedo / 3.14159265 +
                 (distribution * masking * fresnel) / (4.0 * nL * nV + 1e-4);
     vec3 sun = brdf * u_sun_color * (u_sun_intensity * nL * sun_shadow);
-    vec3 ambient_diffuse = albedo.rgb * (hemi + bounce + lamps) * (1.0-pbr_metal);
+    vec3 ambient_diffuse = pbr_albedo * (hemi + bounce + lamps) * (1.0-pbr_metal);
     vec3 lamp_spec = lamps * f0 * (0.12 + 0.28 * (1.0 - pbr_rough));
+    // View-dependent source reflection; same geometry and shadow occlusion
+    // as the authored lamp. No work in dry weather, no screen-space overlay.
+    vec3 wet_lamp_reflection = vec3(0.0);
+    if (wet > 0.01 && u_street_count > 0) {
+      for (int i = 0; i < 4; ++i) {
+        if (i >= u_street_count) break;
+        vec3 to_light = u_street_pos[i] - v_world_pos;
+        float d2 = dot(to_light,to_light);
+        if (d2 <= 0.01 || d2 > 576.0) continue;
+        float distance_m = sqrt(d2);
+        vec3 light_dir = to_light / distance_m;
+        vec3 outgoing = -light_dir;
+        float cone = smoothstep(0.37,0.61,dot(outgoing,u_street_dir[i]));
+        float falloff = pow(max(0.0,1.0-distance_m/24.0),1.5) /
+                        (1.0+0.05*d2);
+        float nl = max(dot(n,light_dir),0.0);
+        vec3 half_vec = normalize(light_dir+V);
+        float nh = max(dot(n,half_vec),0.0);
+        float highlight = pow(nh,mix(112.0,17.0,pbr_rough));
+        float visibility = street_visibility(i,v_world_pos,n,outgoing);
+        wet_lamp_reflection += vec3(1.0,0.78,0.52) *
+            (u_street_intensity*cone*falloff*nl*highlight*visibility*
+             (0.35+0.9*wet));
+      }
+    }
     // Low-frequency hemispheric approximation, not an environment cubemap
     // or ray-traced reflection. Metal receives the sky color, not fake plastic.
     vec3 reflection_ambient = mix(u_ground_light, u_sky_light,
                                   clamp(0.5 + 0.5 * n.z, 0.0, 1.0)) *
                               f0 * (1.0 - pbr_rough) * (u_ambient * 0.55);
-    vec3 linear_color = max(sun + ambient_diffuse + reflection_ambient + lamp_spec,
+    vec3 linear_color = max(sun + ambient_diffuse + reflection_ambient + lamp_spec +
+                            wet_lamp_reflection,
                             vec3(0.0));
     // glTF baseColor samples decode as sRGB; encode lighting for RGBA8
     // offscreen and screen targets, which are not sRGB-enabled framebuffers.
@@ -351,20 +390,28 @@ void main() {
   if (u_asphalt == 1) {
     // Wet asphalt darkens and receives a broad sky-colored sheen. Road
     // markings stay bright because their material does not set u_asphalt.
-    base = mix(base, base * 0.58 + u_sky_light * 0.12, u_wetness);
+)"
+  + R"(    base = mix(base, base * 0.58 + u_sky_light * 0.12, u_wetness);
     float grains = fract(sin(dot(v_world_pos.xy, vec2(12.9898, 78.233))) * 43758.5453);
     float cover = u_snow_cover * (0.65 + 0.35 * grains);
     base = mix(base, vec3(0.83, 0.88, 0.91) * max(0.25, u_ambient + 0.35),
                clamp(cover, 0.0, 1.0));
   }
   base = mix(base, u_accent, u_highlight);
+  // glTF emissiveFactor in linear RGB, encoded to non-sRGB RGBA8 target.
+  // Applied on actual mesh fragments, not a full-screen glow.
+  if (u_gltf_pbr == 1 && max(u_emissive.r,max(u_emissive.g,u_emissive.b)) > 0.001) {
+    base = clamp(base + pow(clamp(u_emissive,0.0,1.0),
+                            vec3(1.0/2.2)),0.0,1.0);
+  }
   // Beer-Lambert distance fog: main camera and each mirror sample the same
   // world-space density, without painting a fake grey screen over the scene.
   float distance_m = length(v_world_pos - u_camera_pos);
   float fog = 1.0 - exp(-u_fog_density * distance_m);
   frag_color = vec4(mix(base, u_fog_color, clamp(fog, 0.0, 1.0)), albedo.a);
 }
-)";
+)"
+;
 
 // Fullscreen sky gradient — attributeless triangle, drawn first with depth
 // untouched. Screen-space vertical mix: horizon color low, sky color high.
@@ -704,7 +751,7 @@ GLRenderer::~GLRenderer() {
 bool GLRenderer::init() {
   // Precondition: gl::load_functions(resolver) succeeded with the current
   // context — the windowing layer owns the resolver, not the renderer.
-  program_ = link_program(kVertexShader, kFragmentShader);
+  program_ = link_program(kVertexShader, kFragmentShader.c_str());
   sky_program_ = link_program(kSkyVertexShader, kSkyFragmentShader);
   grid_program_ = link_program(kGridVertexShader, kGridFragmentShader);
   ground_program_ = link_program(kGroundVertexShader, kGroundFragmentShader);
@@ -753,6 +800,8 @@ bool GLRenderer::init() {
   u_fog_density_ = gl::GetUniformLocation(program_, "u_fog_density");
   u_fog_color_ = gl::GetUniformLocation(program_, "u_fog_color");
   u_wetness_ = gl::GetUniformLocation(program_, "u_wetness");
+  u_pbr_wetness_ = gl::GetUniformLocation(program_, "u_pbr_wetness");
+  u_emissive_ = gl::GetUniformLocation(program_, "u_emissive");
   u_snow_cover_ = gl::GetUniformLocation(program_, "u_snow_cover");
   u_asphalt_ = gl::GetUniformLocation(program_, "u_asphalt");
   u_shadow_enabled_ = gl::GetUniformLocation(program_, "u_shadow_enabled");
@@ -1179,6 +1228,7 @@ void GLRenderer::render(const std::vector<DrawItem>& items,
   gl::Uniform3f(u_fog_color_, environment_.fog_color[0],
                 environment_.fog_color[1], environment_.fog_color[2]);
   gl::Uniform1f(u_wetness_, environment_.wetness);
+  gl::Uniform1f(u_pbr_wetness_, environment_.pbr_wetness);
   gl::Uniform1f(u_snow_cover_, environment_.snow_cover);
   gl::Uniform1i(u_shadow_enabled_,shadow_active_?1:0);
   gl::UniformMatrix4fv(u_shadow_light_matrix_,1,0,shadow_light_matrix_.data());
@@ -1319,6 +1369,7 @@ void GLRenderer::render(const std::vector<DrawItem>& items,
       gl::BindTexture(gl::kTexture2D, mr_tex);
     }
     gl::Uniform1i(u_gltf_pbr_, mat.gltf_pbr ? 1 : 0);
+    gl::Uniform3f(u_emissive_,mat.emissive[0],mat.emissive[1],mat.emissive[2]);
     gl::Uniform1f(u_metallic_, mat.metallic_value);
     gl::Uniform1i(u_alpha_mode_, mesh.alpha_mode);
     gl::Uniform1f(u_alpha_cutoff_, mesh.alpha_cutoff);

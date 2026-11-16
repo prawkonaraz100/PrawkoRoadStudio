@@ -131,6 +131,8 @@ private:
   std::int32_t u_fog_density_ = -1;
   std::int32_t u_fog_color_ = -1;
   std::int32_t u_wetness_ = -1;
+  std::int32_t u_pbr_wetness_ = -1;
+  std::int32_t u_emissive_ = -1;
   std::int32_t u_snow_cover_ = -1;
   std::int32_t u_asphalt_ = -1;
   std::int32_t u_shadow_enabled_ = -1;

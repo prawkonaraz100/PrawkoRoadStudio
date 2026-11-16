@@ -407,6 +407,27 @@ TEST_F(PropAssetImport, PrawkoA1BlenderShelterKeepsAlphaAndRoughnessWhileReporti
   EXPECT_LT(triangle_count, props::kMaxPropTriangles);
 }
 
+TEST_F(PropAssetImport, R6b2gGlbEmissiveLensIsImportedFromAuthorMaterial) {
+  const auto source = std::filesystem::path(RM_ASSETS_DIR) /
+      "prawko/blender/oprawa_r6b2g/r6b2g-latarnia-emisyjna.glb";
+  ASSERT_TRUE(std::filesystem::is_regular_file(source));
+  const auto imported=props::import_prop_model(source,"r6b2g-latarnia-emisyjna");
+  ASSERT_TRUE(imported.has_value()) << imported.error().message;
+  int glowing=0;
+  for (const auto& part:imported->model.parts) {
+    if (part.emissive[0] > 0.5F && part.emissive[1] > 0.5F) {
+      ++glowing;
+      EXPECT_TRUE(part.gltf_pbr);
+      EXPECT_LT(part.emissive[2],part.emissive[0]);
+      EXPECT_GT(part.emissive[2],0.2F);
+    } else {
+      EXPECT_FLOAT_EQ(part.emissive[0],0.0F);
+      EXPECT_FLOAT_EQ(part.emissive[1],0.0F);
+    }
+  }
+  EXPECT_EQ(glowing,1) << "Emission belongs ONLY to the physical lens material";
+}
+
 TEST_F(PropAssetImport, PrawkoR6b2dAuthoredPbrAssetsPreserveUvNormalAndOrm) {
   for (const char* stem : {"r6b2d-przejscie-plyty-12m",
                            "r6b2d-styk-chodnik-ziemia-20m"}) {

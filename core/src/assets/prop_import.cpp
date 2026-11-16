@@ -482,6 +482,7 @@ struct FlatPrimitive {
   float alpha_cutoff = 0.5F;
   float transmission = 0.0F;
   float ior = 1.5F;
+  std::array<float,3> emissive{0.0F,0.0F,0.0F};
 };
 
 /// Per-face normals for a primitive that shipped without any, area-weighted at
@@ -835,6 +836,14 @@ private:
     part.color = resolve_color(primitive, where, part.base_color_texture >= 0);
     if (material != nullptr) {
       part.gltf_pbr = true;
+      // Standard glTF 2.0 emissiveFactor in linear RGB, per-material.
+      if (material->emissiveFactor.size() >= 3) {
+        for (std::size_t channel=0; channel<3; ++channel) {
+          const double value=material->emissiveFactor[channel];
+          part.emissive[channel]=static_cast<float>(
+              std::isfinite(value) ? std::clamp(value,0.0,1.0) : 0.0);
+        }
+      }
       part.metallic = static_cast<float>(
           std::clamp(material->pbrMetallicRoughness.metallicFactor, 0.0, 1.0));
       part.roughness = static_cast<float>(
@@ -1342,7 +1351,8 @@ Expected<PropImportResult> import_prop_model(const std::filesystem::path& path,
                                  .alpha_mode = flat.alpha_mode,
                                  .alpha_cutoff = flat.alpha_cutoff,
                                  .transmission = flat.transmission,
-                                 .ior = flat.ior});
+                                 .ior = flat.ior,
+                                 .emissive = flat.emissive});
   }
   out.textures = std::move(reader.textures());
   const std::optional<std::pair<double, double>> extent = normalise_to_base_centre(out.parts);

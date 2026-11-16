@@ -698,12 +698,12 @@ TEST_F(MainWindowLayoutTest, R6BStreetAssetsCanBeDraggedMovedRotatedAndSaved) {
     std::ofstream state(root / "r6b-street.rmscene.json");
     state << R"({"scene_version":1,"view":{"distance":60,"pitch":1.56,"projection":"orthographic","target":[50,0,0],"yaw":-1.57}})";
   }
-  const std::array<const char*, 12> names{
+  const std::array<const char*, 13> names{
       "r6b-chodnik-20m", "r6b-drzewo", "r6b-latarnia", "r6b2-samochod",
       "r6b2b-pas-zieleni-20m", "r6b2b-rabata-ogrodowa",
       "r6b2b-sciezka-zwirowa-12m", "r6b2c-lipa-9m",
       "r6b2c-brzoza-10m", "r6b2c-pas-fundamentowy-12m",
-      "r6b2d-przejscie-plyty-12m", "r6b2d-styk-chodnik-ziemia-20m"};
+      "r6b2d-przejscie-plyty-12m", "r6b2d-styk-chodnik-ziemia-20m", "r6b2g-latarnia-emisyjna"};
   LibraryManifest overlay;
   std::vector<QString> keys;
   std::vector<std::string> ids;
@@ -711,7 +711,9 @@ TEST_F(MainWindowLayoutTest, R6BStreetAssetsCanBeDraggedMovedRotatedAndSaved) {
     AssetImportRequest request;
     const std::string stem(name);
     request.source = std::filesystem::path(RM_ASSETS_DIR) /
-                     (stem.starts_with("r6b2d-")
+                     (stem.starts_with("r6b2g-")
+                         ? "prawko/blender/oprawa_r6b2g"
+                         : stem.starts_with("r6b2d-")
                          ? "prawko/blender/styki_r6b2d"
                          : stem.starts_with("r6b2c-")
                          ? "prawko/blender/drzewa_r6b2c"
@@ -738,7 +740,7 @@ TEST_F(MainWindowLayoutTest, R6BStreetAssetsCanBeDraggedMovedRotatedAndSaved) {
   ASSERT_GE(cat, 0);
   library->category_combo()->setCurrentIndex(cat);
   const auto* proxy = library->view()->model();
-  ASSERT_EQ(proxy->rowCount(), 12);
+  ASSERT_EQ(proxy->rowCount(), 13);
   auto* viewport = window_.viewport();
   viewport->resize(800, 500);
   viewport->set_camera_preset(QStringLiteral("ortho"));
@@ -803,7 +805,7 @@ TEST_F(MainWindowLayoutTest, R6BStreetAssetsCanBeDraggedMovedRotatedAndSaved) {
     EXPECT_NEAR(obj.s, it->station, 0.01);
     EXPECT_NEAR(obj.hdg, it->heading, 0.01);
   });
-  EXPECT_EQ(count, 12) << "All twelve road/landscape GLBs should drag, rotate and persist";
+  EXPECT_EQ(count, 13) << "All twelve road/landscape GLBs should drag, rotate and persist";
 }
 
 TEST_F(MainWindowLayoutTest, CuratedLibraryStaysAvailableAcrossMapAndScenarioModes) {

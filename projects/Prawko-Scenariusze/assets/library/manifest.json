@@ -182,6 +182,19 @@
         "license": "Apache-2.0 â€” autorski model PrawkoNaRaz"
       },
       "thumbnail": "assets/library/thumbnails/r6b2d-styk-chodnik-ziemia-20m.png"
+    },
+    {
+      "key": "prop.r6b2g-latarnia-emisyjna",
+      "label": "Latarnia z emisyjnym kloszem | R6b2g",
+      "category": "Prawko | Obiekty 3D",
+      "create": {
+        "kind": "tree",
+        "model": "r6b2g-latarnia-emisyjna",
+        "model_file": "assets/props/r6b2g-latarnia-emisyjna.glb",
+        "source": "assets/prawko/blender/oprawa_r6b2g/r6b2g-latarnia-emisyjna.glb",
+        "license": "Apache-2.0 - autorski model PrawkoNaRaz"
+      },
+      "thumbnail": "assets/library/thumbnails/r6b2g-latarnia-emisyjna.png"
     }
   ]
 }

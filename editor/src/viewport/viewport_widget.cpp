@@ -308,6 +308,7 @@ void ViewportWidget::rebuild_scene() {
       uploaded.parts.push_back(renderer_->upload(part));
       Material part_material;
       part_material.gltf_pbr = part.gltf_pbr;
+      part_material.emissive = part.emissive;
       part_material.metallic_value = part.metallic;
       part_material.normal_strength = part.normal_strength;
       part_material.uv_scale = 1.0F;
@@ -871,8 +872,19 @@ void ViewportWidget::render_frame(const OrbitCamera& camera, const QSize& size,
     // Sober intentionally remains flat (legacy); Textured uses the GLB's
     // actual authored UV0 + baseColor texture, shared by all model instances.
     if (textured_rendering_ && index < batch.part_materials.size() &&
-        batch.part_materials[index].gltf_pbr)
-      return batch.part_materials[index];
+        batch.part_materials[index].gltf_pbr) {
+      Material result = batch.part_materials[index];
+      // Night-activated authored lamp; other GLB emissive materials retain
+      // their own author-defined factors independently of this model.
+      if (batch.model_id == "r6b2g-latarnia-emisyjna") {
+        const float strength =
+          qEnvironmentVariableIsSet("PRAWKO_R6B2G_PROOF_DISABLE_EMISSION") ? 0.0F :
+          time_of_day_ == TimeOfDay::Night ? 1.0F :
+          time_of_day_ == TimeOfDay::Dusk ? 0.54F : 0.0F;
+        for (float& channel : result.emissive) channel *= strength;
+      }
+      return result;
+    }
     return prop_material;
   };
   for (const UploadedPropBatch& batch : prop_batches_) {
@@ -1049,6 +1061,12 @@ void ViewportWidget::render_frame(const OrbitCamera& camera, const QSize& size,
   Environment environment = textured_rendering_
       ? conditioned_lighting(time_of_day_, weather_, season_)
       : sober_lighting();
+  // Legacy asphalt wetness unchanged; GLB PBR gets a separate opt-in
+  // wet-weather material factor, testable in an otherwise identical scene.
+  if (textured_rendering_ &&
+      !qEnvironmentVariableIsSet("PRAWKO_R6B2G_PROOF_DISABLE_WET_PBR")) {
+    environment.pbr_wetness = environment.wetness;
+  }
   if (textured_rendering_ && simulation_frame_ && simulation_frame_->driver &&
       (time_of_day_ == TimeOfDay::Dusk || time_of_day_ == TimeOfDay::Night)) {
     const DriverCamera& driver = *simulation_frame_->driver;
@@ -1088,7 +1106,8 @@ void ViewportWidget::render_frame(const OrbitCamera& camera, const QSize& size,
       !qEnvironmentVariableIsSet("PRAWKO_R6B2E_PROOF_DISABLE_STREETLIGHTS")) {
     std::vector<std::pair<float,StreetLamp>> nearby;
     for (const UploadedPropBatch& batch : prop_batches_) {
-      if (batch.model_id != "r6b-latarnia") continue;
+      if (batch.model_id != "r6b-latarnia" &&
+          batch.model_id != "r6b2g-latarnia-emisyjna") continue;
       for (const InstanceData& instance : batch.transforms) {
         const StreetLamp lamp = street_lamp_from_prop(instance);
         float distance2 = 0.0F;

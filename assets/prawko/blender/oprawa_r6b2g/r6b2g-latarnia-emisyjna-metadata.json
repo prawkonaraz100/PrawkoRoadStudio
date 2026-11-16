@@ -1,0 +1,14 @@
+{
+  "title": "Latarnia uliczna z emisyjnym kloszem",
+  "source": "assets\\prawko\\blender\\ulica_r6b\\r6b-latarnia.glb",
+  "format": "glTF2 GLB",
+  "emissive_factor": [
+    1.0,
+    0.79,
+    0.48
+  ],
+  "lens_meshes": 1,
+  "model_meshes": 3,
+  "glb_bytes": 54652,
+  "creator": "Blender 5.3.0"
+}
