@@ -150,3 +150,16 @@ Model r6b2i-kaluza-przykraweznikowa-700 (ok. 6,96 x 2,16 m, 4 części GLB) korz
 Realny test A/B (75 429 równych próbek): dzień/deszcz 2681 istotnych zmian, noc/deszcz 1646, szerszy kadr 940, sucha kontrola 0. Przykładowe trzy pasy jasności w tafli: ON 82,42 / 67,57 / 78,95 (ściana-drzwi-ściana); OFF 55,31 / 54,94 / 55,36. R6B2I_PLANAR_FACADE_NATIVE_VISUAL_GATE_PASS. Testy: Qt 1366 PASS / 7 SKIPPED, C++ 2074 PASS, Python 7 PASS, BUILD_PASS. GTX 1050 Ti / MSAA4 / 1600x900: z odbiciem 59,84 FPS steady / 60,00 orbit; bez odbicia 59,83 / 60,00; 0 klatek powyżej 33,33ms. Qt synchronizowane ~60Hz, to nie maksymalny FPS GPU.
 
 Ograniczenia: wizualnie potwierdzono fragmenty fasady i drzwi w danej kompozycji; nie gwarantuje to idealnego odbicia wszystkich pięter we wszystkich kamerach. Renderer korzysta z jednej wysokości lustra na kamerę, ograniczonego FBO do 512x384; brak pełnego SSR, ray tracing i odbicia transparentnego szkła. Sucha scena i materiały inne niż PrawkoWater zachowują dotychczasowy wygląd.
+
+
+### Optymalizacja renderera — osobna gałąź (16.11.2026)
+
+Wyniki dotyczą tylko gałęzi codex/render-quality-performance, bez połączenia ze zmianami R6b2j. Wszystkie obrazy to rzeczywiste renderowania z Windows/OpenGL, a nie obrazy AI lub stockowe.
+
+- render-quality-street-day.png, render-quality-street-rain-night.png: rzeczywiste zrzuty Qt (866 x 783), ukazujące nadal uproszczoną geometrię oraz nocne oświetlenie.
+- render-quality-gpu-baseline.png, render-quality-gpu-cache.png, render-quality-gpu-aniso4.png: syntetyczny test GPU, nie realistyczna scena uliczna. Przy takim samym filtrowaniu obrazy cache OFF i ON są identyczne pikselowo.
+- render-quality-benchmark.json: pomiary GTX 1050 Ti, OpenGL, 1280 x 720, 1000 instancji / 8 części, cztery latarnie i cień słońca, 15 warmup + 90 klatek. GPU p95 5,976 / 5,302 / 5,311 ms; CPU submission p95 0,656 / 0,466 / 0,455 ms, odpowiednio cache OFF / ON / ON + anizotropia 4x. Statyczne przesłania GPU: 4860 / 0 / 0, 276 514 560 / 0 / 0 bajtów.
+- render-quality-qt-fps.json: QOpenGLWidget, 1600 x 900 MSAA4, 180 próbek, ok. 59,85 FPS na postoju i 60,01 FPS podczas orbitowania, bez klatek powyżej 33,33 ms. Limit odświeżania około 60 Hz, nie maksymalny FPS GPU.
+- render-quality-driver-mirrors.mp4, render-quality-driver-first.png, render-quality-driver-moving.png: rzeczywisty przejazd esmini i trzy niezależne lusterka, 72 klatki / 6 sekund / 12 FPS, test integracyjny PASS.
+
+Build all PASS, Qt 1371 PASS / 7 SKIPPED, C++ 2074 PASS, Python 7 PASS. Stabilizacja słońca sprawdzona matematycznie, bez ilościowego testu migotania przez całą długą jazdę. Scalenie z R6b2j pozostaje otwarte.

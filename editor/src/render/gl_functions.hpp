@@ -97,6 +97,10 @@ inline constexpr GLenum kLinear = 0x2601;
 inline constexpr GLenum kLinearMipmapLinear = 0x2703;
 inline constexpr GLenum kRepeat = 0x2901;
 inline constexpr GLenum kClampToEdge = 0x812F;
+inline constexpr GLenum kExtensions = 0x1F03;
+inline constexpr GLenum kNumExtensions = 0x821D;
+inline constexpr GLenum kTextureMaxAnisotropy = 0x84FE;
+inline constexpr GLenum kMaxTextureMaxAnisotropy = 0x84FF;
 
 // Function pointers, loaded by load_functions().
 // NOLINTBEGIN(readability-identifier-naming) — official GL spellings.
@@ -107,6 +111,9 @@ inline constexpr GLenum kClampToEdge = 0x812F;
 #endif
 
 #define RM_GL_FUNCTIONS(X)                                                                         \
+  X(const unsigned char*, GetStringi, GLenum, GLuint) \
+  X(void, GetFloatv, GLenum, GLfloat*) \
+  X(void, TexParameterf, GLenum, GLenum, GLfloat) \
   X(void, Enable, GLenum)                                                                          \
   X(void, Disable, GLenum)                                                                         \
   X(void, ClearColor, GLfloat, GLfloat, GLfloat, GLfloat)                                          \

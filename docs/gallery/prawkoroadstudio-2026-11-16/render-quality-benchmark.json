@@ -1,0 +1,41 @@
+{
+    "gpu": "NVIDIA GeForce GTX 1050 Ti/PCIe/SSE2",
+    "height": 720,
+    "in_place_animation_pass": true,
+    "instances": 1000,
+    "measurements": [
+        {
+            "anisotropy": 1,
+            "cache": false,
+            "cpu_submit_p95_ms": 0.6564,
+            "gpu_p95_ms": 5.976064,
+            "static_uploaded_bytes_90_frames": 276514560,
+            "static_uploads_90_frames": 4860,
+            "variant": 0
+        },
+        {
+            "anisotropy": 1,
+            "cache": true,
+            "cpu_submit_p95_ms": 0.4658,
+            "gpu_p95_ms": 5.302272,
+            "static_uploaded_bytes_90_frames": 0,
+            "static_uploads_90_frames": 0,
+            "variant": 1
+        },
+        {
+            "anisotropy": 4,
+            "cache": true,
+            "cpu_submit_p95_ms": 0.4545,
+            "gpu_p95_ms": 5.311488,
+            "static_uploaded_bytes_90_frames": 0,
+            "static_uploads_90_frames": 0,
+            "variant": 2
+        }
+    ],
+    "parts": 8,
+    "pixel_identical_cache": true,
+    "samples": 90,
+    "scope": "synthetic scene, real OpenGL, no compositor; GPU elapsed queries and CPU submission",
+    "warmup": 15,
+    "width": 1280
+}

@@ -7,6 +7,9 @@ find_package(Qt6 ${RM_QT_VERSION} REQUIRED COMPONENTS Test OpenGL)
 # S2.2g: opt-in real GPU profiling (no CI/headless invocation or production
 # render-path changes). Invoked manually on the target NVIDIA card; excludes
 # GUI presentation/compositor but uses the very same GLRenderer + PBR textures.
+add_executable(prawko_render_quality_probe EXCLUDE_FROM_ALL prawko_render_quality_probe.cpp)
+target_link_libraries(prawko_render_quality_probe PRIVATE roadmaker_editor_lib Qt6::OpenGL)
+rm_apply_warnings(prawko_render_quality_probe)
 add_executable(prawko_gpu_probe EXCLUDE_FROM_ALL prawko_gpu_probe.cpp)
 target_link_libraries(prawko_gpu_probe PRIVATE roadmaker_editor_lib Qt6::OpenGL)
 rm_apply_warnings(prawko_gpu_probe)
@@ -48,6 +51,7 @@ if(WIN32 AND RM_BUILD_SHARED)
 endif()
 
 add_executable(roadmaker_editor_tests
+  test_render_quality.cpp
   qt_gtest_main.cpp
   test_actor_placement.cpp
   test_actor_rendering.cpp
@@ -232,4 +236,5 @@ if(WIN32)
 endif()
 
 gtest_discover_tests(roadmaker_editor_tests
+  DISCOVERY_TIMEOUT 45 # slow Windows CI/debug link: still discover ALL tests, never skip
   PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

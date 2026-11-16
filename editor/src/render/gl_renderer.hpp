@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "render/renderer.hpp"
+#include "render/render_quality.hpp"
 
 namespace roadmaker::editor {
 
@@ -29,7 +30,20 @@ namespace roadmaker::editor {
 /// gl_functions) that touches GL.
 class GLRenderer final : public Renderer {
 public:
+  struct Tuning {
+    bool cache_instance_uploads = true;
+    bool stabilize_sun_shadows = true;
+    float max_anisotropy = 4.0F;
+  };
+  struct Statistics {
+    std::uint64_t instance_uploads = 0;
+    std::uint64_t instance_bytes = 0;
+  };
   GLRenderer() = default;
+  explicit GLRenderer(Tuning tuning) : tuning_(tuning) {}
+  [[nodiscard]] Statistics statistics() const { return statistics_; }
+  [[nodiscard]] float texture_anisotropy() const { return texture_anisotropy_; }
+  void reset_statistics() { statistics_ = {}; }
   GLRenderer(const GLRenderer&) = delete;
   GLRenderer& operator=(const GLRenderer&) = delete;
   GLRenderer(GLRenderer&&) = delete;
@@ -63,6 +77,7 @@ private:
     // Per-instance transform buffer (attribs 3-6), created lazily on the first
     // instanced draw of this mesh; 0 = never instanced. Deleted in destroy().
     std::uint32_t instance_vbo = 0;
+    InstanceBufferCache instance_cache;
     std::int32_t index_count = 0;
     std::array<float, 4> color{};
     float roughness = 1.0F;
@@ -75,6 +90,10 @@ private:
   };
 
   void destroy(GpuMesh& mesh);
+  void prepare_instances(GpuMesh& mesh, std::span<const InstanceData> instances);
+  Tuning tuning_{};
+  Statistics statistics_{};
+  float texture_anisotropy_ = 1.0F;
   void draw_backdrop(const CameraMatrices& camera);
   void draw_ground(const CameraMatrices& camera);
   bool init_shadow_resources();
