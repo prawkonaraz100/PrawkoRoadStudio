@@ -13,6 +13,15 @@ $activeBranch = (& git.exe -C $root branch --show-current | Out-String).Trim()
 if ($LASTEXITCODE -ne 0 -or $activeBranch -ne 'feature/realistic-road-surfaces') {
   throw "PRAWKO_GUARD_BLOCK: expected active branch feature/realistic-road-surfaces; got $activeBranch"
 }
+# Never overwrite a running GUI executable or reload an unsaved scene.
+# The standalone build wrapper enforces this even outside PrawkoBridge.
+if ($Target -in @('editor','all')) {
+  $runningEditors = @(Get-Process -Name 'roadmaker-editor' -ErrorAction SilentlyContinue)
+  if ($runningEditors.Count -gt 0) {
+    $ids = ($runningEditors | ForEach-Object { $_.Id }) -join ','
+    throw "PRAWKO_GUARD_BLOCK: active roadmaker-editor PID(s) $ids. Save and close the editor before building $Target."
+  }
+}
 $qt=Join-Path $root '.qt\6.8.3\msvc2022_64'
 $tools=Join-Path $root 'reference\RoadMaker\toolchain'
 $cmake="$tools\cmake-3.31.6-windows-x86_64\bin\cmake.exe"
