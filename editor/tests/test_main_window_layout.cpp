@@ -428,6 +428,10 @@ TEST_F(MainWindowLayoutTest, BlenderBarrierLibraryDropAndPropertiesMoveRotateSav
   window_.load_file(scene);
   auto* library = window_.findChild<LibraryPanel*>();
   ASSERT_NE(library, nullptr);
+  // A saved Scenario scene must not conceal project GLBs behind the traffic
+  // actor category on launch; the first visible tiles must be the 3D models.
+  EXPECT_EQ(library->category_combo()->currentData().toString(),
+            QStringLiteral("Prawko | Obiekty 3D"));
   const auto* proxy = library->view()->model();
   ASSERT_NE(proxy, nullptr);
   const int models_category =
@@ -533,6 +537,10 @@ TEST_F(MainWindowLayoutTest, BlenderShelterLibraryDropMoveRotateSave) {
   window_.load_file(scene);
   auto* library = window_.findChild<LibraryPanel*>();
   ASSERT_NE(library, nullptr);
+  // A saved Scenario scene must not conceal project GLBs behind the traffic
+  // actor category on launch; the first visible tiles must be the 3D models.
+  EXPECT_EQ(library->category_combo()->currentData().toString(),
+            QStringLiteral("Prawko | Obiekty 3D"));
   const auto* proxy = library->view()->model();
   ASSERT_NE(proxy, nullptr);
   const int models_category =

@@ -2034,6 +2034,22 @@ void MainWindow::load_file(const std::filesystem::path& path) {
   // another edit happens to invalidate the scene mesh.
   if (project_.has_value()) {
     document_.refresh_registered_project_models();
+    // Restoring a Scenario scene focuses the six traffic actors. For a project
+    // with imported 3D assets, that hides the actual model library on every
+    // launch even though its manifest and thumbnails loaded correctly.
+    // Show the project's models by default after a scene opens; an explicit
+    // Scenario tab click still switches to the actor palette as before.
+    for (int row = 0; row < library_model_.rowCount(); ++row) {
+      const LibraryItem* item = library_model_.item(row);
+      if (item != nullptr && item->category == QStringLiteral("Prawko | Obiekty 3D") &&
+          item->kind == LibraryItem::Kind::Tree &&
+          !item->create_raw.value(QStringLiteral("model_file")).toString().isEmpty()) {
+        library_dock_->show();
+        library_dock_->raise();
+        library_panel_->focus_category(QStringLiteral("Prawko | Obiekty 3D"));
+        break;
+      }
+    }
   }
   remember_last_scene(path); // after the association — it may have changed
 }

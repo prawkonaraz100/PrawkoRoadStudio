@@ -2,6 +2,17 @@
 
 > Stan gałęzi z 17.11.2026. Przed zmianą kodu przeczytaj ten plik i `AGENTS.md`. Historyczne sekcje poniżej opisują także dawne stany PENDING; aktualny stan ustalaj od najnowszej sekcji i Git.
 
+## 17.11.2026 — scena 07 + dostępna biblioteka 3D — Windows PASS
+
+**Problem użytkownika:** modeli GLB nie było widać w palecie. Faktyczna przyczyna: ogólny `assets/library/manifest.json` dostarcza tylko 12 prefabrykatów dróg/stylów, natomiast 18 modeli znajdowało się już w **nakładce biblioteki istniejącego projektu** `projects/Prawko-Scenariusze/assets/library/manifest.json`; otwarcie sceny w trybie `scenario` automatycznie przełączało paletę na `Uczestnicy ruchu`. Modele nie były zgubione. Po `MainWindow::load_file`, gdy projekt zawiera modele 3D, panel skupia `Prawko | Obiekty 3D`; ręczne wybranie trybu Scenariusz wciąż działa. Dopisano asercje regresyjne do dwóch testów Qt w `editor/tests/test_main_window_layout.cpp`.
+
+**Nowa scena 07** `projects/Prawko-Scenariusze/07-pokaz-biblioteki-assetow.{xodr,xosc,rmscene.json}`, kopia istniejącej sceny 06l z pięcioma dodatkowymi obiektami. Obecnie **19 modeli/miniatur projektu, 42 obiekty 19 rodzajów, 3 aktorzy ruchu**. Dodano autorską barierę `prawko_bariera_drogowa.glb` do istniejącej biblioteki projektu, miniaturę wygenerowano z GLB w Blender 5.3 (nie stock). Oryginalnych scen 01–06l ani katalogu `archive/render-*` nie zmieniano. Scenę 07 ustawiono jako `project.json/last_scene`. Skrypt odtwarzający (odmawia nadpisania) `scripts/create_prawko_asset_showcase.py`. Na pulpicie lokalny skrót `PrawkoRoadStudio - Scena pokazowa.lnk` wskazuje `URUCHOM-PRAWKOROADSTUDIO.cmd`, otwierający WYŁĄCZNIE kanoniczny edytor i scenę 07; pilnuje już uruchomionego procesu.
+
+**Potwierdzony odbiór:** `BUILD_PASS: all`, 4/4 celowane testy GUI przeciąganie/przesuwanie/obracanie/zapis i odczyt PASS; pełne Qt **1371 PASS / 7 SKIPPED / 0 FAIL**; `QUALITY_GATE_PASS` C++ i Python; niezależna kontrola manifestu, 19 plików GLB i 19 miniaturek, 42 unikalnych obiektów XODR, linku XOSC PASS; rzeczywiste Windows GL `07` 1 droga / 0 diagnostyk, 3 aktorzy, anizotropia 4x, mapy cieni i dwa FBO odbić READY. Natywny zrzut całego okna `docs/gallery/prawkoroadstudio-2026-11-16/r7-showcase-library.png` pokazuje faktyczne miniatury w panelu `Prawko | Obiekty 3D`. Logi `archive/asset-showcase-{build,targeted-qt,full-qt,quality,qa-run}.log` (lokalnie; archiwum ignorowane w Git).
+
+**Ograniczenia:** nie oznaczono pełnego fotorealizmu sceny ani wszystkich gestów rzeczywistej fizycznej myszy. Test GUI symuluje prawdziwą ścieżkę Qt. Edytor i agent pozostają jednym produktem i w swoich dotychczasowych repozytoriach. **Następne zadanie:** poprawić jakość i czytelność sceny pokazowej według odbioru wizualnego użytkownika, bez tworzenia drugiego projektu, a następnie przejść do R6b2l.
+
+
 ## 17.11.2026 — JEDEN aktywny projekt po R6b2k
 
 **Jedyny edytor do dalszej pracy:** `F:\PrawkoRoadStudio`, gałąź `feature/realistic-road-surfaces`. Po R6b2k HEAD `21ac5d9182d3f4b41cbe5202402ca34e629545cb` zawiera wcześniejsze R6b2j oraz przeniesioną optymalizację (cherry-pick). Windows build all PASS; Qt 1371 PASS/7 SKIPPED; pełny C++/Python QUALITY_GATE_PASS; rzeczywista scena 06l, dwie wysokości odbić i dowody A/B PASS. Oba worktree i GitHub potwierdzały ten HEAD, nie było zmian roboczych. `main` edytora jest starszy i nie był scalany — nie jest drugim projektem.

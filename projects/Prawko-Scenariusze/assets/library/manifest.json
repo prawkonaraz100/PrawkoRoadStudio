@@ -234,6 +234,19 @@
         "license": "Apache-2.0 — autorski model PrawkoNaRaz"
       },
       "thumbnail": "assets/library/thumbnails/r6b2i-kaluza-przykraweznikowa-700.png"
+    },
+    {
+      "key": "prop.prawko_bariera_drogowa",
+      "label": "Bariera drogowa (Prawko GLB)",
+      "category": "Prawko | Obiekty 3D",
+      "thumbnail": "assets/library/thumbnails/prawko_bariera_drogowa.png",
+      "create": {
+        "kind": "tree",
+        "model": "prawko_bariera_drogowa",
+        "model_file": "assets/props/prawko_bariera_drogowa.glb",
+        "source": "assets/prawko/blender/prawko_bariera_drogowa.glb",
+        "license": "Apache-2.0 / PrawkoNaRaz"
+      }
     }
   ]
 }

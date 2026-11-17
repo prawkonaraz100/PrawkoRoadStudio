@@ -9,6 +9,9 @@ Pliki OpenDRIVE i OpenSCENARIO przygotowane 15 listopada 2026 r. od podstaw (Apa
 | 03-deszcz-luk | deszcz/jesien | Luk drogi, AutoPrzed hamuje, Ego reaguje |
 | 04-zima-mgla | mgla/zima | Wolniejsza jazda i ograniczona widocznosc |
 | 05-wiata-test | dzien/lato | Osobna scena do testu GLB i materialow realistycznej wiaty przystankowej |
+| 07-pokaz-biblioteki-assetow | dzien/deszcz | Scena pokazowa z 19 rodzajami modeli GLB: 42 obiekty i 3 uczestnicy ruchu |
+
+**Scena pokazowa 07 (17.11.2026):** to kolejna scena w TYM SAMYM projekcie, nie drugi projekt. Korzysta z geometrii i scenariusza 06l, zachowując wszystkie poprzednie pliki. Katalog `assets/library/manifest.json` zawiera 19 modeli, a `assets/props` ich lokalne kopie i `assets/library/thumbnails` prawdziwe miniatury. Nowy model bariery pochodzi z autorskiego pliku `assets/prawko/blender/prawko_bariera_drogowa.glb`. Po otwarciu 07 w aktualnym edytorze panel Library powinien wskazać `Prawko | Obiekty 3D`, skąd można przeciągać modele na drogę i edytować ich położenie/obrót. Skrót uruchomieniowy na pulpicie otwiera jedyną właściwą instalację `F:\PrawkoRoadStudio`; nie kopiować scen do `archive/render-*`.
 
 Scena 05-wiata-test powstala osobno na potrzeby etapu Prawko Assets A1. Model GLB i miniatura znajduja sie w assets/props i assets/library. Cztery pierwotne scenariusze pozostaja bez zmian, a generator scripts/create-prawko-scenarios.cjs odtwarza tylko pierwotny pakiet czterech. Wiata jest przetestowana w dzien, deszcz i noc (noc bez realistycznego oswietlenia), ale pelne tekstury PBR/UV sa nadal otwarte.
 
