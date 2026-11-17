@@ -120,7 +120,7 @@ bool SelectTool::mouse_press(const ToolEvent& event) {
   // restricted to already-selected props; it never captures unrelated assets.
   const std::vector<ObjectId> selected_objects = selection_.selected_objects();
   std::optional<PickHit> selected_edge;
-  if (!actor && event.screen && selected_objects.size() > 1 &&
+  if (!actor && event.screen && !selected_objects.empty() &&
       (!event.pick || (!event.pick->object.is_valid() && !event.pick->signal.is_valid()))) {
     selected_edge = pick_selected_prop_screen_edges(
         document_.mesh(), *event.screen, selected_objects);

@@ -2,7 +2,17 @@
 
 > Stan gałęzi z 17.11.2026. Przed zmianą kodu przeczytaj ten plik i `AGENTS.md`. Historyczne sekcje poniżej opisują także dawne stany PENDING; aktualny stan ustalaj od najnowszej sekcji i Git.
 
-## 17.11.2026 — wspólna biblioteka i ekran wyboru projektów (najnowszy stan)
+## 17.11.2026 — GLB: trafienie, zaznaczanie i przesuwanie prefabrykatu (#2) — Windows PASS
+
+**Stan i przyczyna błędnej oceny:** prefabrykat `prawko_bariera_drogowa` był poprawnie renderowany i selekcjonowany przez `pick()`, natomiast wcześniejsze automatyczne kliknięcia zrzutów w pomniejszeniu trafiały w jezdnię obok obiektu. W zweryfikowanym GUI Windows 1616×1039 fizyczne współrzędne środka modelu wynosiły około (930,660), nie (885,631). Dodatkowo lokalny `SelectTool::mouse_press` obsługuje teraz fallback ekranowy już dla **jednego** zaznaczonego ObjectId (bez poprzedniej blokady `selected_objects.size() > 1`), zaś `pick_selected_prop_screen_edges` uwzględnia wnętrza rzeczywiście rzutowanych trójkątów i mały margines krawędzi tylko dla już zaznaczonych prefabrykatów. Nie poszerzono globalnego picku drogi.
+
+**Odbiór prawdziwego Windows GUI:** drag ikony `Bariera drogowa (Prawko GLB)` z biblioteki (60,790) na scenę (932,670) — PASS (run 44164695804). Klik dokładnie w geometrię (930,660) zachował `Model prawko_bariera_drogowa` w panelu Properties; tymczasowa diagnostyka potwierdziła `sel=1`, `mesh=43`, `match=1`, `actor=0`, `rayprop=1`, `fallback=0` — promień trafił w obiekt (run 44164990439). Fizyczny drag (930,660)→(1020,660) przesunął tylko prefabrykat, toast `Prop moved — Ctrl+Z to undo`, współrzędne `s=114,807 m; t=-5,731 m` → `s=120,154 m; t=-4,570 m`; droga pozostała nieruchoma (run 44165200259). Dwukrotne Undo przywróciło scenę 07 bez niezapisanych zmian i bez zapisania próbnego obiektu na dysku (run 44165413084). Tymczasową emisję `PICKDIAG` usunięto po teście.
+
+**Kod i testy:** `editor/src/tools/select_tool.cpp` (pojedyncza selekcja), `editor/src/viewport/picking.cpp` (realne rzutowane powierzchnie), `editor/tests/test_picking.cpp` (trafianie we wnętrze trójkąta), `editor/tests/test_select_tool.cpp` (regresja: 1 zaznaczony prop, road-only pick, przesunięcie obiektu i Undo bez naruszenia drogi). Windows `build-qt-tests` PASS (run 44167584746); pełne Qt **1377 PASS / 7 SKIPPED / 0 FAIL** (run 44167886049); kanoniczny `build-all` **PASS** (run 44168342698); Quality Gate **2074 C++ PASS, 10 DISABLED; 7 Python PASS** (run 44168548399). Nie zaliczać SKIPPED/DISABLED jako wykonanych testów.
+
+**Następny etap:** wrócić do nieukończonego R6b2l: długi przejazd z dynamicznymi cieniami i odbiciami, trzy lusterka, przełączanie kamer oraz rozdzielczości FBO. Odbiór obrazu i wydajności na rzeczywistej scenie; nie deklarować pełnego fotorealizmu ani zakończenia R6b2l bez pomiarów. Przed rozpoczęciem sprawdzić nowy HEAD, Git, otwarte okna i sceny.
+
+## 17.11.2026 — wspólna biblioteka i ekran wyboru projektów (poprzedni etap)
 
 **Cel użytkownika:** jedna biblioteka assetów dla WSZYSTKICH projektów, nie osobne manifesty; brak autowczytywania projektu na starcie; selekcja i usuwanie projektów z listy przed otwarciem; osobne akcje zamknięcia sceny/projektu w menu `Plik`.
 

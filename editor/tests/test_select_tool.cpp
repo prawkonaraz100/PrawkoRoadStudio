@@ -20,6 +20,7 @@
 // and preview geometry — the M2 tool test seam
 // (docs/design/m2/01_editing_framework.md §4).
 
+#include "roadmaker/assets/prop_library.hpp"
 #include "roadmaker/edit/connection.hpp"
 #include "roadmaker/edit/operations.hpp"
 #include "roadmaker/edit/snap.hpp"
@@ -33,6 +34,7 @@
 
 #include <QSignalSpy>
 #include <QString>
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
@@ -46,6 +48,8 @@
 #include "document/document.hpp"
 #include "document/selection_model.hpp"
 #include "tools/select_tool.hpp"
+#include "viewport/camera.hpp"
+#include "viewport/projection.hpp"
 
 using roadmaker::LaneId;
 using roadmaker::RoadId;
@@ -189,6 +193,65 @@ roadmaker::SignalId place_sign(Document& document, RoadId road, double s, double
 } // namespace
 
 // --- selection: clicks -----------------------------------------------------
+
+
+TEST(SelectTool, OneSelectedPropScreenEdgePreventsAccidentalRoadDrag) {
+  Scene scene;
+  const roadmaker::ObjectId prop = place_prop(scene.document, scene.dragged, 25.0, 1.0);
+  scene.selection.select({.road = scene.dragged, .object = prop}, SelectMode::Replace);
+  ASSERT_EQ(scene.selection.selected_objects().size(), 1U);
+
+  // Reproduce a ray that reports the lane behind a narrow but visible prop.
+  // Project an actual rendered model-triangle vertex, not a bounding box.
+  const auto& instances = scene.document.mesh().objects;
+  const auto it = std::find_if(instances.begin(), instances.end(),
+                               [&](const auto& candidate) { return candidate.object == prop; });
+  ASSERT_NE(it, instances.end());
+  const auto* model = roadmaker::props::model(it->model_id);
+  ASSERT_NE(model, nullptr);
+  ASSERT_FALSE(model->parts.empty());
+  const auto& part = model->parts.front();
+  ASSERT_FALSE(part.indices.empty());
+  const std::size_t base = static_cast<std::size_t>(part.indices.front()) * 3;
+  ASSERT_LT(base + 2, part.positions.size());
+  const double x = part.positions[base] * it->scale;
+  const double y = part.positions[base + 1] * it->scale;
+  const double z = part.positions[base + 2] * it->scale;
+  const double cs = std::cos(it->heading), sn = std::sin(it->heading);
+  const double wx = it->position[0] + cs * x - sn * y;
+  const double wy = it->position[1] + sn * x + cs * y;
+  const double wz = it->position[2] + z;
+  roadmaker::editor::OrbitCamera camera;
+  camera.frame({static_cast<float>(it->position[0]),
+                static_cast<float>(it->position[1]), 3.0F}, 12.0F);
+  const auto matrices = camera.matrices(4.0F / 3.0F);
+  const auto pixel = roadmaker::editor::project_to_screen(
+      matrices, wx, wy, wz, 800.0, 600.0);
+  ASSERT_TRUE(pixel.has_value());
+
+  ToolEvent press = at(it->position[0], it->position[1],
+                       Qt::LeftButton, Qt::NoModifier, scene.hit(scene.dragged));
+  press.screen = roadmaker::editor::ScreenContext{
+      .camera = matrices, .px = (*pixel)[0], .py = (*pixel)[1],
+      .width = 800.0, .height = 600.0};
+  const Waypoint road_before = node(scene.document, scene.dragged, 0);
+  const double old_s = scene.document.network().object(prop)->s;
+  const int undo_before = scene.document.undo_stack()->count();
+  SelectTool tool(scene.document, scene.selection);
+  ASSERT_TRUE(tool.mouse_press(press));
+  const double move_x = it->position[0] + 8.0;
+  const double move_y = it->position[1];
+  ASSERT_TRUE(tool.mouse_move(at(move_x, move_y, Qt::LeftButton)));
+  EXPECT_TRUE(tool.moving_object()) << "Prop edge must win over lane-only ray pick";
+  ASSERT_TRUE(tool.mouse_release(at(move_x, move_y)));
+  ASSERT_NE(scene.document.network().object(prop), nullptr);
+  EXPECT_GT(scene.document.network().object(prop)->s, old_s + 4.0);
+  EXPECT_EQ(scene.selection.primary().object, prop);
+  EXPECT_TRUE(scene.selection.selected_roads().empty());
+  EXPECT_DOUBLE_EQ(node(scene.document, scene.dragged, 0).x, road_before.x);
+  EXPECT_DOUBLE_EQ(node(scene.document, scene.dragged, 0).y, road_before.y);
+  EXPECT_EQ(scene.document.undo_stack()->count(), undo_before + 1);
+}
 
 TEST(SelectTool, ClickSelectsPickAndMissClears) {
   Scene scene;
@@ -814,6 +877,68 @@ TEST(SelectTool, PrefabDragOutsideAnyMembersStationRangeRejectsWholeGroup) {
   EXPECT_EQ(xodr(scene.document), before);
   EXPECT_EQ(scene.document.undo_stack()->count(), undo_base);
   EXPECT_EQ(scene.selection.selected_objects().size(), 2U);
+}
+
+TEST(SelectTool, SingleSelectedPropScreenFallbackMovesPropNotRoad) {
+  // Regression #2: if the ray hits the road behind a thin prefab, a SINGLE
+  // selected object must still take the mouse press through screen-space pick.
+  // This tests the SelectTool guard, not only the picking helper.
+  Scene scene;
+  const roadmaker::ObjectId prop = place_prop(scene.document, scene.dragged, 30.0, 0.0);
+  scene.selection.select({.road = scene.dragged, .object = prop});
+
+  const auto& instances = scene.document.mesh().objects;
+  const roadmaker::ObjectInstance* instance = nullptr;
+  for (const auto& candidate : instances) {
+    if (candidate.object == prop) {
+      instance = &candidate;
+      break;
+    }
+  }
+  ASSERT_NE(instance, nullptr);
+
+  // Keep all model edges within a few pixels of the screen centre. This
+  // deterministic headless projection guarantees a selected-prop fallback
+  // independent of the orbit camera, while the supplied exact ray hits road.
+  roadmaker::editor::CameraMatrices matrices{};
+  matrices.view[0] = matrices.view[5] = matrices.view[10] = matrices.view[15] = 1.0F;
+  matrices.view[12] = -static_cast<float>(instance->position[0]);
+  matrices.view[13] = -static_cast<float>(instance->position[1]);
+  matrices.view[14] = -static_cast<float>(instance->position[2]);
+  matrices.projection[0] = matrices.projection[5] = matrices.projection[10] = 0.0001F;
+  matrices.projection[15] = 1.0F;
+  const roadmaker::editor::ScreenContext screen{
+      .camera = matrices, .px = 400.0, .py = 300.0, .width = 800.0, .height = 600.0};
+  const std::array<roadmaker::ObjectId, 1> chosen{prop};
+  const auto screen_hit = roadmaker::editor::pick_selected_prop_screen_edges(
+      scene.document.mesh(), screen, chosen);
+  ASSERT_TRUE(screen_hit.has_value());
+  ASSERT_EQ(screen_hit->object, prop);
+
+  const auto* road = scene.document.network().road(scene.dragged);
+  ASSERT_NE(road, nullptr);
+  const auto start = roadmaker::editor::station_to_world(road->plan_view, 30.0, 0.0);
+  const auto finish = roadmaker::editor::station_to_world(road->plan_view, 40.0, 1.0);
+  const auto middle_before = node(scene.document, scene.dragged, 1);
+  const auto state_before = xodr(scene.document);
+  const auto count_before = scene.document.undo_stack()->count();
+  const double prop_s_before = scene.document.network().object(prop)->s;
+
+  SelectTool tool(scene.document, scene.selection);
+  ToolEvent press = at(start[0], start[1], Qt::LeftButton, Qt::NoModifier,
+                       scene.hit(scene.dragged)); // road-only ray result
+  press.screen = screen;
+  ASSERT_TRUE(tool.mouse_press(press));
+  ASSERT_TRUE(tool.mouse_move(at(finish[0], finish[1], Qt::LeftButton)));
+  ASSERT_TRUE(tool.moving_object()) << "A single selected prop must not start road drag";
+  ASSERT_TRUE(tool.mouse_release(at(finish[0], finish[1])));
+  EXPECT_EQ(scene.selection.primary().object, prop);
+  EXPECT_EQ(node(scene.document, scene.dragged, 1), middle_before);
+  ASSERT_NE(scene.document.network().object(prop), nullptr);
+  EXPECT_GT(scene.document.network().object(prop)->s, prop_s_before + 5.0);
+  EXPECT_EQ(scene.document.undo_stack()->count(), count_before + 1);
+  scene.document.undo_stack()->undo();
+  EXPECT_EQ(xodr(scene.document), state_before);
 }
 
 TEST(SelectTool, MoveToolDragMovesAPropAlongItsRoadOneUndo) {

@@ -234,6 +234,63 @@ TEST(PickScreen, ThinSelectedPrefabPoleHasLimitedPixelGrabWithoutStealingRoadCli
   EXPECT_FALSE(pick_selected_prop_screen_edges(mesh, screen, {}).has_value());
 }
 
+TEST(PickScreen, SelectedPrefabFaceInteriorIsPickableBeyondEdgeSlop) {
+  // An actual projected triangle interior may be far from every visible edge.
+  // Simulate the viewport's road-only ray result: a selected prefab must still
+  // be grabbable by pressing anywhere on its face, not only on thin outlines.
+  props::PropModel model;
+  model.id = "test_large_screen_pick_face";
+  model.height = 2.0;
+  model.radius = 5.0;
+  props::PropPart face;
+  face.positions = {-3.0, -3.0, 2.0, 3.0, -3.0, 2.0, 0.0, 3.0, 2.0};
+  face.indices = {0, 1, 2};
+  face.color = {0.6F, 0.5F, 0.3F};
+  model.parts.push_back(face);
+  props::register_project_models({model});
+  struct ClearProjectModels {
+    ~ClearProjectModels() { props::clear_project_models(); }
+  } clear_models;
+
+  RoadNetwork network;
+  NetworkMesh mesh;
+  mesh.roads.push_back(make_quad_road(network, "1", 0.0, 50.0));
+  const ObjectId prefab{.index = 77, .gen = 0};
+  mesh.objects.push_back(ObjectInstance{.object = prefab,
+                                        .road = mesh.roads[0].road,
+                                        .model_id = model.id,
+                                        .position = {25.0, 25.0, 0.0},
+                                        .heading = 0.0});
+  OrbitCamera camera;
+  camera.frame({25.0F, 25.0F, 2.0F}, 8.0F);
+  const CameraMatrices matrices = camera.matrices(4.0F / 3.0F);
+  const auto a = project_to_screen(matrices, 22.0, 22.0, 2.0, 800.0, 600.0);
+  const auto b = project_to_screen(matrices, 28.0, 22.0, 2.0, 800.0, 600.0);
+  const auto c = project_to_screen(matrices, 25.0, 28.0, 2.0, 800.0, 600.0);
+  ASSERT_TRUE(a && b && c);
+  ScreenContext screen{.camera = matrices,
+                       .px = ((*a)[0] + (*b)[0] + (*c)[0]) / 3.0,
+                       .py = ((*a)[1] + (*b)[1] + (*c)[1]) / 3.0,
+                       .width = 800.0,
+                       .height = 600.0};
+  const std::array<std::array<double, 3>, 4> outline{{
+      {22.0, 22.0, 2.0}, {28.0, 22.0, 2.0},
+      {25.0, 28.0, 2.0}, {22.0, 22.0, 2.0}}};
+  const auto edge = screen_distance_to_polyline(screen, outline);
+  ASSERT_TRUE(edge);
+  ASSERT_GT(edge->distance, 7.0) << "The face centre must defeat the old edge-only picker";
+
+  const std::array<ObjectId, 1> selected{prefab};
+  const auto inside = pick_selected_prop_screen_edges(mesh, screen, selected);
+  ASSERT_TRUE(inside);
+  EXPECT_EQ(inside->object, prefab);
+  EXPECT_EQ(inside->road, mesh.roads[0].road);
+
+  screen.px += 200.0;
+  EXPECT_FALSE(pick_selected_prop_screen_edges(mesh, screen, selected).has_value());
+  EXPECT_FALSE(pick_selected_prop_screen_edges(mesh, screen, {}).has_value());
+}
+
 TEST(Pick, HitInsideQuadReturnsLaneAndPoint) {
   RoadNetwork network;
   NetworkMesh mesh;

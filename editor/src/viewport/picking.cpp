@@ -479,11 +479,39 @@ pick_selected_prop_screen_edges(const NetworkMesh& mesh,
             world_point(vertex(part.positions, part.indices[i + 1])),
             world_point(vertex(part.positions, part.indices[i + 2])),
             first};
+        // A mouse press inside a broad projected triangle is on the visible
+        // prefab even when its nearest model edge is more than the small
+        // screen-pixel tolerance away. The old edge-only fallback missed the
+        // entire middle of larger GLB faces and handed the drag to the road.
         const auto edge = screen_distance_to_polyline(screen, outline);
-        if (!edge || edge->distance > best_pixels) {
+        double pixels = edge ? edge->distance : std::numeric_limits<double>::infinity();
+        const auto project_vertex = [&screen](const std::array<double, 3>& p) {
+          return project_to_screen(screen.camera, p[0], p[1], p[2],
+                                   screen.width, screen.height);
+        };
+        const auto a = project_vertex(outline[0]);
+        const auto b = project_vertex(outline[1]);
+        const auto c = project_vertex(outline[2]);
+        if (a && b && c) {
+          const auto side = [](const std::array<double, 2>& p,
+                               const std::array<double, 2>& q, double x, double y) {
+            return (q[0] - p[0]) * (y - p[1]) - (q[1] - p[1]) * (x - p[0]);
+          };
+          const double area = side(*a, *b, (*c)[0], (*c)[1]);
+          if (std::abs(area) > 1e-6) {
+            const double s0 = side(*a, *b, screen.px, screen.py);
+            const double s1 = side(*b, *c, screen.px, screen.py);
+            const double s2 = side(*c, *a, screen.px, screen.py);
+            if ((area > 0.0 && s0 >= 0.0 && s1 >= 0.0 && s2 >= 0.0) ||
+                (area < 0.0 && s0 <= 0.0 && s1 <= 0.0 && s2 <= 0.0)) {
+              pixels = 0.0;
+            }
+          }
+        }
+        if (pixels >= best_pixels) {
           continue;
         }
-        best_pixels = edge->distance;
+        best_pixels = pixels;
         closest = PickHit{.road = instance.road,
                           .object = instance.object,
                           .position = instance.position};
