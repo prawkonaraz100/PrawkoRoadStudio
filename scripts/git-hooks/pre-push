@@ -1,0 +1,16 @@
+#!/bin/sh
+# Shared Git hook: never publish from historical side worktrees.
+canonical=$(git -C F:/PrawkoRoadStudio rev-parse --show-toplevel 2>/dev/null) || exit 1
+actual=$(git rev-parse --show-toplevel 2>/dev/null) || exit 1
+branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null) || branch=''
+if [ "$actual" != "$canonical" ] || [ "$branch" != "feature/realistic-road-surfaces" ]; then
+  echo "PRAWKO_GUARD_BLOCK: push only from canonical active worktree and branch." >&2
+  exit 1
+fi
+while read local_ref local_sha remote_ref remote_sha; do
+  if [ "$local_ref" != "refs/heads/feature/realistic-road-surfaces" ]; then
+    echo "PRAWKO_GUARD_BLOCK: only the active feature branch may be pushed without updating project policy." >&2
+    exit 1
+  fi
+done
+exit 0

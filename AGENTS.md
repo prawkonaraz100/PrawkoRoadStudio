@@ -9,6 +9,20 @@ drogowych do nauki jazdy oraz poprawie jakości wizualnej siatki 3D.
 **Dokument nadrzędny (wymagania):** `docs/PRAWKO-ROAD-STUDIO.md`.
 **Ostatni stan i następne zadanie (START TUTAJ):** `HANDOFF.md`.
 
+**JEDEN AKTYWNY PROJEKT (17.11.2026):** Edytor rozwijaj wyłącznie w
+`F:\PrawkoRoadStudio`, na `feature/realistic-road-surfaces`. Zwykła
+aplikacja to `F:\PrawkoRoadStudio\build\dev-windows\editor\roadmaker-editor.exe`,
+a sceny to `F:\PrawkoRoadStudio\projects`. `archive/render-opt` i
+`archive/render-integration` są WYŁĄCZNIE historycznymi worktree do odczytu
+starych dowodów; NIE uruchamiaj ich aplikacji, NIE edytuj tam kodu ani NIE
+przenoś tam nowych scen. Po R6b2k wszystko potrzebne jest już w aktywnej
+gałęzi (`21ac5d9`). Agenta rozwijaj nadal w jego przewidzianym repo `agent/`:
+jest modułem TEGO SAMEGO produktu, nie drugim edytorem. `main` edytora
+pozostaje starszą gałęzią, NIE osobnym projektem; nie zmieniaj strategii
+scalania bez zgody użytkownika. Standardowe Git hooks (pre-commit/pre-push)
+blokują pracę/publikację z archiwalnych kopii; po nowym klonie odtwórz
+lokalnie `git config core.hooksPath F:/PrawkoRoadStudio/scripts/git-hooks`.
+
 ## Pierwsze kroki
 
 1. Połącz się z DESKTOP-G2FV0GJ przez Desktop Commander.

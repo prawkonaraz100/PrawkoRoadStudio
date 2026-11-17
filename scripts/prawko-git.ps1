@@ -6,6 +6,15 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
+$canonical = 'F:\PrawkoRoadStudio'
+if (![string]::Equals([IO.Path]::GetFullPath($root).TrimEnd('\'), $canonical,
+     [StringComparison]::OrdinalIgnoreCase)) {
+  throw "PRAWKO_GUARD_BLOCK: use only $canonical, never archive worktrees."
+}
+$activeBranch = (& git.exe -C $root branch --show-current | Out-String).Trim()
+if ($LASTEXITCODE -ne 0 -or $activeBranch -ne 'feature/realistic-road-surfaces') {
+  throw "PRAWKO_GUARD_BLOCK: expected active branch feature/realistic-road-surfaces; got $activeBranch"
+}
 if ([string]::IsNullOrWhiteSpace($BackupRoot)) {
   $BackupRoot = Join-Path $root 'archive\git-backups'
 }

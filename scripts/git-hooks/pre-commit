@@ -1,0 +1,11 @@
+#!/bin/sh
+# PrawkoRoadStudio: prevent accidental commits from old integration worktrees.
+canonical=$(git -C F:/PrawkoRoadStudio rev-parse --show-toplevel 2>/dev/null) || exit 1
+actual=$(git rev-parse --show-toplevel 2>/dev/null) || exit 1
+branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null) || branch=''
+if [ "$actual" != "$canonical" ] || [ "$branch" != "feature/realistic-road-surfaces" ]; then
+  echo "PRAWKO_GUARD_BLOCK: commit only in F:/PrawkoRoadStudio on feature/realistic-road-surfaces." >&2
+  echo "Historical archive worktrees are not a second active project." >&2
+  exit 1
+fi
+exit 0

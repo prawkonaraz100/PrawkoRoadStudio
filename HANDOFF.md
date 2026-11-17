@@ -1,6 +1,17 @@
 # PrawkoRoadStudio — PRZEKAZANIE PRACY / START TUTAJ
 
-> Stan tej gałęzi na 16.11.2026. Przed zmianą kodu przeczytaj ten plik i `AGENTS.md`. Kolejność prac wyznacza **Aktywny plan** na początku pliku.
+> Stan gałęzi z 17.11.2026. Przed zmianą kodu przeczytaj ten plik i `AGENTS.md`. Historyczne sekcje poniżej opisują także dawne stany PENDING; aktualny stan ustalaj od najnowszej sekcji i Git.
+
+## 17.11.2026 — JEDEN aktywny projekt po R6b2k
+
+**Jedyny edytor do dalszej pracy:** `F:\PrawkoRoadStudio`, gałąź `feature/realistic-road-surfaces`. Po R6b2k HEAD `21ac5d9182d3f4b41cbe5202402ca34e629545cb` zawiera wcześniejsze R6b2j oraz przeniesioną optymalizację (cherry-pick). Windows build all PASS; Qt 1371 PASS/7 SKIPPED; pełny C++/Python QUALITY_GATE_PASS; rzeczywista scena 06l, dwie wysokości odbić i dowody A/B PASS. Oba worktree i GitHub potwierdzały ten HEAD, nie było zmian roboczych. `main` edytora jest starszy i nie był scalany — nie jest drugim projektem.
+
+**Archiwalne worktree, NIE do nowych prac ani uruchamiania:** `F:\PrawkoRoadStudio\archive\render-opt` (`codex/render-quality-performance`) i `F:\PrawkoRoadStudio\archive\render-integration` (`feature/r6b2k-render-integration`). Pozostawiono je z ich lokalnymi logami i wynikami, aby niczego nie stracić. Nie edytować, nie budować, nie uruchamiać EXE i nie tworzyć na nich kolejnych gałęzi. Standardowe commity i push z tych worktree blokują wspólne Git hooks. Nie usuwaj tych katalogów bez osobnego audytu zapisanych, także ignorowanych artefaktów.
+
+**Jedyna produkcyjna ścieżka:** EXE `F:\PrawkoRoadStudio\build\dev-windows\editor\roadmaker-editor.exe`, sceny `F:\PrawkoRoadStudio\projects`, agent `F:\PrawkoRoadStudio\agent` (osobne repo ze względu na architekturę, ale ten sam produkt). Przed jakimkolwiek zadaniem: `scripts/prawko-resume.ps1`, sprawdzenie HEAD i czystego Git; po zadaniu HANDOFF + testy + commit na aktywnej gałęzi + GitHub i kopia `git bundle`. Nie ruszać `main` ani zamieniać archiwalnych katalogów w aktywne projekty bez uzgodnienia z użytkownikiem.
+
+**Następny etap, nieukończony:** R6b2l — długi przejazd z dynamicznymi cieniami i odbiciami, zmiana rozdzielczości FBO przy przełączaniu kamer. Nie traktować go jako PASS.
+
 
 ## Cel PrawkoNaRaz
 
