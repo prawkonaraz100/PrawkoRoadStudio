@@ -146,6 +146,14 @@ WelcomeWidget::WelcomeWidget(Settings& settings, QWidget* parent)
   open_button->setMinimumHeight(36);
   connect(open_button, &QPushButton::clicked, this, &WelcomeWidget::open_requested);
   intro->addWidget(open_button);
+  auto* new_project_button = new QPushButton(tr("Nowy projekt…"), this);
+  new_project_button->setObjectName(QStringLiteral("welcomeNewProject"));
+  connect(new_project_button, &QPushButton::clicked, this, &WelcomeWidget::new_project_requested);
+  intro->addWidget(new_project_button);
+  auto* open_project_button = new QPushButton(tr("Otwórz projekt z dysku…"), this);
+  open_project_button->setObjectName(QStringLiteral("welcomeOpenProject"));
+  connect(open_project_button, &QPushButton::clicked, this, &WelcomeWidget::open_project_requested);
+  intro->addWidget(open_project_button);
   intro->addSpacing(16);
 
   auto* links = new QLabel(
@@ -190,8 +198,39 @@ WelcomeWidget::WelcomeWidget(Settings& settings, QWidget* parent)
   projects_list_ = make_scene_list(projects_section_);
   projects_list_->setObjectName(QStringLiteral("welcomeProjectsList"));
   projects_layout->addWidget(projects_list_);
-  connect(projects_list_, &QListWidget::itemClicked, this, [this](const QListWidgetItem* item) {
-    emit project_requested(item->data(Qt::UserRole).toString());
+  // Single click SELECTS only. Nothing is loaded until the user explicitly
+  // chooses Open. This allows removing an entry before opening any project.
+  auto* project_controls = new QHBoxLayout;
+  auto* choose_project = new QPushButton(tr("Otwórz wybrany"), projects_section_);
+  choose_project->setObjectName(QStringLiteral("welcomeChooseProject"));
+  auto* forget_project = new QPushButton(tr("Usuń z listy"), projects_section_);
+  forget_project->setObjectName(QStringLiteral("welcomeForgetProject"));
+  choose_project->setEnabled(false);
+  forget_project->setEnabled(false);
+  project_controls->addWidget(choose_project);
+  project_controls->addWidget(forget_project);
+  projects_layout->addLayout(project_controls);
+  connect(projects_list_, &QListWidget::itemSelectionChanged, this,
+          [this, choose_project, forget_project] {
+            const bool chosen = projects_list_->currentItem() != nullptr;
+            choose_project->setEnabled(chosen);
+            forget_project->setEnabled(chosen);
+          });
+  connect(choose_project, &QPushButton::clicked, this, [this] {
+    if (const QListWidgetItem* item = projects_list_->currentItem()) {
+      emit project_requested(item->data(Qt::UserRole).toString());
+    }
+  });
+  connect(projects_list_, &QListWidget::itemDoubleClicked, this,
+          [this](const QListWidgetItem* item) {
+            emit project_requested(item->data(Qt::UserRole).toString());
+          });
+  connect(forget_project, &QPushButton::clicked, this, [this] {
+    if (const QListWidgetItem* item = projects_list_->currentItem()) {
+      // Recent-list management only: never remove project.json, scenes, GLBs.
+      settings_.remove_recent_project(item->data(Qt::UserRole).toString());
+      populate_projects();
+    }
   });
   content->addWidget(projects_section_, 2);
 

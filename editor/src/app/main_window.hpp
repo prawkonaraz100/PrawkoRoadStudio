@@ -89,11 +89,6 @@ public:
   /// No document writes and no change to the saved scene or its view state.
   void open_studio_library();
 
-  /// Interactive startup only: reopen the most recently used valid project and
-  /// its last scene. Falls back to the bundled Prawko project in a source
-  /// worktree; never creates a second project. Screenshot mode does not call it.
-  [[nodiscard]] bool restore_last_project_on_startup();
-
   /// Screenshot mode: highlight roads by OpenDRIVE id so the viewport
   /// feedback states render in a capture — `select_odr` gets the strong
   /// selection tint, `hover_odr` the subtle hover brighten. Empty or unknown
@@ -147,6 +142,10 @@ private:
   void open_file_dialog();
   /// File ▸ New Project…: directory picker + name prompt, then Project::create.
   void new_project_dialog();
+  /// Close the active scene but keep the current project's Library overlay.
+  void close_scene();
+  /// Close scene + project and return to the welcome view without quitting.
+  void close_project();
   /// File ▸ Open Project…: directory picker, then open_project_dir.
   void open_project_dialog();
   /// Opens the project at `dir` (error box on failure) and adopts it.
@@ -161,6 +160,10 @@ private:
   /// Library model as an overlay; clears the overlay when the project has
   /// none (or none parses).
   void apply_project_overlay();
+  /// One canonical global catalog for all projects, plus legacy overlays.
+  void reload_shared_catalogue();
+  void register_available_models(const LibraryManifest* project_overlay = nullptr);
+  [[nodiscard]] Expected<std::filesystem::path> library_manifest_for_write() const;
   /// Turns the project overlay's materials[] definitions into the renderer's
   /// project material overlay, absolutising their project-relative texture
   /// paths (p6-s8, #322).

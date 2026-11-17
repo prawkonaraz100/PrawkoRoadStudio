@@ -1272,6 +1272,30 @@ TEST_F(SceneStateWindowTest, WeatherAndSeasonRestoreAndChangeViewportWithUi) {
   EXPECT_EQ(window_->viewport()->season(), SeasonPreset::Summer);
 }
 
+TEST_F(SceneStateWindowTest, CloseProjectReturnsToChooserWithoutDeletingAnything) {
+  auto project = Project::create(root(), QStringLiteral("Test close"));
+  ASSERT_TRUE(project.has_value());
+  const auto scene = make_scene("closable.xodr", nullptr);
+  window_->load_file(scene);
+  auto* close_project = window_->findChild<QAction*>(QStringLiteral("project.close"));
+  auto* close_scene = window_->findChild<QAction*>(QStringLiteral("scene.close"));
+  ASSERT_NE(close_project, nullptr);
+  ASSERT_NE(close_scene, nullptr);
+  // Closing just the scene leaves the project available.
+  close_scene->trigger();
+  EXPECT_TRUE(window_->windowTitle().contains(QStringLiteral("Test close")));
+  window_->load_file(scene);
+  close_project->trigger();
+  EXPECT_FALSE(window_->windowTitle().contains(QStringLiteral("Test close")));
+  auto* welcome = window_->findChild<WelcomeWidget*>();
+  ASSERT_NE(welcome, nullptr);
+  auto* projects = welcome->findChild<QListWidget*>(QStringLiteral("welcomeProjectsList"));
+  ASSERT_NE(projects, nullptr);
+  EXPECT_EQ(projects->count(), 1);
+  EXPECT_TRUE(std::filesystem::exists(root() / "project.json"));
+  EXPECT_TRUE(std::filesystem::exists(scene));
+}
+
 TEST_F(SceneStateWindowTest, SavingAndOpeningAProjectRemembersItsLastScene) {
   auto project = Project::create(root(), QStringLiteral("Downtown"));
   ASSERT_TRUE(project.has_value());
@@ -1288,8 +1312,16 @@ TEST_F(SceneStateWindowTest, SavingAndOpeningAProjectRemembersItsLastScene) {
   MainWindow reopened(nullptr, /*restore_saved_layout=*/false);
   auto* welcome = reopened.findChild<WelcomeWidget*>();
   ASSERT_NE(welcome, nullptr);
+  auto* projects = welcome->findChild<QListWidget*>(QStringLiteral("welcomeProjectsList"));
+  auto* choose = welcome->findChild<QPushButton*>(QStringLiteral("welcomeChooseProject"));
+  ASSERT_NE(projects, nullptr);
+  ASSERT_NE(choose, nullptr);
+  ASSERT_EQ(projects->count(), 1);
+  EXPECT_FALSE(choose->isEnabled());
+  projects->setCurrentRow(0); // selecting must not open the project
+  EXPECT_TRUE(choose->isEnabled());
   EXPECT_FALSE(reopened.windowTitle().contains(QStringLiteral("main.xodr")));
-  emit welcome->project_requested(dir_->path());
+  choose->click(); // exercise the real UI path, not a manually emitted signal
   // The title carries the open scene and the project — the observable that
   // says both halves happened (adopt the project, reopen its last scene).
   EXPECT_TRUE(reopened.windowTitle().contains(QStringLiteral("main.xodr")))

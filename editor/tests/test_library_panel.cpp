@@ -37,7 +37,7 @@ namespace {
 LibraryListModel& populated_model() {
   static LibraryListModel model;
   const auto manifest =
-      LibraryManifest::load(std::filesystem::path(RM_ASSETS_DIR) / "library" / "manifest.json");
+      LibraryManifest::load(std::filesystem::path(RM_ASSETS_DIR) / "library" / "bundled-defaults.json");
   if (manifest.has_value())
     model.set_manifest(*manifest);
   return model;
@@ -180,7 +180,7 @@ TEST(LibraryPanel, FocusCategoryClearsSearchAndHidesOldCategories) {
 TEST(LibraryPanel, LegacyProjectOverlayCannotLeakIntoCuratedPalette) {
   LibraryListModel model;
   const auto builtin =
-      LibraryManifest::load(std::filesystem::path(RM_ASSETS_DIR) / "library" / "manifest.json");
+      LibraryManifest::load(std::filesystem::path(RM_ASSETS_DIR) / "library" / "bundled-defaults.json");
   ASSERT_TRUE(builtin.has_value());
   model.set_manifest(*builtin);
   const auto overlay = LibraryManifest::parse(QByteArray(R"({
@@ -213,7 +213,7 @@ TEST(LibraryPanel, ActorWithoutThumbnailStillHasAGlyph) {
 TEST(LibraryPanel, RealImportedBlenderModelAppearsAndIsDraggable) {
   LibraryListModel model;
   const auto builtin =
-      LibraryManifest::load(std::filesystem::path(RM_ASSETS_DIR) / "library/manifest.json");
+      LibraryManifest::load(std::filesystem::path(RM_ASSETS_DIR) / "library/bundled-defaults.json");
   ASSERT_TRUE(builtin.has_value());
   model.set_manifest(*builtin);
   const auto overlay = LibraryManifest::parse(QByteArray(R"({

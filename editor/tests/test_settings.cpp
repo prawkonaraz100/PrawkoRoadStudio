@@ -29,6 +29,8 @@
 #include <QListWidget>
 #include <QMainWindow>
 #include <QMap>
+#include <QPushButton>
+#include <QSignalSpy>
 #include <QSettings>
 #include <QTemporaryDir>
 #include <QVariant>
@@ -178,6 +180,33 @@ TEST_F(SettingsTest, RelativeProjectDirIsRecordedAbsolute) {
   const QString stored = settings_->recent_projects().front();
   EXPECT_TRUE(QFileInfo(stored).isAbsolute()) << stored.toStdString();
   EXPECT_TRUE(QFileInfo(stored).isDir()) << stored.toStdString();
+}
+
+TEST_F(SettingsTest, TheProjectChooserSelectsBeforeOpenAndForgetsOnlyListEntry) {
+  QTemporaryDir dir;
+  ASSERT_TRUE(dir.isValid());
+  ASSERT_TRUE(Project::create(std::filesystem::path(dir.path().toStdWString()),
+                              QStringLiteral("Nie usuwaj z dysku")).has_value());
+  settings_->add_recent_project(dir.path());
+  WelcomeWidget welcome(*settings_);
+  auto* list = welcome.findChild<QListWidget*>(QStringLiteral("welcomeProjectsList"));
+  auto* open = welcome.findChild<QPushButton*>(QStringLiteral("welcomeChooseProject"));
+  auto* remove = welcome.findChild<QPushButton*>(QStringLiteral("welcomeForgetProject"));
+  ASSERT_NE(list, nullptr);
+  ASSERT_NE(open, nullptr);
+  ASSERT_NE(remove, nullptr);
+  ASSERT_EQ(list->count(), 1);
+  QSignalSpy requested(&welcome, &WelcomeWidget::project_requested);
+  list->setCurrentRow(0); // selecting is NOT opening
+  EXPECT_EQ(requested.count(), 0);
+  EXPECT_TRUE(open->isEnabled());
+  open->click(); // explicit open
+  EXPECT_EQ(requested.count(), 1);
+  remove->click(); // remove RECENT reference, not files
+  EXPECT_EQ(requested.count(), 1);
+  EXPECT_EQ(list->count(), 0);
+  EXPECT_TRUE(settings_->recent_projects().isEmpty());
+  EXPECT_TRUE(QFile::exists(dir.filePath(QStringLiteral("project.json"))));
 }
 
 TEST_F(SettingsTest, ARelativeAndAnAbsoluteFormOfOnePathAreOneEntry) {

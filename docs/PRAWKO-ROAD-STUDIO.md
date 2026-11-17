@@ -1,5 +1,28 @@
 # PrawkoRoadStudio — osobny projekt oparty na RoadMaker
 
+## Aktualna decyzja: globalne assety i jawny wybór projektu (17.11.2026)
+
+**Jedna aplikacja, jedna wspólna biblioteka dla wszystkich projektów.**
+Po zwykłym uruchomieniu otwiera się ekran wyboru, a nie ostatni projekt.
+Kliknięcie projektu w liście jedynie zaznacza wpis; otwarcie następuje po
+`Otwórz wybrany` albo dwukliku. `Usuń z listy` modyfikuje wyłącznie
+pamięć ostatnich projektów, **nigdy pliki, foldery ani sceny**. Dostępne są
+osobne operacje `Zamknij scenę` (projekt i biblioteka pozostają) oraz
+`Zamknij projekt` (powrót do wyboru, bez wyłączania edytora). Nowy projekt
+otrzymuje własny podfolder. Niezapisane dokumenty wymagają jawnej decyzji
+Save / Discard / Cancel przed zmianą projektu.
+
+**Jedyna biblioteka assetów:** `assets/library/manifest.json` (31 pozycji:
+12 elementów drogowych i 19 własnych GLB), `assets/props/` (modele) i
+`assets/library/thumbnails/` (miniatury). Assety są dostępne również bez
+aktywnego projektu; nowy import zapisuje do tej wspólnej biblioteki.
+`assets/library/bundled-defaults.json` to techniczna, nieedytowalna część
+Qt zawierająca tylko 12 podstawowych elementów, a nie druga biblioteka
+użytkownika. Zewnętrzne stare manifesty projektowe są czytane wyłącznie
+dla wstecznej zgodności. Dawne kopie plików GLB w projekcie scenariuszy
+pozostają jako zapas kompatybilności, lecz nie są drugim aktywnym katalogiem.
+Historyczne sekcje poniżej opisują stan z wcześniejszych etapów.
+
 Stan początkowy: 12.11.2026. Repozytorium projektu: `F:\PrawkoRoadStudio`.
 Gałąź projektowa: `feature/realistic-road-surfaces`, fork lokalny RoadMaker
 (upstream Robomous/RoadMaker, commit bazowy `c7a3f5a`, Apache-2.0).

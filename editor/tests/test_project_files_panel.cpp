@@ -50,7 +50,7 @@ void write_file(const std::filesystem::path& path, const std::string& contents) 
 LibraryListModel& catalogue_model() {
   static LibraryListModel model;
   const auto manifest =
-      LibraryManifest::load(std::filesystem::path(RM_ASSETS_DIR) / "library" / "manifest.json");
+      LibraryManifest::load(std::filesystem::path(RM_ASSETS_DIR) / "library" / "bundled-defaults.json");
   if (manifest.has_value()) {
     model.set_manifest(*manifest);
   }

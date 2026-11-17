@@ -59,6 +59,8 @@ signals:
   void file_requested(const QString& path);
   /// A recent-project tile was clicked; `dir` is the project directory.
   void project_requested(const QString& dir);
+  void new_project_requested();
+  void open_project_requested();
 
 protected:
   void showEvent(QShowEvent* event) override;

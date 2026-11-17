@@ -38,6 +38,7 @@
 #include <QCoreApplication>
 #include <QComboBox>
 #include <QDateTime>
+#include <QDir>
 #include <QDesktopServices>
 #include <QDialogButtonBox>
 #include <QDockWidget>
@@ -60,6 +61,7 @@
 #include <QMimeData>
 #include <QProgressBar>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QSaveFile>
 #include <QShowEvent>
 #include <QStackedWidget>
@@ -136,6 +138,29 @@
 
 namespace roadmaker::editor {
 
+namespace {
+// One application-wide asset library: F:/PrawkoRoadStudio/assets.
+// Tests run with isolated temporary projects and must not accidentally load
+// source-tree assets. The production editor and its screenshot mode do.
+std::optional<std::filesystem::path> shared_asset_root() {
+  const QString exe = QFileInfo(QCoreApplication::applicationFilePath()).fileName();
+  if (exe != QStringLiteral("roadmaker-editor.exe") &&
+      exe != QStringLiteral("roadmaker-editor")) {
+    return std::nullopt;
+  }
+  std::filesystem::path dir(QCoreApplication::applicationDirPath().toStdWString());
+  for (int i = 0; i < 8; ++i) {
+    if (std::filesystem::is_regular_file(dir / "assets/library/manifest.json") &&
+        std::filesystem::is_directory(dir / "projects")) {
+      return dir;
+    }
+    if (dir == dir.parent_path()) break;
+    dir = dir.parent_path();
+  }
+  return std::nullopt;
+}
+} // namespace
+
 MainWindow::MainWindow(QWidget* parent, bool restore_saved_layout)
     : QMainWindow(parent), autosave_(document_,
                                      AutosaveManager::default_recovery_dir(),
@@ -172,6 +197,8 @@ MainWindow::MainWindow(QWidget* parent, bool restore_saved_layout)
   // repopulates the welcome view with that project's scenes — no document
   // loads until the user picks one.
   connect(welcome_, &WelcomeWidget::project_requested, this, &MainWindow::open_project_dir);
+  connect(welcome_, &WelcomeWidget::new_project_requested, this, &MainWindow::new_project_dialog);
+  connect(welcome_, &WelcomeWidget::open_project_requested, this, &MainWindow::open_project_dialog);
   connect(
       &document_, &Document::loaded, this, [this] { central_stack_->setCurrentWidget(viewport_); });
 
@@ -1141,17 +1168,9 @@ void MainWindow::build_docks() {
   scene_dock_->widget()->setMinimumWidth(260);
   addDockWidget(Qt::LeftDockWidgetArea, scene_dock_);
 
-  // Library: the catalogue the user drags from (drop handler is P2.4). Loaded
-  // from the bundled manifest; tabbed with the Scene tree on the left, Scene
-  // raised by default.
-  {
-    QFile manifest(QStringLiteral(":/library/manifest.json"));
-    if (manifest.open(QIODevice::ReadOnly)) {
-      if (auto loaded = LibraryManifest::parse(manifest.readAll()); loaded.has_value()) {
-        library_model_.set_manifest(std::move(*loaded));
-      }
-    }
-  }
+  // One global Library, regardless of the active scene or project.
+  // Project overlays remain readable for old third-party project files.
+  reload_shared_catalogue();
   library_dock_ = new QDockWidget(tr("Library"), this);
   library_dock_->setObjectName(QStringLiteral("dock.library"));
   library_panel_ = new LibraryPanel(library_model_, library_dock_);
@@ -1351,20 +1370,47 @@ void MainWindow::build_docks() {
 }
 
 void MainWindow::build_menus() {
-  QMenu* file_menu = menuBar()->addMenu(tr("&File"));
+  QMenu* file_menu = menuBar()->addMenu(tr("&Plik"));
+  file_menu->setObjectName(QStringLiteral("menu.file"));
+  // Projects: a clear switch/close flow independent of application Quit.
+  QAction* new_project_action = file_menu->addAction(tr("Nowy projekt…"));
+  new_project_action->setObjectName(QStringLiteral("project.new"));
+  connect(new_project_action, &QAction::triggered, this, &MainWindow::new_project_dialog);
+  QAction* open_project_action = file_menu->addAction(tr("Otwórz projekt…"));
+  open_project_action->setObjectName(QStringLiteral("project.open"));
+  connect(open_project_action, &QAction::triggered, this, &MainWindow::open_project_dialog);
+  QMenu* recent_projects = file_menu->addMenu(tr("Ostatnie projekty"));
+  recent_projects->setObjectName(QStringLiteral("menu.projects.recent"));
+  connect(recent_projects, &QMenu::aboutToShow, this, [this, recent_projects] {
+    recent_projects->clear();
+    for (const QString& dir : settings_.recent_projects()) {
+      const auto project = Project::open(std::filesystem::path(dir.toStdWString()));
+      if (!project.has_value()) {
+        continue;
+      }
+      QAction* action = recent_projects->addAction(project->name());
+      action->setToolTip(dir);
+      connect(action, &QAction::triggered, this, [this, dir] { open_project_dir(dir); });
+    }
+    if (recent_projects->actions().isEmpty()) {
+      QAction* empty = recent_projects->addAction(tr("Brak ostatnich projektów"));
+      empty->setEnabled(false);
+    }
+  });
+  QAction* close_project_action = file_menu->addAction(tr("Zamknij projekt"));
+  close_project_action->setObjectName(QStringLiteral("project.close"));
+  connect(close_project_action, &QAction::triggered, this, &MainWindow::close_project);
+  connect(file_menu, &QMenu::aboutToShow, this, [this, close_project_action] {
+    close_project_action->setEnabled(project_.has_value());
+  });
+  file_menu->addSeparator();
   file_menu->addAction(actions_->new_file);
   file_menu->addAction(actions_->open);
-  recent_menu_ = file_menu->addMenu(tr("Open &Recent"));
+  recent_menu_ = file_menu->addMenu(tr("Ostatnie sceny"));
   update_recent_files_menu();
-  file_menu->addSeparator();
-  // Projects (p6-s1): plain directory pickers — a project is a folder with a
-  // project.json, nothing heavier, so the flows stay two clicks.
-  auto* new_project_action = new QAction(tr("New &Project…"), this);
-  connect(new_project_action, &QAction::triggered, this, &MainWindow::new_project_dialog);
-  file_menu->addAction(new_project_action);
-  auto* open_project_action = new QAction(tr("Open Pro&ject…"), this);
-  connect(open_project_action, &QAction::triggered, this, &MainWindow::open_project_dialog);
-  file_menu->addAction(open_project_action);
+  QAction* close_scene_action = file_menu->addAction(tr("Zamknij scenę"));
+  close_scene_action->setObjectName(QStringLiteral("scene.close"));
+  connect(close_scene_action, &QAction::triggered, this, &MainWindow::close_scene);
   file_menu->addSeparator();
   file_menu->addAction(actions_->save);
   file_menu->addAction(actions_->save_as);
@@ -2118,21 +2164,47 @@ void MainWindow::associate_project_for(const std::filesystem::path& scene_path) 
 }
 
 void MainWindow::new_project_dialog() {
-  const QString dir = QFileDialog::getExistingDirectory(this, tr("Choose the project folder"));
-  if (dir.isEmpty()) {
+  // Choose a PARENT directory, then create a NEW child. Never place a
+  // project.json directly into the shared PrawkoRoadStudio/projects folder.
+  const auto shared = shared_asset_root();
+  const QString suggested = shared.has_value()
+      ? QString::fromStdWString((*shared / "projects").wstring())
+      : QDir::homePath();
+  const QString parent = QFileDialog::getExistingDirectory(
+      this, tr("Wybierz katalog na nowy projekt"), suggested);
+  if (parent.isEmpty()) {
     return;
   }
   bool accepted = false;
   const QString name = QInputDialog::getText(this,
-                                             tr("New Project"),
-                                             tr("Project name:"),
+                                             tr("Nowy projekt"),
+                                             tr("Nazwa projektu:"),
                                              QLineEdit::Normal,
-                                             QFileInfo(dir).fileName(),
+                                             QStringLiteral("Nowy projekt"),
                                              &accepted);
   if (!accepted || name.trimmed().isEmpty()) {
     return;
   }
-  auto project = Project::create(std::filesystem::path(dir.toStdString()), name.trimmed());
+  QString folder = name.simplified();
+  folder.replace(QRegularExpression(QStringLiteral(R"([<>:"/\\|?*])")), QStringLiteral("-"));
+  while (folder.endsWith(QLatin1Char('.')) || folder.endsWith(QLatin1Char(' '))) {
+    folder.chop(1);
+  }
+  if (folder.isEmpty() || folder == QStringLiteral(".") || folder == QStringLiteral("..")) {
+    QMessageBox::warning(this, tr("Nowy projekt"), tr("Podaj poprawną nazwę folderu."));
+    return;
+  }
+  const std::filesystem::path destination =
+      std::filesystem::path(parent.toStdWString()) / folder.toStdWString();
+  if (std::filesystem::exists(destination)) {
+    QMessageBox::warning(this, tr("Nowy projekt"),
+                         tr("Katalog o tej nazwie już istnieje. Wybierz inną nazwę."));
+    return;
+  }
+  if (!confirm_discard()) {
+    return;
+  }
+  auto project = Project::create(destination, name.trimmed());
   if (!project.has_value()) {
     QMessageBox::warning(this,
                          tr("New Project failed"),
@@ -2140,7 +2212,40 @@ void MainWindow::new_project_dialog() {
                                           QString::fromStdString(project.error().context)));
     return;
   }
+  // A new project starts with an empty scene, not the document from the
+  // previously active project. Do not close the application.
+  simulation_panel_->cancel();
+  autosave_.clear_recovery();
+  document_.reset();
   adopt_project(std::move(*project));
+  open_studio_library();
+  central_stack_->setCurrentWidget(welcome_);
+  welcome_->refresh();
+}
+
+void MainWindow::close_scene() {
+  if (!confirm_discard()) {
+    return;
+  }
+  simulation_panel_->cancel();
+  autosave_.clear_recovery();
+  document_.reset();
+  // Keep project_ and its library. Closing a scene is not closing a project.
+  central_stack_->setCurrentWidget(welcome_);
+  welcome_->refresh();
+}
+
+void MainWindow::close_project() {
+  if (!project_.has_value() || !confirm_discard()) {
+    return;
+  }
+  simulation_panel_->cancel();
+  autosave_.clear_recovery();
+  document_.reset();
+  clear_project();
+  open_studio_library();
+  central_stack_->setCurrentWidget(welcome_);
+  welcome_->refresh(); // last projects are immediately selectable
 }
 
 void MainWindow::open_project_dialog() {
@@ -2150,50 +2255,8 @@ void MainWindow::open_project_dialog() {
   }
 }
 
-bool MainWindow::restore_last_project_on_startup() {
-  // Prefer the project that the user really opened last. Missing, moved and
-  // broken projects are skipped without modal error dialogs on startup.
-  std::vector<std::filesystem::path> candidates;
-  for (const QString& path : settings_.recent_projects()) {
-    candidates.emplace_back(path.toStdWString());
-  }
-
-  // First install with no recent projects: find the ONE bundled Prawko
-  // workspace project from the editor executable, not the current working
-  // directory. Installed releases without a project folder keep the welcome
-  // screen. This never creates or copies any project.
-  std::filesystem::path dir(QCoreApplication::applicationDirPath().toStdWString());
-  for (int depth = 0; depth < 6; ++depth) {
-    const auto bundled = dir / "projects" / "Prawko-Scenariusze";
-    if (std::filesystem::is_regular_file(bundled / "project.json")) {
-      candidates.push_back(bundled);
-      break;
-    }
-    if (dir == dir.parent_path()) {
-      break;
-    }
-    dir = dir.parent_path();
-  }
-
-  for (const auto& path : candidates) {
-    auto project = Project::open(path);
-    if (!project.has_value()) {
-      continue;
-    }
-    const auto last_scene = project->last_scene_path();
-    adopt_project(std::move(*project));
-    if (last_scene.has_value()) {
-      load_file(*last_scene);
-    }
-    spdlog::info("Prawko startup restored project {}",
-                 path.string());
-    return true;
-  }
-  return false;
-}
-
 void MainWindow::open_project_dir(const QString& dir) {
-  auto project = Project::open(std::filesystem::path(dir.toStdString()));
+  auto project = Project::open(std::filesystem::path(dir.toStdWString()));
   if (!project.has_value()) {
     QMessageBox::warning(this,
                          tr("Open Project failed"),
@@ -2201,15 +2264,23 @@ void MainWindow::open_project_dir(const QString& dir) {
                                           QString::fromStdString(project.error().context)));
     return;
   }
-  const auto last_scene = project->last_scene_path();
-  adopt_project(std::move(*project));
-  // Reopening a project puts you back on the scene you left (fmt-s1, #325),
-  // whose sidecar then restores the camera. A last_scene that no longer
-  // resolves is simply absent — the project still opens, on the welcome view.
-  // confirm_discard() first: this is a document swap like any other.
-  if (last_scene.has_value() && confirm_discard()) {
-    load_file(*last_scene);
+  // Check BEFORE adopting any new project or unloading its models. Cancel
+  // preserves the document, project association and full Library untouched.
+  if (!confirm_discard()) {
+    return;
   }
+  const auto last_scene = project->last_scene_path();
+  simulation_panel_->cancel();
+  autosave_.clear_recovery();
+  document_.reset();
+  adopt_project(std::move(*project));
+  open_studio_library();
+  if (last_scene.has_value()) {
+    load_file(*last_scene);
+  } else {
+    central_stack_->setCurrentWidget(welcome_);
+  }
+  welcome_->refresh();
 }
 
 void MainWindow::adopt_project(Project project) {
@@ -2224,14 +2295,99 @@ void MainWindow::adopt_project(Project project) {
 }
 
 void MainWindow::clear_project() {
-  if (!project_.has_value()) {
-    return;
-  }
+  if (!project_.has_value()) return;
   project_.reset();
-  library_model_.clear_overlay();  // the overlay leaves with its project
-  library_panel_->clear_project(); // so does the file explorer
+  library_model_.clear_overlay();
+  library_panel_->clear_project();
+  register_available_models(); // global GLBs stay registered without a project
   update_window_title();
   welcome_->set_active_project(QString());
+}
+
+void MainWindow::reload_shared_catalogue() {
+  LibraryManifest combined;
+  QFile bundled(QStringLiteral(":/library/manifest.json"));
+  if (bundled.open(QIODevice::ReadOnly)) {
+    if (auto loaded = LibraryManifest::parse(bundled.readAll()); loaded.has_value()) {
+      combined = std::move(*loaded);
+    }
+  }
+  if (const auto root = shared_asset_root()) {
+    if (const auto shared = LibraryManifest::load(*root / "assets/library/manifest.json");
+        shared.has_value()) {
+      for (const LibraryItem& entry : shared->items()) {
+        LibraryItem item = entry;
+        if (!item.create_raw.value(QStringLiteral("model_file")).toString().isEmpty() &&
+            !item.thumbnail.isEmpty()) {
+          item.thumbnail = QString::fromStdWString(
+              (*root / std::filesystem::path(item.thumbnail.toStdWString())).wstring());
+        }
+        combined.upsert(std::move(item));
+      }
+      for (const LibraryMaterial& source : shared->materials()) {
+        LibraryMaterial material = source;
+        if (!material.thumbnail.isEmpty()) {
+          const std::filesystem::path image(material.thumbnail.toStdWString());
+          if (image.is_relative()) {
+            material.thumbnail = QString::fromStdWString((*root / image).wstring());
+          }
+        }
+        combined.upsert_material(std::move(material));
+      }
+    }
+  }
+  library_model_.set_manifest(std::move(combined));
+  register_available_models();
+}
+
+void MainWindow::register_available_models(const LibraryManifest* project_overlay) {
+  LibraryManifest combined;
+  std::optional<std::filesystem::path> root = shared_asset_root();
+  if (root) {
+    if (const auto shared = LibraryManifest::load(*root / "assets/library/manifest.json");
+        shared.has_value()) {
+      combined = std::move(*shared);
+    }
+  }
+  if (project_overlay != nullptr && project_.has_value()) {
+    for (const LibraryItem& source : project_overlay->items()) {
+      LibraryItem item = source;
+      QJsonObject create = item.create_raw;
+      const QString model_file = create.value(QStringLiteral("model_file")).toString();
+      if (!model_file.isEmpty()) {
+        const std::filesystem::path source_path(model_file.toStdWString());
+        if (source_path.is_relative()) {
+          create.insert(QStringLiteral("model_file"),
+                        QString::fromStdWString((project_->dir() / source_path).wstring()));
+          item.create_raw = create;
+        }
+      }
+      combined.upsert(std::move(item));
+    }
+    for (const LibraryMaterial& source : project_overlay->materials()) {
+      LibraryMaterial material = source;
+      const auto absolute = [this](const QString& path) -> QString {
+        if (path.isEmpty()) return {};
+        const std::filesystem::path file(path.toStdWString());
+        return QString::fromStdWString(
+            (file.is_absolute() ? file : project_->dir() / file).wstring());
+      };
+      material.albedo = absolute(material.albedo);
+      material.normal = absolute(material.normal);
+      material.roughness = absolute(material.roughness);
+      combined.upsert_material(std::move(material));
+    }
+  }
+  if (!root && !project_.has_value()) {
+    MaterialCatalog::clear_project_materials();
+    props::clear_project_models();
+    return;
+  }
+  // value_or would evaluate project_->dir() even when only the global root
+  // exists; use a conditional to support the no-project welcome screen.
+  const auto base = root.has_value() ? *root : project_->dir();
+  document_.report_diagnostics(register_project_prop_models(base, combined));
+  install_project_materials(combined);
 }
 
 void MainWindow::apply_project_overlay() {
@@ -2239,43 +2395,25 @@ void MainWindow::apply_project_overlay() {
       project_.has_value() ? project_->library_manifest_path() : std::nullopt;
   if (!manifest_path.has_value()) {
     library_model_.clear_overlay();
-    MaterialCatalog::clear_project_materials();
-    props::clear_project_models();
+    register_available_models();
     return;
   }
   auto manifest = LibraryManifest::load(*manifest_path);
   if (!manifest.has_value()) {
-    // A broken overlay must not take the built-in catalogue down with it.
     spdlog::warn("project library overlay rejected: {} ({})",
-                 manifest.error().message,
-                 manifest.error().context);
+                 manifest.error().message, manifest.error().context);
     library_model_.clear_overlay();
-    MaterialCatalog::clear_project_materials();
-    props::clear_project_models();
+    register_available_models();
     return;
   }
-  // The manifest's materials[] definitions become the renderer's project
-  // material overlay (p6-s8, #322). Texture paths are stored project-relative
-  // for portability and absolutised here, because that is the only place that
-  // knows the project directory — ViewportWidget::texture_for QImage-decodes an
-  // absolute filesystem path exactly as it does a qrc alias, which is why the
-  // renderer needed no change for import at all.
-  install_project_materials(*manifest);
-
-  // A project's imported prop models must be resolvable BEFORE any mesh build,
-  // because props::model() is what the mesh builder, the renderer's instanced
-  // batching and both exporters all key on (p6-s8, #322).
-  document_.report_diagnostics(register_project_prop_models(project_->dir(), *manifest));
-
-  // Overlay thumbnails are project-relative — resolve them against the project
-  // directory (p6-s2) so a project's own PNGs load from disk.
+  register_available_models(&*manifest);
   library_model_.set_overlay(std::move(*manifest),
-                             QString::fromStdString(project_->dir().string()));
+                             QString::fromStdWString(project_->dir().wstring()));
 }
 
 void MainWindow::import_asset() {
-  if (!project_.has_value()) {
-    viewport_->show_toast(tr("Open or create a project to import assets"), ToastSeverity::Info);
+  if (!project_.has_value() && !shared_asset_root()) {
+    viewport_->show_toast(tr("No writable shared library found"), ToastSeverity::Warning);
     return;
   }
   // The filter comes from the same list the accept predicate consults, so the
@@ -2289,8 +2427,8 @@ void MainWindow::import_asset() {
 }
 
 void MainWindow::import_asset_from(const std::filesystem::path& source) {
-  if (!project_.has_value()) {
-    viewport_->show_toast(tr("Open or create a project to import assets"), ToastSeverity::Info);
+  if (!project_.has_value() && !shared_asset_root()) {
+    viewport_->show_toast(tr("No writable shared library found"), ToastSeverity::Warning);
     return;
   }
   const std::optional<AssetImportKind> kind = asset_import_kind(source);
@@ -2319,12 +2457,15 @@ void MainWindow::import_asset_from(const std::filesystem::path& source) {
   }
 
   const AssetImportRequest request = dialog.request();
+  const auto shared = shared_asset_root();
+  const std::filesystem::path asset_dir =
+      shared.has_value() ? *shared : project_->dir();
   LibraryManifest manifest = load_or_create_overlay_manifest();
   AssetImportResult outcome;
   QString label;
 
   if (*kind == AssetImportKind::Prop) {
-    auto imported = import_prop_asset(project_->dir(), request);
+    auto imported = import_prop_asset(asset_dir, request);
     if (!imported.has_value()) {
       viewport_->show_toast(
           tr("Cannot import: %1").arg(QString::fromStdString(imported.error().message)),
@@ -2339,7 +2480,7 @@ void MainWindow::import_asset_from(const std::filesystem::path& source) {
     outcome = result;
     manifest.upsert(std::move(item));
   } else {
-    auto imported = import_material_asset(project_->dir(), request);
+    auto imported = import_material_asset(asset_dir, request);
     if (!imported.has_value()) {
       viewport_->show_toast(
           tr("Cannot import: %1").arg(QString::fromStdString(imported.error().message)),
@@ -2351,7 +2492,7 @@ void MainWindow::import_asset_from(const std::filesystem::path& source) {
     manifest.upsert_material(std::move(imported->first));
   }
 
-  const auto path = project_->library_manifest_path_for_write();
+  const auto path = library_manifest_for_write();
   if (!path.has_value()) {
     viewport_->show_toast(tr("Cannot write to the project's library: %1")
                               .arg(QString::fromStdString(path.error().message)),
@@ -2366,6 +2507,7 @@ void MainWindow::import_asset_from(const std::filesystem::path& source) {
   }
   // No scene rebuild: a brand-new material is not referenced by any geometry yet,
   // so nothing on screen changes until the user drops it onto a lane.
+  reload_shared_catalogue();
   apply_project_overlay();
 
   if (outcome.renamed) {
@@ -2379,12 +2521,13 @@ void MainWindow::import_asset_from(const std::filesystem::path& source) {
 }
 
 void MainWindow::install_project_materials(const LibraryManifest& manifest) {
-  if (!project_.has_value()) {
+  const auto shared = shared_asset_root();
+  if (!project_.has_value() && !shared.has_value()) {
     MaterialCatalog::clear_project_materials();
-    props::clear_project_models();
     return;
   }
-  const std::filesystem::path root = project_->dir();
+  const std::filesystem::path root =
+      shared.has_value() ? *shared : project_->dir();
   const auto absolute = [&root](const QString& relative) -> std::string {
     if (relative.isEmpty()) {
       return {};
@@ -2606,7 +2749,21 @@ void MainWindow::arm_tool_for_library_item(const LibraryItem& item) {
   }
 }
 
+Expected<std::filesystem::path> MainWindow::library_manifest_for_write() const {
+  if (const auto shared = shared_asset_root()) {
+    return *shared / "assets/library/manifest.json";
+  }
+  if (project_.has_value()) return project_->library_manifest_path_for_write();
+  return make_error(ErrorCode::FileNotFound, "no shared asset library available");
+}
+
 LibraryManifest MainWindow::load_or_create_overlay_manifest() const {
+  if (const auto shared = shared_asset_root()) {
+    if (auto loaded = LibraryManifest::load(*shared / "assets/library/manifest.json");
+        loaded.has_value()) {
+      return std::move(*loaded);
+    }
+  }
   if (project_.has_value()) {
     if (const auto path = project_->library_manifest_path()) {
       if (auto loaded = LibraryManifest::load(*path); loaded.has_value()) {
@@ -2622,7 +2779,7 @@ void MainWindow::create_crosswalk_asset() {
     viewport_->show_toast(tr("Open or create a project to author assets"), ToastSeverity::Info);
     return;
   }
-  const auto path = project_->library_manifest_path_for_write();
+  const auto path = library_manifest_for_write();
   if (!path.has_value()) {
     viewport_->show_toast(tr("Cannot write to the project's library: %1")
                               .arg(QString::fromStdString(path.error().message)),
@@ -2650,7 +2807,8 @@ void MainWindow::create_crosswalk_asset() {
     viewport_->show_toast(tr("Couldn't write the project library"), ToastSeverity::Warning);
     return;
   }
-  apply_project_overlay(); // reload the overlay so the model sees the new asset
+  reload_shared_catalogue();
+  apply_project_overlay(); // refresh the common library after asset authoring
   library_dock_->show();
   library_dock_->raise();
   library_panel_->select_asset(key); // selects it and opens its editor
@@ -2660,7 +2818,7 @@ void MainWindow::commit_crosswalk_asset(const LibraryItem& item) {
   if (!project_.has_value()) {
     return;
   }
-  const auto path = project_->library_manifest_path_for_write();
+  const auto path = library_manifest_for_write();
   if (!path.has_value()) {
     viewport_->show_toast(tr("Cannot write to the project's library: %1")
                               .arg(QString::fromStdString(path.error().message)),
@@ -2673,7 +2831,8 @@ void MainWindow::commit_crosswalk_asset(const LibraryItem& item) {
     viewport_->show_toast(tr("Couldn't write the project library"), ToastSeverity::Warning);
     return;
   }
-  apply_project_overlay(); // refresh the Library preview/icons for the edited asset
+  reload_shared_catalogue();
+  apply_project_overlay(); // refresh the shared Library preview/icons
   // Propagate the asset change to every following instance in one undoable
   // command (the manifest write itself is not undoable — documented follow-up).
   if (auto command = propagate_crosswalk_asset(document_.network(),
@@ -2689,7 +2848,7 @@ void MainWindow::create_prop_set_asset() {
     viewport_->show_toast(tr("Open or create a project to author assets"), ToastSeverity::Info);
     return;
   }
-  const auto path = project_->library_manifest_path_for_write();
+  const auto path = library_manifest_for_write();
   if (!path.has_value()) {
     viewport_->show_toast(tr("Cannot write to the project's library: %1")
                               .arg(QString::fromStdString(path.error().message)),
@@ -2720,7 +2879,8 @@ void MainWindow::create_prop_set_asset() {
     viewport_->show_toast(tr("Couldn't write the project library"), ToastSeverity::Warning);
     return;
   }
-  apply_project_overlay(); // reload the overlay so the model sees the new asset
+  reload_shared_catalogue();
+  apply_project_overlay(); // refresh the common library after asset authoring
   library_dock_->show();
   library_dock_->raise();
   library_panel_->select_asset(key); // selects it and opens its editor
@@ -2730,7 +2890,7 @@ void MainWindow::commit_prop_set_asset(const LibraryItem& item) {
   if (!project_.has_value()) {
     return;
   }
-  const auto path = project_->library_manifest_path_for_write();
+  const auto path = library_manifest_for_write();
   if (!path.has_value()) {
     viewport_->show_toast(tr("Cannot write to the project's library: %1")
                               .arg(QString::fromStdString(path.error().message)),
@@ -2746,14 +2906,15 @@ void MainWindow::commit_prop_set_asset(const LibraryItem& item) {
   // No propagation: a scatter bakes independent prop objects that never
   // reference the set, so editing the set only changes future scatters (unlike
   // commit_crosswalk_asset, whose instances carry the asset's geometry).
-  apply_project_overlay(); // refresh the Library entry for the edited set
+  reload_shared_catalogue();
+  apply_project_overlay(); // refresh the shared Library entry
 }
 
 void MainWindow::commit_prop_asset(const LibraryItem& item) {
   if (!project_.has_value()) {
     return;
   }
-  const auto path = project_->library_manifest_path_for_write();
+  const auto path = library_manifest_for_write();
   if (!path.has_value()) {
     viewport_->show_toast(tr("Cannot write to the project's library: %1")
                               .arg(QString::fromStdString(path.error().message)),
@@ -2769,7 +2930,8 @@ void MainWindow::commit_prop_asset(const LibraryItem& item) {
   // No propagation: Default scale affects new placements only (each placed prop
   // already bakes its absolute @height/@radius and never references the asset),
   // same rationale as commit_prop_set_asset.
-  apply_project_overlay(); // refresh the Library entry for the edited prop
+  reload_shared_catalogue();
+  apply_project_overlay(); // refresh the shared Library entry
 }
 
 void MainWindow::set_capture_highlights(const QString& select_odr, const QString& hover_odr) {

@@ -94,6 +94,8 @@ public:
   /// Prepends the project directory `path` (deduplicated, absolutized, capped
   /// at kMaxRecentFiles — the same cap as scenes).
   void add_recent_project(const QString& path);
+  /// Remove a project only from the chooser's recent list, never from disk.
+  void remove_recent_project(const QString& path);
 
   /// Theme id (docs/standards/ui-design.md). Empty = default_theme(); the
   /// --theme CLI flag overrides without persisting.

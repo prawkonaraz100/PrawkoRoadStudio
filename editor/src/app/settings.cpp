@@ -130,6 +130,15 @@ void Settings::add_recent_project(const QString& path) {
   prepend_recent(kRecentProjectsKey, path);
 }
 
+void Settings::remove_recent_project(const QString& path) {
+  if (read_only()) {
+    return;
+  }
+  QStringList recent = recent_projects();
+  recent.removeAll(absolute(path));
+  settings_.setValue(QString::fromLatin1(kRecentProjectsKey), recent);
+}
+
 QString Settings::theme_name() const {
   return settings_.value(QStringLiteral("ui/theme")).toString();
 }

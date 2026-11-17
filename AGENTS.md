@@ -23,17 +23,27 @@ scalania bez zgody użytkownika. Standardowe Git hooks (pre-commit/pre-push)
 blokują pracę/publikację z archiwalnych kopii; po nowym klonie odtwórz
 lokalnie `git config core.hooksPath F:/PrawkoRoadStudio/scripts/git-hooks`.
 
-**JEDEN SKRÓT UŻYTKOWNIKA (17.11.2026):** na pulpicie tylko `PrawkoRoadStudio.lnk`
-bez argumentu `.xodr`. Aplikacja przy uruchomieniu zwykłym przywraca ostatni
-poprawny projekt i jego ostatnią scenę; na świeżej instalacji w drzewie źródeł
-wykrywa `projects/Prawko-Scenariusze`. Biblioteka projektu z 19 modelami GLB
-pozostaje widoczna także po otwarciu samodzielnej sceny agenta (bez przypisywania
-jej jako `last_scene` tego projektu). Poprzedni skrót pokazowy i skrypt
-`URUCHOM-PRAWKOROADSTUDIO.cmd` są wycofane — nie odtwarzać ich.
+**JEDEN SKRÓT I JEDNA GLOBALNA BIBLIOTEKA (17.11.2026):** na pulpicie
+tylko `PrawkoRoadStudio.lnk`, bez argumentu `.xodr`. START ZAWSZE pokazuje
+ekran wyboru projektu, NIE ładuje ostatniego automatycznie. Kliknięcie w liście
+ostatnich projektów tylko zaznacza; `Otwórz wybrany` otwiera. `Usuń z listy`
+usuwa jedynie wpis w Settings, **NIGDY pliki na dysku**. `Plik` ma
+`Nowy projekt`, `Otwórz projekt`, `Ostatnie projekty`, `Zamknij projekt`
+oraz osobne `Zamknij scenę`. Nowe projekty trafiają do osobnych folderów,
+a nie do katalogu nadrzędnego. **Jedyna wspólna biblioteka assetów wszystkich
+projektów** jest w `F:\PrawkoRoadStudio\assets/library/manifest.json`,
+modele w `assets/props/`, miniatury w `assets/library/thumbnails/`:
+12 gotowych nawierzchni + minimum 19 własnych GLB. Wbudowane statyczne
+12 pozycji dla zasobów Qt to `assets/library/bundled-defaults.json`, nie
+druga biblioteka użytkownika. Nowy import GLB i materiałów do wspólnego
+katalogu, nie do projektowego. Stare kopie GLB w `projects/Prawko-Scenariusze/assets`
+pozostały wyłącznie dla zgodności ze starymi wersjami; manifest tego projektu
+nie rejestruje już 19 oddzielnych modeli. Nie przywracaj automatycznego
+otwierania projektu ani odrębnych bibliotek dla nowych projektów.
 
 ## Pierwsze kroki
 
-1. Połącz się z DESKTOP-G2FV0GJ przez Desktop Commander.
+1. Połącz się z Windows przez **PrawkoBridge-Control**: prywatne repozytorium `prawkonaraz100/PrawkoBridge-Control`, Issue #353 i podłączony konektor GitHub. Wysyłaj tam polecenia `/prawko status`, `/prawko dev inspect`, `/prawko dev read HANDOFF.md` i odbieraj potwierdzone wyniki z GitHub Actions. Lokalny self-hosted runner `prawko-road` musi działać w sesji użytkownika. Instrukcje połączenia są w README prywatnego repo. Nie wymagaj Desktop Commandera ani dodatkowego tunelu, jeśli PrawkoBridge działa.
 2. **Najpierw przeczytaj `F:\PrawkoRoadStudio\HANDOFF.md`.**
    Uruchom `scripts/prawko-resume.ps1` — wykrywa live SHA obu repo, status
    zmian i zgodność z GitHub. Bez tego nie podejmuj pracy z pamięci rozmowy.

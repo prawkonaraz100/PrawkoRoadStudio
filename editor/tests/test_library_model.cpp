@@ -38,10 +38,30 @@ namespace roadmaker::editor {
 namespace {
 
 const std::filesystem::path kManifest =
-    std::filesystem::path(RM_ASSETS_DIR) / "library" / "manifest.json";
+    std::filesystem::path(RM_ASSETS_DIR) / "library" / "bundled-defaults.json";
 
 QByteArray json(const char* text) {
   return QByteArray{text};
+}
+
+TEST(LibraryManifest, SharedGlobalCatalogContainsEveryAuthoredGlb) {
+  const auto root = std::filesystem::path(RM_ASSETS_DIR);
+  const auto shared = LibraryManifest::load(root / "library" / "manifest.json");
+  ASSERT_TRUE(shared.has_value());
+  EXPECT_EQ(shared->items().size(), 31U);
+  int model_count = 0;
+  for (const LibraryItem& item : shared->items()) {
+    const QString model_file = item.create_raw.value(QStringLiteral("model_file")).toString();
+    if (model_file.isEmpty()) continue;
+    ++model_count;
+    EXPECT_EQ(item.kind, LibraryItem::Kind::Tree);
+    EXPECT_EQ(item.category, QStringLiteral("Prawko | Obiekty 3D"));
+    EXPECT_TRUE(std::filesystem::is_regular_file(root.parent_path() /
+                                                 model_file.toStdWString()));
+    EXPECT_TRUE(std::filesystem::is_regular_file(root.parent_path() /
+                                                 item.thumbnail.toStdWString()));
+  }
+  EXPECT_EQ(model_count, 19);
 }
 
 TEST(LibraryManifest, ParsesTheShippedManifest) {

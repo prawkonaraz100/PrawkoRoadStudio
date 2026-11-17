@@ -38,6 +38,11 @@ QString resolve_builtin_thumbnail(const QString& manifest_path) {
   if (manifest_path.isEmpty()) {
     return {};
   }
+  // The global Prawko catalog contains real on-disk GLB thumbnails. Keep
+  // absolute paths instead of sending them to the bundled qrc alias.
+  if (QFileInfo(manifest_path).isAbsolute()) {
+    return manifest_path;
+  }
   return QStringLiteral(":/library/thumbnails/") + QFileInfo(manifest_path).fileName();
 }
 

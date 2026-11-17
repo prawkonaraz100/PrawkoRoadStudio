@@ -134,7 +134,12 @@ TEST_F(WelcomeWidgetTest, RecentProjectTilesShowNameAndSceneCountAndEmitDir) {
   EXPECT_EQ(list->item(0)->data(Qt::UserRole).toString(), dir.path());
 
   QSignalSpy spy(&widget, &WelcomeWidget::project_requested);
+  list->setCurrentRow(0);
   emit list->itemClicked(list->item(0));
+  EXPECT_EQ(spy.count(), 0) << "selection must not auto-open a project";
+  auto* choose = widget.findChild<QPushButton*>(QStringLiteral("welcomeChooseProject"));
+  ASSERT_NE(choose, nullptr);
+  choose->click();
   ASSERT_EQ(spy.count(), 1);
   EXPECT_EQ(spy.first().first().toString(), dir.path());
 }
