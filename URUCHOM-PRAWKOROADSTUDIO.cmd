@@ -22,4 +22,6 @@ if not errorlevel 1 (
   exit /b 2
 )
 start "" /D "%ROOT%" "%EXE%" "%SCENE%"
-exit /b %ERRORLEVEL%
+rem START can dispatch the GUI but still leave a nonzero shell ERRORLEVEL.
+rem File existence and the already-running protection were checked above.
+exit /b 0
