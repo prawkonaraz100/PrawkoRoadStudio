@@ -2,6 +2,16 @@
 
 > Stan gałęzi z 17.11.2026. Przed zmianą kodu przeczytaj ten plik i `AGENTS.md`. Historyczne sekcje poniżej opisują także dawne stany PENDING; aktualny stan ustalaj od najnowszej sekcji i Git.
 
+## 17.11.2026 — jeden skrót, autowznowienie projektu i biblioteki — Windows PASS
+
+**Jeden sposób uruchamiania:** istniejący skrót Windows `PrawkoRoadStudio.lnk` wskazuje WYŁĄCZNIE `F:\PrawkoRoadStudio\build\dev-windows\editor\roadmaker-editor.exe` i ma **puste argumenty**, bez wymuszonej sceny agenta. Usunięto z pulpitu drugi skrót `PrawkoRoadStudio - Scena pokazowa.lnk`; jego dawny launcher `URUCHOM-PRAWKOROADSTUDIO.cmd` usunięto z aktywnego repo (historia Git nadal go zachowuje). Nie odtwarzać podwójnych skrótów.
+
+**Zachowanie aplikacji:** normalny start wywołuje `MainWindow::restore_last_project_on_startup`, przegląda ostatnio otwarte poprawne projekty z `Settings` i przywraca ich ostatnią scenę; gdy lista jest pusta lub nieważna, w źródłowym katalogu aplikacji znajduje istniejący `projects/Prawko-Scenariusze`; w dystrybucji bez projektu pozostaje ekran powitalny. Następnie `open_studio_library` pokazuje kategorię `Prawko | Obiekty 3D` jeżeli modele są obecne, inaczej `Prawko | Gotowe drogi`. Otwarcie samodzielnego `.xodr` poza projektem **nie czyści aktywnej biblioteki** ani nie zapisuje tego pliku jako `project.json/last_scene`; sceny należące do innych projektów nadal przełączają projekt w sposób jawny. Tryb screenshot nie uruchamia automatycznego przywracania i pozostaje read-only.
+
+**Kontrole:** Windows `BUILD_PASS: all`; 3/3 celowane testy GUI (drag/move/rotate/save, zachowanie modelu przy scenie zewnętrznej i map/scenario) PASS; Qt 1371 PASS/7 SKIPPED/0 FAIL; C++ i Python `QUALITY_GATE_PASS`. Realny start z poprawionego skrótu dał proces Windows PID 11400 bez argumentu `.xodr`, załadowano `07-pokaz-biblioteki-assetow.xodr` (1 droga/0 diagnostyki), `Prawko startup restored project F:/PrawkoRoadStudio/projects/Prawko-Scenariusze`, cienie i dwa FBO odbić READY. Dwa skróty nie istnieją równocześnie. Logi w `archive/single-shortcut-*.log` lokalnie; nie mylić ich z plikami projektowymi. Poprzednie sceny oraz 19 modeli pozostawiono bez zmian.
+
+**Następny etap:** dalsza weryfikacja wyglądu i ergonomii biblioteki oraz R6b2l; żaden z nich nie został oznaczony jako ukończony.
+
 ## 17.11.2026 — scena 07 + dostępna biblioteka 3D — Windows PASS
 
 **Problem użytkownika:** modeli GLB nie było widać w palecie. Faktyczna przyczyna: ogólny `assets/library/manifest.json` dostarcza tylko 12 prefabrykatów dróg/stylów, natomiast 18 modeli znajdowało się już w **nakładce biblioteki istniejącego projektu** `projects/Prawko-Scenariusze/assets/library/manifest.json`; otwarcie sceny w trybie `scenario` automatycznie przełączało paletę na `Uczestnicy ruchu`. Modele nie były zgubione. Po `MainWindow::load_file`, gdy projekt zawiera modele 3D, panel skupia `Prawko | Obiekty 3D`; ręczne wybranie trybu Scenariusz wciąż działa. Dopisano asercje regresyjne do dwóch testów Qt w `editor/tests/test_main_window_layout.cpp`.

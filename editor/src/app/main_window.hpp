@@ -89,6 +89,11 @@ public:
   /// No document writes and no change to the saved scene or its view state.
   void open_studio_library();
 
+  /// Interactive startup only: reopen the most recently used valid project and
+  /// its last scene. Falls back to the bundled Prawko project in a source
+  /// worktree; never creates a second project. Screenshot mode does not call it.
+  [[nodiscard]] bool restore_last_project_on_startup();
+
   /// Screenshot mode: highlight roads by OpenDRIVE id so the viewport
   /// feedback states render in a capture — `select_odr` gets the strong
   /// selection tint, `hover_odr` the subtle hover brighten. Empty or unknown

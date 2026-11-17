@@ -35,6 +35,7 @@
 #include <QApplication>
 #include <QCheckBox>
 #include <QCloseEvent>
+#include <QCoreApplication>
 #include <QComboBox>
 #include <QDateTime>
 #include <QDesktopServices>
@@ -2087,7 +2088,9 @@ void MainWindow::apply_scene_state() {
 }
 
 void MainWindow::remember_last_scene(const std::filesystem::path& scene) {
-  if (!project_.has_value()) {
+  // Do not erase a project's last valid scene when a standalone or agent-side
+  // XODR is opened while using the same asset library.
+  if (!project_.has_value() || Project::find_project_for(scene) != project_->dir()) {
     return;
   }
   project_->set_last_scene(scene);
@@ -2099,9 +2102,10 @@ void MainWindow::remember_last_scene(const std::filesystem::path& scene) {
 }
 
 void MainWindow::associate_project_for(const std::filesystem::path& scene_path) {
-  // Auto-associate the containing project (GW-2 step 1): a scene inside a
-  // project directory adopts that project (Library overlay and all); a
-  // standalone scene drops any project association.
+  // Auto-associate scenes inside another declared project. A standalone
+  // XODR keeps the currently selected project asset library, so opening an
+  // agent/test scene does not make all 3D props disappear. Its path is NOT
+  // recorded as the project's last scene (remember_last_scene guards that).
   if (const auto project_dir = Project::find_project_for(scene_path)) {
     if (!project_.has_value() || project_->dir() != *project_dir) {
       if (auto opened = Project::open(*project_dir); opened.has_value()) {
@@ -2110,8 +2114,6 @@ void MainWindow::associate_project_for(const std::filesystem::path& scene_path) 
         clear_project();
       }
     }
-  } else {
-    clear_project();
   }
 }
 
@@ -2146,6 +2148,48 @@ void MainWindow::open_project_dialog() {
   if (!dir.isEmpty()) {
     open_project_dir(dir);
   }
+}
+
+bool MainWindow::restore_last_project_on_startup() {
+  // Prefer the project that the user really opened last. Missing, moved and
+  // broken projects are skipped without modal error dialogs on startup.
+  std::vector<std::filesystem::path> candidates;
+  for (const QString& path : settings_.recent_projects()) {
+    candidates.emplace_back(path.toStdWString());
+  }
+
+  // First install with no recent projects: find the ONE bundled Prawko
+  // workspace project from the editor executable, not the current working
+  // directory. Installed releases without a project folder keep the welcome
+  // screen. This never creates or copies any project.
+  std::filesystem::path dir(QCoreApplication::applicationDirPath().toStdWString());
+  for (int depth = 0; depth < 6; ++depth) {
+    const auto bundled = dir / "projects" / "Prawko-Scenariusze";
+    if (std::filesystem::is_regular_file(bundled / "project.json")) {
+      candidates.push_back(bundled);
+      break;
+    }
+    if (dir == dir.parent_path()) {
+      break;
+    }
+    dir = dir.parent_path();
+  }
+
+  for (const auto& path : candidates) {
+    auto project = Project::open(path);
+    if (!project.has_value()) {
+      continue;
+    }
+    const auto last_scene = project->last_scene_path();
+    adopt_project(std::move(*project));
+    if (last_scene.has_value()) {
+      load_file(*last_scene);
+    }
+    spdlog::info("Prawko startup restored project {}",
+                 path.string());
+    return true;
+  }
+  return false;
 }
 
 void MainWindow::open_project_dir(const QString& dir) {
@@ -2779,6 +2823,18 @@ void MainWindow::open_studio_library() {
   }
   library_dock_->show();
   library_dock_->raise();
+  // The built-in catalogue has road presets, while the actual imported GLBs
+  // live in the current project's overlay. Prefer those tiles whenever they
+  // exist. Never require a particular scene or editing mode to show them.
+  for (int row = 0; row < library_model_.rowCount(); ++row) {
+    const LibraryItem* item = library_model_.item(row);
+    if (item != nullptr && item->category == QStringLiteral("Prawko | Obiekty 3D") &&
+        item->kind == LibraryItem::Kind::Tree &&
+        !item->create_raw.value(QStringLiteral("model_file")).toString().isEmpty()) {
+      library_panel_->focus_category(QStringLiteral("Prawko | Obiekty 3D"));
+      return;
+    }
+  }
   library_panel_->focus_category(QStringLiteral("Prawko | Gotowe drogi"));
 }
 

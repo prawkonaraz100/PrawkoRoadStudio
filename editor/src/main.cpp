@@ -318,11 +318,15 @@ int main(int argc, char** argv) {
   }
   roadmaker::editor::MainWindow window;
   window.show();
-  window.open_studio_library(); // launch directly into the mouse asset catalogue
-
+  // Restore the actual last project before a CLI scene is loaded. In
+  // particular, opening an external .xodr must not hide the user's project
+  // library. This runs only for interactive launches, never screenshot mode.
+  const bool project_restored = window.restore_last_project_on_startup();
+  (void)project_restored;
   if (argc > 1) {
     window.load_file(argv[1]);
   }
+  window.open_studio_library(); // project GLBs, otherwise bundled road presets
 
   return QApplication::exec();
 }

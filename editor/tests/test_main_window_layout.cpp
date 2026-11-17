@@ -501,6 +501,26 @@ TEST_F(MainWindowLayoutTest, BlenderBarrierLibraryDropAndPropertiesMoveRotateSav
     EXPECT_NEAR(object.hdg, 1.571, 0.01);
   });
   EXPECT_EQ(count, 1) << "The UI drop did not persist a real GLB object";
+
+  // Regression: loading a valid standalone (e.g. agent-generated) scene
+  // must not discard the active project's 3D library or overwrite its
+  // portable last_scene pointer. The model can still be dragged afterwards.
+  QTemporaryDir external_dir;
+  ASSERT_TRUE(external_dir.isValid());
+  const auto external_scene = std::filesystem::path(external_dir.path().toStdU16String()) /
+                              "agent_standalone.xodr";
+  std::filesystem::copy_file(scene, external_scene);
+  window_.load_file(external_scene);
+  window_.open_studio_library();
+  EXPECT_EQ(library->category_combo()->currentData().toString(),
+            QStringLiteral("Prawko | Obiekty 3D"));
+  EXPECT_EQ(proxy->rowCount(), 1);
+  EXPECT_EQ(proxy->data(proxy->index(0, 0), LibraryListModel::KeyRole).toByteArray(),
+            QByteArray("prop.bariera_ostrzegawcza_prawko"));
+  auto preserved_project = Project::open(root);
+  ASSERT_TRUE(preserved_project.has_value());
+  ASSERT_TRUE(preserved_project->last_scene_path().has_value());
+  EXPECT_EQ(*preserved_project->last_scene_path(), scene);
 }
 
 TEST_F(MainWindowLayoutTest, BlenderShelterLibraryDropMoveRotateSave) {

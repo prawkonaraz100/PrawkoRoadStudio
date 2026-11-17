@@ -23,6 +23,14 @@ scalania bez zgody użytkownika. Standardowe Git hooks (pre-commit/pre-push)
 blokują pracę/publikację z archiwalnych kopii; po nowym klonie odtwórz
 lokalnie `git config core.hooksPath F:/PrawkoRoadStudio/scripts/git-hooks`.
 
+**JEDEN SKRÓT UŻYTKOWNIKA (17.11.2026):** na pulpicie tylko `PrawkoRoadStudio.lnk`
+bez argumentu `.xodr`. Aplikacja przy uruchomieniu zwykłym przywraca ostatni
+poprawny projekt i jego ostatnią scenę; na świeżej instalacji w drzewie źródeł
+wykrywa `projects/Prawko-Scenariusze`. Biblioteka projektu z 19 modelami GLB
+pozostaje widoczna także po otwarciu samodzielnej sceny agenta (bez przypisywania
+jej jako `last_scene` tego projektu). Poprzedni skrót pokazowy i skrypt
+`URUCHOM-PRAWKOROADSTUDIO.cmd` są wycofane — nie odtwarzać ich.
+
 ## Pierwsze kroki
 
 1. Połącz się z DESKTOP-G2FV0GJ przez Desktop Commander.
