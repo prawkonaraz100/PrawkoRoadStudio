@@ -84,7 +84,12 @@ ViewportWidget::ViewportWidget(Document& document,
                                ToolManager& tools,
                                QWidget* parent)
     : QOpenGLWidget(parent), document_(document), selection_(selection), tools_(tools),
-      renderer_(std::make_unique<GLRenderer>()), gizmo_drag_(document) {
+      renderer_(std::make_unique<GLRenderer>(GLRenderer::Tuning{
+          // R6b2k proof-only A/B: compare full rainy scene, two planar
+          // reflections and all shadows with unchanged cache ON/OFF.
+          .cache_instance_uploads =
+              !qEnvironmentVariableIsSet("PRAWKO_R6B2K_PROOF_DISABLE_INSTANCE_CACHE")})),
+      gizmo_drag_(document) {
   setMouseTracking(true); // hover s/t without a pressed button
   setFocusPolicy(Qt::StrongFocus);
   setMinimumSize(320, 240);

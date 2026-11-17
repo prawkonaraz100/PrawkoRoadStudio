@@ -1,0 +1,155 @@
+{
+  "task": "R6b2k R6b2j 2-level water plus GPU cache+shadows+anisotropy",
+  "base_commit": "0af977ec8bbdd6252db6884468cd79118bdbcd73",
+  "optimization_commit": "5677026e12698baf696adad42d6cc0eba9039ea2",
+  "asset_count": 18,
+  "scene": "06l-r6b2j-dwie-wysokosci-kaluz.xodr",
+  "cache_off_on_pixel_changed_samples": {
+    "R6B2J_RAIN_DAY_CACHE": 0,
+    "R6B2J_RAIN_NIGHT_CACHE": 0,
+    "DRY_DAY_CACHE": 0,
+    "CAMERA_X66_CACHE": 0,
+    "CAMERA_X70_CACHE": 0,
+    "RAIN_DAY_TWO_LEVELS": 928,
+    "RAIN_NIGHT_TWO_LEVELS": 512,
+    "SIDEWALK_TWO_LEVELS": 1351
+  },
+  "actual_gpu": {
+    "gpu": "NVIDIA GeForce GTX 1050 Ti/PCIe/SSE2",
+    "height": 720,
+    "in_place_animation_pass": true,
+    "instances": 1000,
+    "measurements": [
+      {
+        "anisotropy": 1,
+        "cache": false,
+        "cpu_submit_p95_ms": 0.68,
+        "gpu_p95_ms": 6.116352,
+        "static_uploaded_bytes_90_frames": 276514560,
+        "static_uploads_90_frames": 4860,
+        "variant": 0
+      },
+      {
+        "anisotropy": 1,
+        "cache": true,
+        "cpu_submit_p95_ms": 0.5543,
+        "gpu_p95_ms": 4.780032,
+        "static_uploaded_bytes_90_frames": 0,
+        "static_uploads_90_frames": 0,
+        "variant": 1
+      },
+      {
+        "anisotropy": 4,
+        "cache": true,
+        "cpu_submit_p95_ms": 0.552,
+        "gpu_p95_ms": 4.785152,
+        "static_uploaded_bytes_90_frames": 0,
+        "static_uploads_90_frames": 0,
+        "variant": 2
+      }
+    ],
+    "parts": 8,
+    "pixel_identical_cache": true,
+    "samples": 90,
+    "scope": "synthetic scene, real OpenGL, no compositor; GPU elapsed queries and CPU submission",
+    "warmup": 15,
+    "width": 1280
+  },
+  "scene_fps_cache_off": {
+    "driver_mirrors_and_headlights_enabled": false,
+    "gl_renderer": "NVIDIA GeForce GTX 1050 Ti/PCIe/SSE2",
+    "measurement": "visible real QOpenGLWidget frameSwapped cadence, Qt events/overlays/compositor",
+    "modes": [
+      {
+        "effective_fps": 59.842653715829805,
+        "frame_swapped_count": 210,
+        "frames_over_33ms": 1,
+        "mean_ms": 16.7104888888889,
+        "mode": "steady_refresh",
+        "p50_ms": 16.666400000000003,
+        "p95_ms": 17.461084999999997,
+        "p99_ms": 25.67135700000007,
+        "samples": 180,
+        "timer_ticks": 205,
+        "worst_ms": 34.0141
+      },
+      {
+        "effective_fps": 59.99768008970319,
+        "frame_swapped_count": 210,
+        "frames_over_33ms": 0,
+        "mean_ms": 16.667311111111115,
+        "mode": "alt_lmb_orbit",
+        "p50_ms": 16.669600000000003,
+        "p95_ms": 17.13535,
+        "p99_ms": 17.325941,
+        "samples": 180,
+        "timer_ticks": 210,
+        "worst_ms": 17.5245
+      }
+    ],
+    "msaa_draw_fbo": 6,
+    "msaa_draw_fbo_sample_buffers": 1,
+    "msaa_draw_fbo_samples": 4,
+    "msaa_requested": 4,
+    "msaa_widget_format": 0,
+    "qt_timer_interval_ms": 16,
+    "resolution": "1600x900",
+    "sampled_frames": 180,
+    "scene": "cache-off",
+    "three_mirror_fbos_enabled": false,
+    "variant": "orbit",
+    "warmup_frames": 30
+  },
+  "scene_fps_cache_on": {
+    "driver_mirrors_and_headlights_enabled": false,
+    "gl_renderer": "NVIDIA GeForce GTX 1050 Ti/PCIe/SSE2",
+    "measurement": "visible real QOpenGLWidget frameSwapped cadence, Qt events/overlays/compositor",
+    "modes": [
+      {
+        "effective_fps": 59.9973161200589,
+        "frame_swapped_count": 210,
+        "frames_over_33ms": 0,
+        "mean_ms": 16.66741222222222,
+        "mode": "steady_refresh",
+        "p50_ms": 16.672,
+        "p95_ms": 17.230584999999998,
+        "p99_ms": 17.428198000000002,
+        "samples": 180,
+        "timer_ticks": 209,
+        "worst_ms": 17.5464
+      },
+      {
+        "effective_fps": 60.00202006800895,
+        "frame_swapped_count": 210,
+        "frames_over_33ms": 0,
+        "mean_ms": 16.666105555555557,
+        "mode": "alt_lmb_orbit",
+        "p50_ms": 16.66825,
+        "p95_ms": 17.10233,
+        "p99_ms": 17.34665,
+        "samples": 180,
+        "timer_ticks": 210,
+        "worst_ms": 17.3647
+      }
+    ],
+    "msaa_draw_fbo": 6,
+    "msaa_draw_fbo_sample_buffers": 1,
+    "msaa_draw_fbo_samples": 4,
+    "msaa_requested": 4,
+    "msaa_widget_format": 0,
+    "qt_timer_interval_ms": 16,
+    "resolution": "1600x900",
+    "sampled_frames": 180,
+    "scene": "cache-on",
+    "three_mirror_fbos_enabled": false,
+    "variant": "orbit",
+    "warmup_frames": 30
+  },
+  "esmini_driver_second_level_changed_samples": 30,
+  "build": "BUILD_PASS: all",
+  "qt": "1371 PASS; 7 SKIPPED",
+  "cpp": "2074 PASS",
+  "python": "7 PASS",
+  "quality": "QUALITY_GATE_PASS",
+  "real_video": "PASS"
+}

@@ -178,3 +178,14 @@ Wyniki dotyczą tylko gałęzi codex/render-quality-performance, bez połączeni
 - render-quality-driver-mirrors.mp4, render-quality-driver-first.png, render-quality-driver-moving.png: rzeczywisty przejazd esmini i trzy niezależne lusterka, 72 klatki / 6 sekund / 12 FPS, test integracyjny PASS.
 
 Build all PASS, Qt 1371 PASS / 7 SKIPPED, C++ 2074 PASS, Python 7 PASS. Stabilizacja słońca sprawdzona matematycznie, bez ilościowego testu migotania przez całą długą jazdę. Scalenie z R6b2j pozostaje otwarte.
+
+
+## R6b2k - integracja dwóch poziomów kałuż z optymalizacją renderera (Windows)
+
+To są NOWE wyniki z połączonego kodu R6b2j (commit 0af977e) i optymalizacji (commit 5677026), a nie stare wyniki dwóch osobnych gałęzi. Kod zachowuje 18 assetów biblioteki, scenę 06l, dwa poziomy rzeczywistych FBO i poruszające się samochody. Cache ponownie wykorzystuje instancje w głównym przebiegu, cieniach słońca i lamp oraz odbiciach; cienie słoneczne stabilizowane są do pełnych tekseli. Anizotropia materiałów GLB do 4x z fallbackiem.
+
+Materiały r6b2k-rain-day-cache-off/on.png, r6b2k-rain-night-cache-off/on.png, r6b2k-clear-day-cache-off/on.png i r6b2k-moving1/2-cache-off/on.png to prawdziwe PNG z Qt Windows na GTX 1050 Ti (identyczna geometria, kamera, deszcz; zamrożone krople wyłącznie podczas próby). Cache ON/OFF dał ZERO zmian nawet na najmniejszych badanych próbkach RGB we wszystkich pięciu parach. Pliki r6b2k-rain-day-onelevel.png, r6b2k-rain-night-onelevel.png i r6b2k-sidewalk-onelevel.png oraz odpowiadające im pliki twolevels potwierdzają działanie drugiego poziomu: 928 / 512 / 1351 istotnych zmian w A/B.
+
+r6b2k-driver-esmini.mp4 i r6b2k-esmini-*.png są faktycznym przejazdem esmini z kamerą kierowcy, trzema lusterkami, FFmpeg i OFF/ON drugiego poziomu przy tym samym czasie/pozie pojazdu (30 istotnych próbek). r6b2k-gpu-0/1/2.png i r6b2k-gpu-benchmark.json są SYNTETYCZNYM benchmarkiem GPU, a NIE miejską sceną. Benchmark 90 próbek / 1000 instancji po 8 części na GTX 1050 Ti: GPU p95 6.116 ms cache OFF; 4.780 ms cache ON; 4.785 ms ON z filtrem 4x. Zysk 21.8% w tym benchmarku, nie gwarancja przyspieszenia dowolnej sceny; transfery 4860 do 0. rzeczywiste Qt FPS (frameSwapped przy synchronizacji około 60 Hz) z cache ON: steady_refresh: 60.00 FPS, alt_lmb_orbit: 60.00 FPS. Surowe dane w r6b2k-fps-cache-*.json i r6b2k-validated-summary.json.
+
+Pełny build PASS, 1371 Qt PASS / 7 SKIPPED, 2074 C++ PASS, 7 Python PASS, QUALITY_GATE_PASS, realny przejazd esmini PASS. Ograniczenia: maksymalnie dwie wysokości kałuż na widok; bufor odbić nadal alokowany przy zmianie rozdzielczości kamer, brak globalnego HDR, SSR i ray tracingu; FPS zsynchronizowane z ekranem nie oznacza maksymalnego FPS GPU.

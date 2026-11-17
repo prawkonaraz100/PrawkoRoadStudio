@@ -1,0 +1,45 @@
+{
+    "driver_mirrors_and_headlights_enabled": false,
+    "gl_renderer": "NVIDIA GeForce GTX 1050 Ti/PCIe/SSE2",
+    "measurement": "visible real QOpenGLWidget frameSwapped cadence, Qt events/overlays/compositor",
+    "modes": [
+        {
+            "effective_fps": 59.9973161200589,
+            "frame_swapped_count": 210,
+            "frames_over_33ms": 0,
+            "mean_ms": 16.66741222222222,
+            "mode": "steady_refresh",
+            "p50_ms": 16.672,
+            "p95_ms": 17.230584999999998,
+            "p99_ms": 17.428198000000002,
+            "samples": 180,
+            "timer_ticks": 209,
+            "worst_ms": 17.5464
+        },
+        {
+            "effective_fps": 60.00202006800895,
+            "frame_swapped_count": 210,
+            "frames_over_33ms": 0,
+            "mean_ms": 16.666105555555557,
+            "mode": "alt_lmb_orbit",
+            "p50_ms": 16.66825,
+            "p95_ms": 17.10233,
+            "p99_ms": 17.34665,
+            "samples": 180,
+            "timer_ticks": 210,
+            "worst_ms": 17.3647
+        }
+    ],
+    "msaa_draw_fbo": 6,
+    "msaa_draw_fbo_sample_buffers": 1,
+    "msaa_draw_fbo_samples": 4,
+    "msaa_requested": 4,
+    "msaa_widget_format": 0,
+    "qt_timer_interval_ms": 16,
+    "resolution": "1600x900",
+    "sampled_frames": 180,
+    "scene": "cache-on",
+    "three_mirror_fbos_enabled": false,
+    "variant": "orbit",
+    "warmup_frames": 30
+}
