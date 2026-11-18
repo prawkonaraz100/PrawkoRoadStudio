@@ -1,0 +1,17 @@
+{
+  "model": "pl-b33-50",
+  "code": "B-33 Ograniczenie prędkości 50 km/h",
+  "group": "średni (S)",
+  "units": "metres",
+  "up_axis": "Z",
+  "face_direction": "-Y",
+  "front_center_height_m": 2.45,
+  "nominal_face_size_m": "circle diameter 0.8",
+  "physical_meshes": 20,
+  "triangles": 12760,
+  "blend_version": "5.3.0",
+  "glb_bytes": 400684,
+  "source": "Autorska geometria PrawkoNaRaz; akty Dz.U.2019.2310/2311 ze zmianami, porównać ze wzorem",
+  "legal_audit": "VISUAL_REVIEW_REQUIRED",
+  "license": "Apache-2.0"
+}

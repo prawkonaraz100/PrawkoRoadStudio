@@ -54,7 +54,10 @@ TEST(LibraryManifest, SharedGlobalCatalogContainsEveryAuthoredGlb) {
     if (model_file.isEmpty()) continue;
     ++model_count;
     EXPECT_EQ(item.kind, LibraryItem::Kind::Tree);
-    EXPECT_EQ(item.category, QStringLiteral("Prawko | Obiekty 3D"));
+    const bool polish_sign = model_file.startsWith(QStringLiteral("assets/props/pl-"));
+    EXPECT_EQ(item.category, polish_sign
+                                  ? QStringLiteral("Prawko | Polskie znaki 3D")
+                                  : QStringLiteral("Prawko | Obiekty 3D"));
     EXPECT_TRUE(std::filesystem::is_regular_file(root.parent_path() /
                                                  model_file.toStdWString()));
     EXPECT_TRUE(std::filesystem::is_regular_file(root.parent_path() /

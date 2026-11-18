@@ -394,6 +394,58 @@
         "license": "Apache-2.0 — autorska geometria i materiały PrawkoNaRaz"
       },
       "thumbnail": "assets/library/thumbnails/r7a-lawka-miejska-drewno.png"
+    },
+    {
+      "key": "prop.pl-a7-ustap-pierwszenstwa",
+      "label": "Znak A-7 | Ustąp pierwszeństwa | Polski",
+      "category": "Prawko | Polskie znaki 3D",
+      "create": {
+        "kind": "tree",
+        "model": "pl-a7-ustap-pierwszenstwa",
+        "model_file": "assets/props/pl-a7-ustap-pierwszenstwa.glb",
+        "source": "assets/prawko/blender/polskie_znaki_p0/pl-a7-ustap-pierwszenstwa.glb",
+        "license": "Apache-2.0 — autorski model PrawkoNaRaz"
+      },
+      "thumbnail": "assets/library/thumbnails/pl-a7-ustap-pierwszenstwa.png"
+    },
+    {
+      "key": "prop.pl-b20-stop",
+      "label": "Znak B-20 | STOP | Polski",
+      "category": "Prawko | Polskie znaki 3D",
+      "create": {
+        "kind": "tree",
+        "model": "pl-b20-stop",
+        "model_file": "assets/props/pl-b20-stop.glb",
+        "source": "assets/prawko/blender/polskie_znaki_p0/pl-b20-stop.glb",
+        "license": "Apache-2.0 — autorski model PrawkoNaRaz"
+      },
+      "thumbnail": "assets/library/thumbnails/pl-b20-stop.png"
+    },
+    {
+      "key": "prop.pl-d6-przejscie-pieszych",
+      "label": "Znak D-6 | Przejście dla pieszych | Polski",
+      "category": "Prawko | Polskie znaki 3D",
+      "create": {
+        "kind": "tree",
+        "model": "pl-d6-przejscie-pieszych",
+        "model_file": "assets/props/pl-d6-przejscie-pieszych.glb",
+        "source": "assets/prawko/blender/polskie_znaki_p0/pl-d6-przejscie-pieszych.glb",
+        "license": "Apache-2.0 — autorski model PrawkoNaRaz"
+      },
+      "thumbnail": "assets/library/thumbnails/pl-d6-przejscie-pieszych.png"
+    },
+    {
+      "key": "prop.pl-b33-50",
+      "label": "Znak B-33 | Ograniczenie prędkości 50 km/h | Polski",
+      "category": "Prawko | Polskie znaki 3D",
+      "create": {
+        "kind": "tree",
+        "model": "pl-b33-50",
+        "model_file": "assets/props/pl-b33-50.glb",
+        "source": "assets/prawko/blender/polskie_znaki_p0/pl-b33-50.glb",
+        "license": "Apache-2.0 — autorski model PrawkoNaRaz"
+      },
+      "thumbnail": "assets/library/thumbnails/pl-b33-50.png"
     }
   ]
 }

@@ -1,0 +1,17 @@
+{
+  "model": "pl-a7-ustap-pierwszenstwa",
+  "code": "A-7 Ustąp pierwszeństwa",
+  "group": "średni (S)",
+  "units": "metres",
+  "up_axis": "Z",
+  "face_direction": "-Y",
+  "front_center_height_m": 2.45,
+  "nominal_face_size_m": "triangle side 0.9",
+  "physical_meshes": 18,
+  "triangles": 936,
+  "blend_version": "5.3.0",
+  "glb_bytes": 82392,
+  "source": "Autorska geometria PrawkoNaRaz; akty Dz.U.2019.2310/2311 ze zmianami, porównać ze wzorem",
+  "legal_audit": "VISUAL_REVIEW_REQUIRED",
+  "license": "Apache-2.0"
+}

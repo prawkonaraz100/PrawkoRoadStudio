@@ -1,6 +1,6 @@
 # PrawkoRoadStudio — rejestr produkcji polskich znaków drogowych 3D
 
-**Aktualizacja:** 18 listopada 2026 · **Gałąź:** `feature/realistic-road-surfaces` · **Status:** początkowy backlog.
+**Aktualizacja:** 18 listopada 2026 · **Gałąź:** `feature/realistic-road-surfaces` · **Status:** pierwsze cztery modele wykonane i zarejestrowane w bibliotece; odbiór prawny i pełny GUI nadal otwarte.
 
 Ten plik jest **jedynym rejestrem statusu produkcji polskich znaków** dla wspólnej biblioteki PrawkoRoadStudio. Nie oznaczaj znaku jako gotowego na podstawie samego skryptu Blendera, wyrenderowanej grafiki, modelu amerykańskiego lub podobnego symbolu. Każdy znak musi być polski, trójwymiarowy, czytelny i umieszczalny myszą.
 
@@ -9,12 +9,12 @@ Ten plik jest **jedynym rejestrem statusu produkcji polskich znaków** dla wspó
 | Etap | Liczba |
 | --- | ---: |
 | Zweryfikowane znaki polskie (ukończone) | **0** |
-| W produkcji | **0** |
+| W produkcji | **4** |
 | Plan pierwszej partii | **4** |
 | Pozostałe w tym rejestrze | **173** |
 | Razem wpisów A–D w rejestrze | **177** |
 
-**Nie mylić ze stanem całej biblioteki:** są w niej inne autorskie GLB (np. wiata, ławka, sygnalizator świetlny), lecz nie są to kompletne polskie *pionowe znaki drogowe A–D*. W `assets/props/` i `assets/library/manifest.json` na dzień utworzenia rejestru **nie ma ukończonego, certyfikowanego przez test GUI polskiego znaku A–D**. Nie licz starych symboli US ze starych fixture'ów do gotowych polskich znaków.
+**Nie mylić ze stanem całej biblioteki:** są w niej inne autorskie GLB (np. wiata, ławka, sygnalizator świetlny), lecz nie są to kompletne polskie *pionowe znaki drogowe A–D*. Po etapie P0 w `assets/props/` i `assets/library/manifest.json` są **4 nowe GLB polskich znaków**, lecz jeszcze żaden nie uzyskał końcowego statusu ✅ Gotowy. Kryterium obejmuje również ocenę zgodności lica z aktualnym wzorem i Windows GUI. Nie licz starych symboli US ze starych fixture'ów do gotowych polskich znaków.
 
 ## Zasada statusów i odbioru
 
@@ -33,10 +33,26 @@ Ten plik jest **jedynym rejestrem statusu produkcji polskich znaków** dla wspó
 
 | Kod | Nazwa i wariant | Blender | GLB | Biblioteka | Windows GUI | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| **A-7** | Ustąp pierwszeństwa | — | — | — | — | ⬜ Do wykonania |
-| **B-20** | STOP | — | — | — | — | ⬜ Do wykonania |
-| **D-6** | Przejście dla pieszych | — | — | — | — | ⬜ Do wykonania |
-| **B-33** | Ograniczenie prędkości — 50 km/h | — | — | — | — | ⬜ Do wykonania |
+| **A-7** | Ustąp pierwszeństwa | PASS | PASS | PASS | do odbioru | 🟣 W bibliotece |
+| **B-20** | STOP | PASS | PASS | PASS | do odbioru | 🟣 W bibliotece |
+| **D-6** | Przejście dla pieszych | PASS | PASS | PASS | do odbioru | 🟣 W bibliotece |
+| **B-33** | Ograniczenie prędkości — 50 km/h | PASS | PASS | PASS | do odbioru | 🟣 W bibliotece |
+
+
+### P0 / R7b — dowód wykonania części technicznej (18.11.2026)
+
+**Wykonano fizycznie w lokalnym Blenderze 5.3.0:** 4 modele z autorską geometrią i materiałami PBR, osobnymi tarczami 3D, licem, stalowym słupkiem, podstawą, uchwytami i śrubami. Eksport GLB walidowany pod kątem realnych meshów i materiałów; pliki .blend, rendery, JSON metadanych, GLB i miniatury są w repo. Nie są to płaskie zdjęcia ani amerykańskie znaki z odzyskanego zestawu.
+
+| Znak | Wspólny model GLB | Źródło Blender (.blend) |
+| --- | --- | --- |
+| A-7 | `assets/props/pl-a7-ustap-pierwszenstwa.glb` | `assets/prawko/blender/polskie_znaki_p0/pl-a7-ustap-pierwszenstwa.blend` |
+| B-20 | `assets/props/pl-b20-stop.glb` | `assets/prawko/blender/polskie_znaki_p0/pl-b20-stop.blend` |
+| D-6 | `assets/props/pl-d6-przejscie-pieszych.glb` | `assets/prawko/blender/polskie_znaki_p0/pl-d6-przejscie-pieszych.blend` |
+| B-33 (50) | `assets/props/pl-b33-50.glb` | `assets/prawko/blender/polskie_znaki_p0/pl-b33-50.blend` |
+
+**Potwierdzone:** Blender run 44405740700 PASS; strzeżony installer run 44406072029 PASS; walidator biblioteki run 44406199218 PASS; native Quality Gate run 44406214910 PASS. Kategoria w GUI: `Prawko | Polskie znaki 3D` (osobna od innych obiektów 3D). Test regresyjny manifestu poprawiony o osobną kategorię polskich znaków; rebuild Qt run 44407223608 PASS i pełne Qt run 44407670488 PASS (pierwsza próba Qt wykryła stary test kategorii, naprawiony i ponownie sprawdzony). Odbiór w żywym GUI nadal PENDING: aplikacja została uruchomiona PID 21492 (run 44407943539), ale Windows zgłosił nieważne wymiary okna w runach 44408427582 i 44408590308, co blokuje strzeżone akcje myszy; nic nie zapisano w scenie.
+
+**NIE ukończono odbioru prawnego:** przy odczycie podglądów D-6 ma uproszczoną sylwetkę pieszego; wszystkie wzory wymagają porównania z aktualnymi tablicami technicznymi, szczególnie szerokości obwódek, barw folii i liter. Materiały zastosowano jako aproksymację PBR, nie gwarantują fizycznej retrorefleksyjności. Dopiero po tej kontroli i po teście myszą (upuszczenie, przesunięcie, obrót) wolno oznaczyć ✅ i zaznaczyć odpowiednie checkboxy.
 
 **Następne po pierwszej partii:** D-1, C-12, B-2, B-36, A-17, A-16, B-21/B-22, D-40/D-41, D-42/D-43; są już uwzględnione w szczegółowej kolejce poniżej. Przy projektowaniu wersji z blachy i folii zadbaj o krawędź tarczy, tył, uchwyty, słupek, prawidłowy kształt lica, odblaskowy wygląd materiału oraz proporcje. Nie generuj piktogramów na oko jako zgodnych z prawem.
 
