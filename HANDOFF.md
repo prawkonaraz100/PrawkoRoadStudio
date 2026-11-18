@@ -2,6 +2,16 @@
 
 > Stan gałęzi z 18.11.2026. Przed zmianą kodu przeczytaj ten plik i `AGENTS.md`. Historyczne sekcje poniżej opisują także dawne stany PENDING; aktualny stan ustalaj od najnowszej sekcji i Git.
 
+## 18.11.2026 — R6b2l, krok 2: sprzętowy test długiego przejazdu i zmiany rozmiaru trzech FBO — PASS zakresu testu
+
+**Baza:** gałąź `feature/realistic-road-surfaces`, HEAD przed zmianą testu `71a0fb73d41542c3ecda112668bb14991f710bb2` (R6b2l krok 1). Pracowano wyłącznie przez prywatne PrawkoBridge; edytor Windows pozostał otwarty bez wymuszania zamknięcia. Sceny `.xodr` i `.xosc` niezmienione.
+
+**Zmiana:** w istniejącym opt-in `editor/tests/test_prawko_real_video.cpp` dodano rzeczywisty sprzętowy test wielokrotnego przejścia FBO przy `320×240 → 960×540 → 640×360 → 640×360` na identycznej pozie kierowcy z esmini. Każda klatka ma mieć poprawne wymiary, a wszystkie trzy lusterka — widoczną, zróżnicowaną zawartość. Wykorzystano `ViewportWidget::driver_mirror_sizes`. Strzeżona podmiana SHA-256 i lokalny backup: `replace-check` [run 44379701132], `replace` [run 44379841201], katalog `toolchain/bridge-backups/20261118-202246-change-r6b2l-hardware-resize-20261118`. Produkcyjnego renderera w tym kroku nie zmieniano.
+
+**Dowody Windows:** rzeczywisty esmini na istniejącej scenie `01-miasto-lusterka`, trzy poruszające się lusterka, cienie, eksport 12 s / 144 klatek MP4: [run 44378914727] oraz po nowym teście resize [run 44380141671], obydwa PASS. Po zmianie testu `build-qt-tests` [run 44379959447] PASS, pełna seria Qt [run 44380335199]: **1378 PASS, 7 SKIPPED, 0 FAIL**; natywny Quality Gate [run 44380878143]: **2074 C++ PASS, 10 DISABLED; 7 Python PASS**. SKIPPED i DISABLED nie zaliczać jako wykonane. Prywatne obrazy i MP4 są artefaktami Actions. Prędkość eksportu MP4 nie jest pomiarem interaktywnego FPS ani niezależnego p95 GPU.
+
+**NIE ukończono pełnego R6b2l:** nie zmierzono p95 CPU/GPU dla długiej jazdy na GTX 1050 Ti, nie przetestowano interaktywnego przełączania kamer z jednoczesnym resize ani oddzielnie dwóch wysokości odbić kałuż ze sceny `06l-r6b2j-dwie-wysokosci-kaluz`. **Pierwszy następny krok:** przeprowadzić te odbiory z realnym GPU, porównać obrazy i statystyki cieni/kałuż/lusterek oraz zanotować wyniki przed deklaracją PASS. Nie tworzyć kolejnych projektów ani nie edytować zapisanych scen tylko dla testów.
+
 ## 18.11.2026 — R6b2l, krok 1: ponowne używanie trzech FBO lusterek — kod + testy PASS; długi przejazd PENDING
 
 **Start i ochrona:** Windows PrawkoBridge `/prawko dev inspect`, `/prawko dev resume` PASS; gałąź `feature/realistic-road-surfaces`, wyjściowy HEAD `a34f2fa9362433bdb8fb7b4566c3947c5f5c8aae`, oba worktree czyste i zgodne z origin przed zmianą. `/prawko dev window-state`: zero okien; nie nadpisywano scen ani cudzych plików.

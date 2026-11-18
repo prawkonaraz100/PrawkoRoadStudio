@@ -119,6 +119,50 @@ TEST(PrawkoRealVideo, DriverViewStreamsActualTrafficAndMirrorsToMp4) {
   QImage later=view.capture_simulation_frame(kSize,camera,playback.poses_at(4.0),
                                             QStringLiteral("Ego"),4.0);
   ASSERT_EQ(later.size(),kSize);
+
+  // R6b2l hardware regression: reuse the same real driver pose while the
+  // output FBO and all three mirror FBOs shrink, grow and return to the
+  // initial size. A size-only unit test cannot catch invalid GL attachment
+  // lifetimes or a stale QOpenGLWidget default framebuffer after resize.
+  const auto resize_poses = playback.poses_at(2.0);
+  constexpr std::array<std::pair<int,int>,4> resize_cases{{
+      {320,240}, {960,540}, {640,360}, {640,360}}};
+  for (const auto& [target_width, target_height] : resize_cases) {
+    const QSize target_size{target_width,target_height};
+    const QImage proof = view.capture_simulation_frame(
+        target_size,camera,resize_poses,QStringLiteral("Ego"),2.0);
+    ASSERT_FALSE(proof.isNull()) << "Driver framebuffer failed after resize";
+    ASSERT_EQ(proof.size(),target_size);
+    const auto mirror_sizes = ViewportWidget::driver_mirror_sizes(target_size);
+    const int margin = std::max(7,target_width/115);
+    const std::array<QRect,3> boxes{{
+        QRect((target_width-mirror_sizes[0].width())/2,margin,
+              mirror_sizes[0].width(),mirror_sizes[0].height()),
+        QRect(margin,target_height-mirror_sizes[1].height()-margin,
+              mirror_sizes[1].width(),mirror_sizes[1].height()),
+        QRect(target_width-mirror_sizes[2].width()-margin,
+              target_height-mirror_sizes[2].height()-margin,
+              mirror_sizes[2].width(),mirror_sizes[2].height())}};
+    for (std::size_t m = 0; m < boxes.size(); ++m) {
+      const QRect interior=boxes[m].adjusted(12,9,-12,-9);
+      ASSERT_TRUE(interior.isValid());
+      int visible_pixels=0;
+      std::set<unsigned> colors;
+      for (int y=interior.top(); y<interior.bottom(); y+=4) {
+        for (int x=interior.left(); x<interior.right(); x+=4) {
+          const QRgb p=proof.pixel(x,y);
+          const int light=qRed(p)+qGreen(p)+qBlue(p);
+          if (light>75) ++visible_pixels;
+          colors.insert(static_cast<unsigned>(
+              ((qRed(p)/20)<<16)|((qGreen(p)/20)<<8)|(qBlue(p)/20)));
+        }
+      }
+      EXPECT_GT(visible_pixels,4) << "Black mirror FBO after resize: "<<m;
+      EXPECT_GT(colors.size(),3U) << "Empty mirror FBO after resize: "<<m;
+    }
+  }
+  std::cout<<"R6B2L_REAL_GL_FBO_RESIZE_PASS 320x240 960x540 640x360 640x360"
+           <<std::endl;
   // R6b2j opt-in: identical ACTUAL esmini driver pose (not orbit-camera
   // screenshots). Compare the second elevated-water reflection ON/OFF,
   // keeping cockpit, precipitation, sunlight and vehicle movement fixed.
