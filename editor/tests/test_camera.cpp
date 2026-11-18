@@ -25,6 +25,7 @@
 #include "roadmaker/osc/scenario.hpp"
 #include "viewport/camera.hpp"
 #include "viewport/picking.hpp"
+#include "viewport/viewport_widget.hpp"
 
 namespace roadmaker::editor {
 namespace {
@@ -131,6 +132,28 @@ TEST(DriverCamera, ThreeMirrorsFollowVehicleAndLookBehind) {
                            .up = driver.up};
   const auto turned = driver_mirror_camera(yawed, DriverMirror::Center);
   EXPECT_NEAR(turned.forward[1], -1.0F, 1e-5F);
+}
+
+TEST(DriverMirrorFbo, KeepsTargetSizesConsistentAcrossWindowResizes) {
+  const auto empty = ViewportWidget::driver_mirror_sizes(QSize{});
+  for (const auto& size : empty) {
+    EXPECT_TRUE(size.isEmpty());
+  }
+  const auto small = ViewportWidget::driver_mirror_sizes(QSize{320, 240});
+  EXPECT_EQ(small[0], QSize(160, 40));
+  EXPECT_EQ(small[1], QSize(110, 66));
+  EXPECT_EQ(small[2], small[1]);
+  const auto medium = ViewportWidget::driver_mirror_sizes(QSize{960, 540});
+  EXPECT_EQ(medium[0], QSize(336, 84));
+  EXPECT_EQ(medium[1], QSize(182, 109));
+  EXPECT_EQ(medium[2], medium[1]);
+  const auto large = ViewportWidget::driver_mirror_sizes(QSize{1920, 1080});
+  EXPECT_EQ(large[0], QSize(480, 120));
+  EXPECT_EQ(large[1], QSize(250, 150));
+  EXPECT_EQ(large[2], large[1]);
+  EXPECT_EQ(ViewportWidget::driver_mirror_sizes(QSize{3840, 2160}), large);
+  EXPECT_NE(small, medium);
+  EXPECT_NE(medium, large);
 }
 
 TEST(OrbitCamera, ViewRotationIsOrthonormal) {

@@ -23,6 +23,7 @@
 
 #include <QElapsedTimer>
 #include <QImage>
+#include <QOpenGLFramebufferObject>
 #include <QOpenGLWidget>
 #include <QPoint>
 #include <QString>
@@ -88,6 +89,10 @@ public:
                  ToolManager& tools,
                  QWidget* parent = nullptr);
   ~ViewportWidget() override;
+
+  /// Pixel size of the three driver mirror targets (center, left, right).
+  /// The same sizing rule drives FBO allocation and screen-space placement.
+  [[nodiscard]] static std::array<QSize, 3> driver_mirror_sizes(const QSize& output_size);
 
   ViewportWidget(const ViewportWidget&) = delete;
   ViewportWidget& operator=(const ViewportWidget&) = delete;
@@ -548,6 +553,9 @@ private:
   ToolManager& tools_;
 
   std::unique_ptr<Renderer> renderer_;
+  // Reused across driving frames; recreated only when the view size changes.
+  // Destroy while the owning OpenGL context is current.
+  std::array<std::unique_ptr<QOpenGLFramebufferObject>, 3> mirror_targets_;
   OrbitCamera camera_;
   std::vector<UploadedItem> items_;
   /// Instanced prop/signal batches (one per model), uploaded ONCE per rebuild.

@@ -1,6 +1,18 @@
 # PrawkoRoadStudio — PRZEKAZANIE PRACY / START TUTAJ
 
-> Stan gałęzi z 17.11.2026. Przed zmianą kodu przeczytaj ten plik i `AGENTS.md`. Historyczne sekcje poniżej opisują także dawne stany PENDING; aktualny stan ustalaj od najnowszej sekcji i Git.
+> Stan gałęzi z 18.11.2026. Przed zmianą kodu przeczytaj ten plik i `AGENTS.md`. Historyczne sekcje poniżej opisują także dawne stany PENDING; aktualny stan ustalaj od najnowszej sekcji i Git.
+
+## 18.11.2026 — R6b2l, krok 1: ponowne używanie trzech FBO lusterek — kod + testy PASS; długi przejazd PENDING
+
+**Start i ochrona:** Windows PrawkoBridge `/prawko dev inspect`, `/prawko dev resume` PASS; gałąź `feature/realistic-road-surfaces`, wyjściowy HEAD `a34f2fa9362433bdb8fb7b4566c3947c5f5c8aae`, oba worktree czyste i zgodne z origin przed zmianą. `/prawko dev window-state`: zero okien; nie nadpisywano scen ani cudzych plików.
+
+**Kod:** `editor/src/viewport/viewport_widget.hpp` i `.cpp`: trzy FBO lusterek (środkowe, lewe, prawe) są teraz przechowywane między klatkami i odtwarzane jedynie przy zmianie rozdzielczości/niepoprawnym FBO. Zwolnienie następuje przy niszczeniu widżetu i przed zniszczeniem kontekstu OpenGL. Jedna funkcja `driver_mirror_sizes` określa zarówno rozmiary renderów, jak i paneli QPainter; zachowano pierwotne ograniczenia wielkości i przywracanie domyślnego FBO OpenGL. `editor/tests/test_camera.cpp`: `DriverMirrorFbo.KeepsTargetSizesConsistentAcrossWindowResizes` kontroluje pusty viewport, 320×240, 960×540, 1920×1080 i limit dla 3840×2160. Zmiany wprowadzono przez strzeżony SHA-256 manifest `change-r6b2l-mirror-fbo-cache-20261118` (`apply-check` run 44373320074 PASS, `apply` run 44373456286 PASS); kopie w `toolchain/bridge-backups`.
+
+**Testy po zmianie:** pełny Windows `build-all` PASS (run 44373712792); pełne Qt **1378 PASS, 7 SKIPPED, 0 FAIL** (run 44375223347); Quality Gate **2074 C++ PASS, 10 DISABLED; 7 Python PASS** (run 44375556532). Nie liczyć SKIPPED/DISABLED jako wykonane.
+
+**Rzeczywiste GUI Windows:** przebudowany EXE uruchomił się przez PrawkoBridge (run 44375745221); projekt `PrawkoNaRaz | Autorskie scenariusze` i scena `07-pokaz-biblioteki-assetow.xodr` otwarte z poziomu GUI, widoczny deszcz, nawierzchnia, pojazdy, budynki i biblioteka GLB, bez gwiazdki niezapisanych zmian (run 44376116016). Klik akcji Symulacja nie aktywował odtwarzania w tej scenie (run 44376358063); zrzut menu Scenariusz (run 44376647287) nie potwierdził widoku kierowcy. **NIE potwierdzono obrazowo trzech lusterek w aktywnym przejeździe, ich działania przy zmianie FBO ani poprawy p95 CPU/GPU.** Nie ogłaszać ukończenia całego R6b2l.
+
+**Następny krok R6b2l:** na scenie z uruchamialnym kierowcą przeprowadzić rzeczywisty długi przejazd, zmieniając kamery i rozdzielczość viewportu; porównać obrazy wszystkich trzech lusterek i cieni/odbicia/kałuże, potwierdzić bezbłędne wiązanie FBO po resize i mierzyć p95 CPU/GPU na GTX 1050 Ti. Jeśli bieżąca scena 07 nie dopuszcza odtwarzania, użyć istniejącej sceny z poprawnym OpenSCENARIO; nie zmieniać zapisanych scen tylko dla testu.
 
 ## 17.11.2026 — GLB: trafienie, zaznaczanie i przesuwanie prefabrykatu (#2) — Windows PASS
 

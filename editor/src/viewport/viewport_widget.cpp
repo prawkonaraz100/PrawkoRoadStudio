@@ -146,6 +146,9 @@ ViewportWidget::ViewportWidget(Document& document,
 ViewportWidget::~ViewportWidget() {
   // GL resources must die while the context is current (QOpenGLWidget rule).
   makeCurrent();
+  for (auto& target : mirror_targets_) {
+    target.reset();
+  }
   if (gl_ready_) {
     renderer_->shutdown();
   }
@@ -157,6 +160,15 @@ void ViewportWidget::initializeGL() {
   if (!gl_ready_) {
     qFatal("Failed to initialize OpenGL 3.3 core renderer");
   }
+  // QOpenGLWidget can recreate its context when reparented. Never retain
+  // mirror framebuffer names from an OpenGL context that is going away.
+  connect(context(), &QOpenGLContext::aboutToBeDestroyed, this, [this] {
+    makeCurrent();
+    for (auto& target : mirror_targets_) {
+      target.reset();
+    }
+    doneCurrent();
+  }, Qt::DirectConnection);
 
   // Surface textures upload lazily on first use (material_for/texture_for),
   // bundled in the :/textures qrc. A failed load leaves an invalid handle and
@@ -1147,33 +1159,48 @@ void ViewportWidget::render_frame(const OrbitCamera& camera, const QSize& size,
   }
 }
 
-std::array<QImage, 3> ViewportWidget::capture_driver_mirrors(const QSize& output_size) {
-  std::array<QImage, 3> images;
-  if (!simulation_frame_ || !simulation_frame_->driver || !gl_ready_) {
-    return images;
+std::array<QSize, 3> ViewportWidget::driver_mirror_sizes(const QSize& output_size) {
+  if (output_size.isEmpty()) {
+    return {QSize{}, QSize{}, QSize{}};
   }
   const int center_w = std::clamp(static_cast<int>(output_size.width() * 0.35), 160, 480);
   const int side_w = std::clamp(static_cast<int>(output_size.width() * 0.19), 110, 250);
+  return {QSize{center_w, std::max(40, center_w / 4)},
+          QSize{side_w, std::max(58, side_w * 3 / 5)},
+          QSize{side_w, std::max(58, side_w * 3 / 5)}};
+}
+
+std::array<QImage, 3> ViewportWidget::capture_driver_mirrors(const QSize& output_size) {
+  std::array<QImage, 3> images;
+  if (!simulation_frame_ || !simulation_frame_->driver || !gl_ready_ ||
+      output_size.isEmpty()) {
+    return images;
+  }
+  const auto sizes = driver_mirror_sizes(output_size);
   constexpr std::array<DriverMirror, 3> mirrors{
       DriverMirror::Center, DriverMirror::Left, DriverMirror::Right};
   for (std::size_t i = 0; i < mirrors.size(); ++i) {
-    const int w = i == 0 ? center_w : side_w;
-    const QSize resolution{w, i == 0 ? std::max(40, w / 4) : std::max(58, w * 3 / 5)};
-    QOpenGLFramebufferObjectFormat format;
-    format.setAttachment(QOpenGLFramebufferObject::Depth);
-    QOpenGLFramebufferObject target(resolution, format);
-    if (!target.isValid() || !target.bind()) {
+    const QSize resolution = sizes[i];
+    auto& target = mirror_targets_[i];
+    if (!target || !target->isValid() || target->size() != resolution) {
+      target.reset(); // release old GL attachments before a new resolution
+      QOpenGLFramebufferObjectFormat format;
+      format.setAttachment(QOpenGLFramebufferObject::Depth);
+      target = std::make_unique<QOpenGLFramebufferObject>(resolution, format);
+    }
+    if (!target->isValid() || !target->bind()) {
+      target.reset();
       continue;
     }
     const DriverCamera mirror = driver_mirror_camera(*simulation_frame_->driver, mirrors[i]);
     render_frame(camera_, resolution, &mirror);
-    images[i] = target.toImage().mirrored(true, false);
+    images[i] = target->toImage().mirrored(true, false);
     if (!images[i].isNull()) {
       QPainter painter(&images[i]);
       draw_precipitation(painter, resolution, weather_,
                          static_cast<qint64>(simulation_frame_->time_seconds * 1000.0 / 60.0));
     }
-    target.release();
+    target->release();
   }
   // QOpenGLWidget's default framebuffer is NOT 0. Restore it before using
   // QPainter over the live viewport or returning to the exporter.
@@ -1190,10 +1217,11 @@ void ViewportWidget::draw_driver_mirrors(QPainter& painter, const QSize& output_
   const int w = output_size.width();
   const int h = output_size.height();
   const int margin = std::max(7, w / 115);
-  const int center_w = std::clamp(static_cast<int>(w * 0.35), 160, 480);
-  const int side_w = std::clamp(static_cast<int>(w * 0.19), 110, 250);
-  const int center_h = std::max(40, center_w / 4);
-  const int side_h = std::max(58, side_w * 3 / 5);
+  const auto sizes = driver_mirror_sizes(output_size);
+  const int center_w = sizes[0].width();
+  const int side_w = sizes[1].width();
+  const int center_h = sizes[0].height();
+  const int side_h = sizes[1].height();
   const std::array<QRect, 3> boxes{
       QRect((w - center_w) / 2, margin, center_w, center_h),
       QRect(margin, h - side_h - margin, side_w, side_h),
