@@ -368,6 +368,32 @@
         "source": "assets/prawko/blender/prawko_bariera_drogowa.glb",
         "license": "Apache-2.0 / PrawkoNaRaz"
       }
+    },
+    {
+      "key": "prop.r7a-sygnalizator-led-3",
+      "label": "Sygnalizator LED | czerwone światło | Prawko R7a",
+      "category": "Prawko | Obiekty 3D",
+      "create": {
+        "kind": "tree",
+        "model": "r7a-sygnalizator-led-3",
+        "model_file": "assets/props/r7a-sygnalizator-led-3.glb",
+        "source": "assets/prawko/blender/architektura_r7a/r7a-sygnalizator-led-3.glb",
+        "license": "Apache-2.0 — autorska geometria i materiały PrawkoNaRaz"
+      },
+      "thumbnail": "assets/library/thumbnails/r7a-sygnalizator-led-3.png"
+    },
+    {
+      "key": "prop.r7a-lawka-miejska-drewno",
+      "label": "Ławka miejska stal i drewno | Prawko R7a",
+      "category": "Prawko | Obiekty 3D",
+      "create": {
+        "kind": "tree",
+        "model": "r7a-lawka-miejska-drewno",
+        "model_file": "assets/props/r7a-lawka-miejska-drewno.glb",
+        "source": "assets/prawko/blender/architektura_r7a/r7a-lawka-miejska-drewno.glb",
+        "license": "Apache-2.0 — autorska geometria i materiały PrawkoNaRaz"
+      },
+      "thumbnail": "assets/library/thumbnails/r7a-lawka-miejska-drewno.png"
     }
   ]
 }

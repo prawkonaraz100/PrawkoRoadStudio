@@ -1,0 +1,17 @@
+{
+  "model": "r7a-lawka-miejska-drewno",
+  "units": "metres",
+  "up_axis": "Z",
+  "forward": "-Y",
+  "bbox_m": {
+    "width": 1.84,
+    "depth": 0.5,
+    "height": 0.9
+  },
+  "objects": 50,
+  "triangles_before_modifiers": 2008,
+  "materials": 4,
+  "glb_bytes": 344640,
+  "blender": "5.3.0",
+  "license": "Apache-2.0; original PrawkoNaRaz geometry and textures"
+}

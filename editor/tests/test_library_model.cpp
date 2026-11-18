@@ -48,7 +48,6 @@ TEST(LibraryManifest, SharedGlobalCatalogContainsEveryAuthoredGlb) {
   const auto root = std::filesystem::path(RM_ASSETS_DIR);
   const auto shared = LibraryManifest::load(root / "library" / "manifest.json");
   ASSERT_TRUE(shared.has_value());
-  EXPECT_EQ(shared->items().size(), 31U);
   int model_count = 0;
   for (const LibraryItem& item : shared->items()) {
     const QString model_file = item.create_raw.value(QStringLiteral("model_file")).toString();
@@ -61,7 +60,17 @@ TEST(LibraryManifest, SharedGlobalCatalogContainsEveryAuthoredGlb) {
     EXPECT_TRUE(std::filesystem::is_regular_file(root.parent_path() /
                                                  item.thumbnail.toStdWString()));
   }
-  EXPECT_EQ(model_count, 19);
+  // The shared asset catalog is intentionally extensible: count the real
+  // authored GLB files, rather than freezing the count at the original 19.
+  std::size_t authored_glbs = 0;
+  for (const auto& file : std::filesystem::directory_iterator(root / "props")) {
+    if (file.is_regular_file() && file.path().extension() == ".glb") {
+      ++authored_glbs;
+    }
+  }
+  EXPECT_GE(authored_glbs, 19U);
+  EXPECT_EQ(static_cast<std::size_t>(model_count), authored_glbs);
+  EXPECT_EQ(shared->items().size(), 12U + authored_glbs);
 }
 
 TEST(LibraryManifest, ParsesTheShippedManifest) {
