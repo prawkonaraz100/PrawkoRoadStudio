@@ -29,7 +29,7 @@ appears at the entity's pivot, always on top at a constant on-screen size:
 |---|---|
 | **X arrow** (red) | Translate along world X |
 | **Y arrow** (green) | Translate along world Y |
-| **Z arrow** (blue) | Raise/lower — *roads only* (uniform elevation offset) |
+| **Z arrow** (blue) | Raise/lower any selected road, 3D model or sign |
 | **Centre pad** | Free translate in the XY plane |
 | **Yaw ring** | Rotate about Z (the vertical axis) |
 
@@ -77,18 +77,23 @@ appears at the entity's pivot, always on top at a constant on-screen size:
   rebuild would discard anything you dragged them to. Grabbing an arrow, the pad
   or the ring is refused on the spot, with a toast naming the road and the
   junction. Move the arms instead.
-- **Props** — X/Y translate (re-projected onto the owning road) and the yaw ring
-  rotates the instance. No Z arrow yet. On a **prop span**, the ring turns every
-  instance in the series by the same angle relative to the road — the heading is
-  an offset the whole series shares.
-- **Signs and signals** — the same translate and ring, on the sign itself rather
-  than the road it stands beside. The ring edits the **Heading offset**, which
-  makes it an override exactly like typing in the Attributes pane:
+- **Props** — X/Y translate (re-projected onto the owning road), the yaw ring rotates
+  the instance, and the blue Z arrow changes its elevation above its owning road.
+  All parts of a composed prefab rise together as **one undoable change**.
+  On a **prop span**, the ring turns every instance by the same angle relative
+  to the road; repositioning the entire span remains a known limitation.
+- **Signs and signals** — the same X/Y and Z translate and yaw ring on the sign
+  itself, not on the road it stands beside. The Z arrow changes mounting height,
+  without changing which traffic the sign governs or its facing.
+  The ring edits the **Heading offset**, which makes it an override exactly like typing in the Attributes pane:
   [auto-orientation](objects-signals.md) never recomputes it afterwards, and
   **Auto facing** is the only way back to the derived angle. Which traffic the
   sign applies to is left alone — turning a sign never changes what it governs.
 
-Pitch/roll rings and prop elevation are planned follow-ups.
+Pitch and roll rotation handles are not available yet. Only yaw rotation about Z
+is supported; models and signs now support translating vertically via the Z arrow.
+An object still belongs to an owning road and planar movement remains bounded by
+that road's snap range.
 
 ## When a move puts a prop in the way
 

@@ -68,7 +68,7 @@ std::optional<GizmoTarget> gizmo_target(const RoadNetwork& network,
       return std::nullopt;
     }
     const auto p = station_to_world(road->plan_view, object->s, object->t);
-    return GizmoTarget{.object = entry.object, .pivot = {p[0], p[1], 0.0}};
+    return GizmoTarget{.object = entry.object, .pivot = {p[0], p[1], object->z_offset}};
   }
   if (entry.signal.is_valid()) {
     const Signal* signal = network.signal(entry.signal);
@@ -80,7 +80,7 @@ std::optional<GizmoTarget> gizmo_target(const RoadNetwork& network,
       return std::nullopt;
     }
     const auto p = station_to_world(road->plan_view, signal->s, signal->t);
-    return GizmoTarget{.signal = entry.signal, .pivot = {p[0], p[1], 0.0}};
+    return GizmoTarget{.signal = entry.signal, .pivot = {p[0], p[1], signal->z_offset}};
   }
   if (entry.road.is_valid()) {
     const Road* road = network.road(entry.road);
@@ -120,12 +120,8 @@ GizmoDragStart GizmoDragSession::begin(const GizmoTarget& target,
   if (handle == GizmoHandle::None) {
     return GizmoDragStart::Ignored;
   }
-  // Only a road offers a Z arm (props and signals have no kernel z-move op
-  // yet, and the arm is not drawn for them), so a Z grab on a leaf is a miss
-  // rather than a dead drag.
-  if (handle == GizmoHandle::AxisZ && !target.road.is_valid()) {
-    return GizmoDragStart::Ignored;
-  }
+  // All placed props and signs have persistable z offsets. A Z grab edits
+  // that object's height; a road continues to edit its elevation profile.
   // The one gate a ROAD transform passes: refuse what the kernel would refuse
   // at the grab. A leaf entity moves within its road, so it does not apply.
   //
@@ -226,25 +222,61 @@ Expected<void> GizmoDragSession::update(const GizmoDragInput& input) {
                                .arg(degrees(angle), 0, 'f', 0);
     }
   } else if (drag.handle == GizmoHandle::AxisZ) {
-    const RoadId road = drag.target.road;
     const double dz = input.dz;
-    factory = [road, dz](const RoadNetwork& base) -> std::unique_ptr<edit::Command> {
-      const Road* r = base.road(road);
-      if (r == nullptr) {
-        return {};
-      }
-      std::vector<edit::ElevationPoint> points = edit::elevation_profile_points(*r);
-      if (points.empty()) {
-        points = {edit::ElevationPoint{.s = 0.0, .z = dz},
-                  edit::ElevationPoint{.s = r->plan_view.length(), .z = dz}};
-      } else {
-        for (edit::ElevationPoint& point : points) {
-          point.z += dz;
+    if (!std::isfinite(dz) || std::abs(dz) < 1e-9) {
+      return {}; // no gesture: never create an empty undo command
+    }
+    if (drag.target.object.is_valid()) {
+      const ObjectId object = drag.target.object;
+      factory = [object, dz](const RoadNetwork& base) -> std::unique_ptr<edit::Command> {
+        const Object* selected = base.object(object);
+        if (selected == nullptr) return {};
+        std::vector<std::pair<ObjectId, Object>> lifted;
+        if (selected->assembly.has_value()) {
+          // A complex prefab is one rigid unit: all parts retain their relative z.
+          const std::string instance = selected->assembly->instance;
+          const std::string asset = selected->assembly->asset;
+          base.for_each_object([&](ObjectId id, const Object& part) {
+            if (part.assembly && part.assembly->instance == instance &&
+                part.assembly->asset == asset) {
+              Object moved = part;
+              moved.z_offset += dz;
+              lifted.emplace_back(id, std::move(moved));
+            }
+          });
+        } else {
+          Object moved = *selected;
+          moved.z_offset += dz;
+          lifted.emplace_back(object, std::move(moved));
         }
-      }
-      return edit::set_elevation_profile(base, road, std::move(points));
-    };
-    drag.summary = QObject::tr("Raised road by %1").arg(units::format_length(dz));
+        if (lifted.empty()) return {};
+        return edit::update_objects(base, std::move(lifted), "Raise Prop");
+      };
+      drag.summary = QObject::tr("Raised prop by %1").arg(units::format_length(dz));
+    } else if (drag.target.signal.is_valid()) {
+      const SignalId signal_id = drag.target.signal;
+      factory = [signal_id, dz](const RoadNetwork& base) -> std::unique_ptr<edit::Command> {
+        const Signal* signal = base.signal(signal_id);
+        if (signal == nullptr) return {};
+        return edit::set_signal_z_offset(base, signal_id, signal->z_offset + dz);
+      };
+      drag.summary = QObject::tr("Raised sign by %1").arg(units::format_length(dz));
+    } else {
+      const RoadId road = drag.target.road;
+      factory = [road, dz](const RoadNetwork& base) -> std::unique_ptr<edit::Command> {
+        const Road* r = base.road(road);
+        if (r == nullptr) return {};
+        std::vector<edit::ElevationPoint> points = edit::elevation_profile_points(*r);
+        if (points.empty()) {
+          points = {edit::ElevationPoint{.s = 0.0, .z = dz},
+                    edit::ElevationPoint{.s = r->plan_view.length(), .z = dz}};
+        } else {
+          for (edit::ElevationPoint& point : points) point.z += dz;
+        }
+        return edit::set_elevation_profile(base, road, std::move(points));
+      };
+      drag.summary = QObject::tr("Raised road by %1").arg(units::format_length(dz));
+    }
   } else {
     // Planar translate (AxisX / AxisY / PlaneXY).
     const auto delta =

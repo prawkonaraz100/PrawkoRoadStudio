@@ -516,29 +516,123 @@ TEST(GizmoDrag, TranslatingASignReprojectsItWithoutTouchingItsHeading) {
   EXPECT_DOUBLE_EQ(placed->h_offset, 0.4);
 }
 
-TEST(GizmoDrag, OnlyARoadOffersTheZArm) {
+TEST(GizmoDrag, AllPlacedEntitiesExposeVerticalTranslation) {
   Scene scene;
   const ObjectId prop = scene.add_prop(40.0, 4.0, 0.0);
-  const SignalId sign = scene.add_sign(30.0, -5.0, ObjectOrientation::Plus, 0.0);
+  const SignalId sign = scene.add_sign(30.0, -5.0, ObjectOrientation::Plus, 0.6);
   GizmoDragSession session(scene.document);
 
-  const auto prop_target = gizmo_target(scene.document.network(), {.object = prop});
+  const std::string before = xodr(scene.document);
+  auto prop_target = gizmo_target(scene.document.network(), {.object = prop});
   ASSERT_TRUE(prop_target.has_value());
-  EXPECT_EQ(session.begin(*prop_target, GizmoHandle::AxisZ, {0.0, 0.0}), GizmoDragStart::Ignored);
-  EXPECT_TRUE(session.refusal().isEmpty());
+  EXPECT_EQ(session.begin(*prop_target, GizmoHandle::AxisZ, {0.0, 0.0}),
+            GizmoDragStart::Armed);
+  ASSERT_TRUE(session.update(GizmoDragInput{.dz = 1.25}).has_value());
+  ASSERT_TRUE(session.commit());
+  EXPECT_DOUBLE_EQ(scene.document.network().object(prop)->z_offset, 1.25);
+  EXPECT_NEAR(gizmo_target(scene.document.network(), {.object = prop})->pivot[2], 1.25, 1e-12);
+  scene.document.undo_stack()->undo();
+  EXPECT_EQ(xodr(scene.document), before);
 
-  const auto sign_target = gizmo_target(scene.document.network(), {.signal = sign});
+  auto sign_target = gizmo_target(scene.document.network(), {.signal = sign});
   ASSERT_TRUE(sign_target.has_value());
-  EXPECT_EQ(session.begin(*sign_target, GizmoHandle::AxisZ, {0.0, 0.0}), GizmoDragStart::Ignored);
-  EXPECT_TRUE(session.refusal().isEmpty());
+  EXPECT_EQ(session.begin(*sign_target, GizmoHandle::AxisZ, {0.0, 0.0}),
+            GizmoDragStart::Armed);
+  ASSERT_TRUE(session.update(GizmoDragInput{.dz = 0.65}).has_value());
+  ASSERT_TRUE(session.commit());
+  const Signal* raised_sign = scene.document.network().signal(sign);
+  ASSERT_NE(raised_sign, nullptr);
+  EXPECT_DOUBLE_EQ(raised_sign->z_offset, 0.65);
+  EXPECT_DOUBLE_EQ(raised_sign->h_offset, 0.6);
+  scene.document.undo_stack()->undo();
+  EXPECT_EQ(xodr(scene.document), before);
 
-  const auto road_target = gizmo_target(scene.document.network(), {.road = scene.road});
+  auto road_target = gizmo_target(scene.document.network(), {.road = scene.road});
   ASSERT_TRUE(road_target.has_value());
-  EXPECT_EQ(session.begin(*road_target, GizmoHandle::AxisZ, {0.0, 0.0}), GizmoDragStart::Armed);
+  EXPECT_EQ(session.begin(*road_target, GizmoHandle::AxisZ, {0.0, 0.0}),
+            GizmoDragStart::Armed);
   session.cancel();
+  EXPECT_EQ(session.begin(*road_target, GizmoHandle::None, {0.0, 0.0}),
+            GizmoDragStart::Ignored);
+}
 
-  EXPECT_EQ(session.begin(*road_target, GizmoHandle::None, {0.0, 0.0}), GizmoDragStart::Ignored);
-  EXPECT_TRUE(session.refusal().isEmpty());
+TEST(GizmoDrag, FourPolishModelsTranslateRotateAndLiftWithUndo) {
+  for (const char* model : {"pl-a7-ustap-pierwszenstwa", "pl-b20-stop",
+                            "pl-d6-przejscie-pieszych", "pl-b33-50"}) {
+    SCOPED_TRACE(model);
+    Scene scene;
+    Object object;
+    object.odr_id = "7";
+    object.type = ObjectType::Tree;
+    object.name = model;
+    object.s = 40.0; object.t = 4.0;
+    ASSERT_TRUE(scene.document.push_command(edit::add_object(scene.document.network(),
+                                                               scene.road, object)));
+    ObjectId id;
+    scene.document.network().for_each_object([&](ObjectId found, const Object& placed) {
+      if (placed.odr_id == "7") id = found;
+    });
+    ASSERT_TRUE(id.is_valid());
+    const std::string before = xodr(scene.document);
+    const int base_undos = scene.document.undo_stack()->count();
+    GizmoDragSession session(scene.document);
+    auto target = gizmo_target(scene.document.network(), {.object = id});
+    ASSERT_TRUE(target.has_value());
+    ASSERT_EQ(session.begin(*target, GizmoHandle::PlaneXY,
+                            {target->pivot[0], target->pivot[1]}), GizmoDragStart::Armed);
+    ASSERT_TRUE(session.update(GizmoDragInput{
+        .cursor_world = {target->pivot[0] + 8.0, target->pivot[1] + 1.0}}).has_value());
+    ASSERT_TRUE(session.commit());
+    target = gizmo_target(scene.document.network(), {.object = id});
+    ASSERT_TRUE(target.has_value());
+    ring_drag(session, *target, std::numbers::pi / 2.0);
+    target = gizmo_target(scene.document.network(), {.object = id});
+    ASSERT_TRUE(target.has_value());
+    ASSERT_EQ(session.begin(*target, GizmoHandle::AxisZ, {0.0, 0.0}), GizmoDragStart::Armed);
+    ASSERT_TRUE(session.update(GizmoDragInput{.dz = 1.25}).has_value());
+    ASSERT_TRUE(session.commit());
+    const Object* placed = scene.document.network().object(id);
+    ASSERT_NE(placed, nullptr);
+    EXPECT_EQ(placed->name, model);
+    EXPECT_NEAR(placed->s, 48.0, 1e-7);
+    EXPECT_NEAR(placed->t, 5.0, 1e-7);
+    EXPECT_NEAR(placed->hdg, std::numbers::pi / 2.0, 1e-7);
+    EXPECT_NEAR(placed->z_offset, 1.25, 1e-7);
+    const std::string after = xodr(scene.document);
+    EXPECT_EQ(scene.document.undo_stack()->count(), base_undos + 3);
+    for (int i = 0; i < 3; ++i) scene.document.undo_stack()->undo();
+    EXPECT_EQ(xodr(scene.document), before);
+    for (int i = 0; i < 3; ++i) scene.document.undo_stack()->redo();
+    EXPECT_EQ(xodr(scene.document), after);
+  }
+}
+
+TEST(GizmoDrag, ComplexPrefabVerticalMoveKeepsAllPartsTogether) {
+  Scene scene;
+  ASSERT_TRUE(scene.document.push_command(edit::place_assembly(
+      scene.document.network(), scene.road, 40.0, -4.0, 0.0, "signal_mast")));
+  std::vector<std::pair<ObjectId, double>> z_before;
+  ObjectId part_id;
+  scene.document.network().for_each_object([&](ObjectId id, const Object& part) {
+    if (part.assembly) { z_before.emplace_back(id, part.z_offset); part_id = id; }
+  });
+  ASSERT_EQ(z_before.size(), 4U);
+  const std::string before = xodr(scene.document);
+  GizmoDragSession session(scene.document);
+  const auto target = gizmo_target(scene.document.network(), {.object = part_id});
+  ASSERT_TRUE(target.has_value());
+  ASSERT_EQ(session.begin(*target, GizmoHandle::AxisZ, {0.0, 0.0}),
+            GizmoDragStart::Armed);
+  ASSERT_TRUE(session.update(GizmoDragInput{.dz = 0.85}).has_value());
+  ASSERT_TRUE(session.commit());
+  for (const auto& [id, original_z] : z_before) {
+    const Object* moved = scene.document.network().object(id);
+    ASSERT_NE(moved, nullptr);
+    EXPECT_NEAR(moved->z_offset, original_z + 0.85, 1e-10);
+    EXPECT_TRUE(moved->assembly.has_value());
+  }
+  scene.document.undo_stack()->undo();
+  EXPECT_EQ(xodr(scene.document), before);
 }
 
 // --- roads ---------------------------------------------------------------------

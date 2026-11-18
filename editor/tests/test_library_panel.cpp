@@ -256,5 +256,60 @@ TEST(LibraryPanel, RealImportedBlenderModelAppearsAndIsDraggable) {
   EXPECT_EQ(panel.view()->model()->rowCount(), 0);
 }
 
+
+TEST(LibraryPanel, PolishRoadSignModelsAreVisibleAndDraggableWithoutLegacyLeakage) {
+  LibraryListModel model;
+  const auto builtin =
+      LibraryManifest::load(std::filesystem::path(RM_ASSETS_DIR) / "library/bundled-defaults.json");
+  ASSERT_TRUE(builtin.has_value());
+  model.set_manifest(*builtin);
+  const auto overlay = LibraryManifest::parse(QByteArray(R"({
+    "manifest_version":1,
+    "items":[{
+      "key":"prop.pl-a7-ustap-pierwszenstwa",
+      "label":"A-7 Ustąp pierwszeństwa",
+      "category":"Prawko | Polskie znaki 3D",
+      "create":{"kind":"tree","model":"pl-a7-ustap-pierwszenstwa",
+                "model_file":"assets/props/pl-a7-ustap-pierwszenstwa.glb"}
+    },{
+      "key":"prop.pl-b20-stop",
+      "label":"B-20 STOP",
+      "category":"Prawko | Polskie znaki 3D",
+      "create":{"kind":"tree","model":"pl-b20-stop",
+                "model_file":"assets/props/pl-b20-stop.glb"}
+    },{
+      "key":"prop.legacy-test",
+      "label":"Legacy imported icon",
+      "category":"Props",
+      "create":{"kind":"tree","model":"tree_pine"}
+    }]
+  })"));
+  ASSERT_TRUE(overlay.has_value());
+  model.set_overlay(*overlay, QString());
+  LibraryPanel panel(model);
+  auto* category = panel.category_combo();
+  ASSERT_NE(category, nullptr);
+  const int signs = category->findData(QStringLiteral("Prawko | Polskie znaki 3D"));
+  ASSERT_GE(signs, 0);
+  category->setCurrentIndex(signs);
+  ASSERT_EQ(panel.view()->model()->rowCount(), 2);
+  for (int i = 0; i < 2; ++i) {
+    const QModelIndex tile = panel.view()->model()->index(i, 0);
+    ASSERT_TRUE(tile.isValid());
+    const QString key =
+        panel.view()->model()->data(tile, LibraryListModel::KeyRole).toString();
+    EXPECT_TRUE(key.startsWith(QStringLiteral("prop.pl-")));
+    std::unique_ptr<QMimeData> mime(panel.view()->model()->mimeData({tile}));
+    ASSERT_NE(mime, nullptr);
+    EXPECT_EQ(mime->data(kLibraryItemMimeType), key.toUtf8());
+  }
+  category->setCurrentIndex(0);
+  EXPECT_EQ(panel.view()->model()->rowCount(), 20); // 18 baseline + 2 Polish models
+  auto* search = panel.findChild<QLineEdit*>(QStringLiteral("library_search"));
+  ASSERT_NE(search, nullptr);
+  search->setText(QStringLiteral("Legacy imported icon"));
+  EXPECT_EQ(panel.view()->model()->rowCount(), 0);
+}
+
 } // namespace
 } // namespace roadmaker::editor

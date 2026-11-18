@@ -94,8 +94,8 @@ struct GizmoTarget {
 struct GizmoDragInput {
   /// Cursor on the z=0 ground plane [m].
   std::array<double, 2> cursor_world{};
-  /// AxisZ only: the world-Z delta from the press [m], which only the widget
-  /// can compute (it needs the pivot's screen pixels-per-metre).
+  /// AxisZ: world-Z delta [m] for props (whole prefab), signals and roads.
+  /// Computed using the gizmo pivot's screen pixels per metre.
   double dz = 0.0;
   /// The suppression modifier is held — rotate freely instead of snapping.
   bool free_rotation = false;

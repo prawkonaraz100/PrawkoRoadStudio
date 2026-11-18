@@ -2011,8 +2011,6 @@ void ViewportWidget::draw_gizmo(QPainter& painter) const {
   if (!target.has_value()) {
     return;
   }
-  // Only a road has a Z arm: props and signals have no kernel z-move op yet.
-  const bool has_z_arm = target->road.is_valid();
   const float aspect =
       height() > 0 ? static_cast<float>(width()) / static_cast<float>(height()) : 1.0F;
   const GizmoScreen gizmo = gizmo_screen(camera_.matrices(aspect),
@@ -2037,7 +2035,7 @@ void ViewportWidget::draw_gizmo(QPainter& painter) const {
     painter.drawEllipse(origin, gizmo.ring_radius, gizmo.ring_radius);
   }
 
-  // Axis arrows (X red, Y green, Z blue) — Z only for roads.
+  // Axis arrows (X red, Y green, Z blue) on every transformable entity.
   const auto draw_arrow = [&](GizmoHandle handle, std::array<double, 2> tip, QColor color) {
     if (std::hypot(tip[0] - gizmo.origin[0], tip[1] - gizmo.origin[1]) < 1e-6) {
       return; // arm points almost straight at the camera — hide it
@@ -2064,9 +2062,7 @@ void ViewportWidget::draw_gizmo(QPainter& painter) const {
   };
   draw_arrow(GizmoHandle::AxisX, gizmo.x_tip, kAxisColorX);
   draw_arrow(GizmoHandle::AxisY, gizmo.y_tip, kAxisColorY);
-  if (has_z_arm) {
-    draw_arrow(GizmoHandle::AxisZ, gizmo.z_tip, kAxisColorZ);
-  }
+  draw_arrow(GizmoHandle::AxisZ, gizmo.z_tip, kAxisColorZ);
 
   // Centre pad (free planar move).
   {
@@ -2320,9 +2316,6 @@ void ViewportWidget::mouseMoveEvent(QMouseEvent* event) {
                                           static_cast<double>(width()),
                                           static_cast<double>(height())),
                              {event->position().x(), event->position().y()});
-      if (!target->road.is_valid() && hover == GizmoHandle::AxisZ) {
-        hover = GizmoHandle::None; // only roads expose Z
-      }
     }
     if (hover != gizmo_hover_) {
       gizmo_hover_ = hover;

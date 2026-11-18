@@ -99,8 +99,10 @@ namespace {
   if (is_curated_category(item.category)) {
     return true;
   }
-  return item.category == QStringLiteral("Prawko | Obiekty 3D") &&
-         item.kind == LibraryItem::Kind::Tree &&
+  const bool curated_model_category =
+      item.category == QStringLiteral("Prawko | Obiekty 3D") ||
+      item.category == QStringLiteral("Prawko | Polskie znaki 3D");
+  return curated_model_category && item.kind == LibraryItem::Kind::Tree &&
          !item.create_raw.value(QStringLiteral("model_file")).toString().isEmpty();
 }
 
