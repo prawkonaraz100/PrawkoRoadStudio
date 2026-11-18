@@ -2,6 +2,14 @@
 
 > Stan gałęzi z 18.11.2026. Przed zmianą kodu przeczytaj ten plik i `AGENTS.md`. Historyczne sekcje poniżej opisują także dawne stany PENDING; aktualny stan ustalaj od najnowszej sekcji i Git.
 
+## 18.11.2026 — Polskie znaki drogowe: start rejestru produkcji
+
+**Nowe wymaganie użytkownika:** tworzenie w lokalnym Blenderze realistycznych polskich znaków, a także jednoznaczna lista gotowych i pozostałych modeli. **Jedyne źródło statusu**: `docs/roadmap/polskie-znaki-3d.md` — checklista A/B/C/D 177 symboli, plus kolejki do szczegółowego audytu E/F/G/T/P. Obowiązuje rozróżnienie: roboczy `.blend` → eksport GLB → wspólny `assets/library/manifest.json` + miniatura → rzeczywisty Windows drag/select/move/rotate i prawidłowy wygląd → commit i PASS. Dopiero ostatni etap oznacza `Gotowy`. Brak ukończonych polskich znaków A–D na dzień utworzenia rejestru: 0/177. Nie liczyć sygnalizatora LED R7a ani starych fixture'ów US jako polskich znaków pionowych.
+
+**Priorytet partii P0:** A-7 `Ustąp pierwszeństwa`, B-20 `STOP`, D-6 `Przejście dla pieszych`, B-33 wariant `50 km/h`. Wymagane autorskie Blender mesh i geometria tarczy, lico według polskiego wzoru, rzeczywiste wymiary, materiały, słupek, tył, mocowania, miniatura, import, sprawdzenie GUI, testy i zapis artefaktów. Weryfikować aktualne prawo: Dz.U. 2019 poz. 2310 i 2311 z późniejszymi zmianami oraz Dz.U. 2026 poz. 132 i 133. Lista jest robocza, nie ogłaszać pełnego audytu wszystkich prawnych wariantów.
+
+**Stan pracy:** projekt `feature/realistic-road-surfaces` HEAD start `e6b71c48d215ddc07369cb8fec0cc7d1c8d8ec17`, repo czyste i zgodne z origin po zamknięciu R7a; PrawkoBridge `/prawko status` PASS run 44402263234, brak działającego edytora `/prawko dev window-state` run 44402266935. Utworzono `docs/roadmap/polskie-znaki-3d.md` wyłącznie nowym, nie-nadpisującym poleceniem przez zaufany PrawkoBridge (run 44403212195), następnie strzeżony wpis do HANDOFF. **Następny krok produkcyjny:** modelowanie czterech znaków P0 w Blenderze 5.3. Nie zmieniaj statusu na `Gotowy` bez realnego GUI. Nie powielaj rejestru w drugim dokumencie.
+
 ## 18.11.2026 — R7a: dwa autorskie obiekty Blender 5.3 w globalnej bibliotece — eksport, import i GUI PASS
 
 **Cel użytkownika:** rzeczywiste edytowalne modele 3D powstałe w lokalnym Blenderze, jedna globalna biblioteka; bez statycznych obrazków udających asset i bez kopiowania obiektów stockowych. Baza: `feature/realistic-road-surfaces`, przed pracą HEAD `66c62beed80406c029dec0f7aa3f77d28ef429c7`, oba repo i origin zgodne; Windows PrawkoBridge `/prawko status`, `/prawko dev resume` PASS. Blender 5.3.0 fizycznie uruchomiony na Windows (run 44385473421), bez Desktop Commandera i zewnętrznego API modeli.
