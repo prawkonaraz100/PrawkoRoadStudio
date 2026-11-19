@@ -1,6 +1,20 @@
 # PrawkoRoadStudio — PRZEKAZANIE PRACY / START TUTAJ
 
-> Stan gałęzi z 18.11.2026. Przed zmianą kodu przeczytaj ten plik i `AGENTS.md`. Historyczne sekcje poniżej opisują także dawne stany PENDING; aktualny stan ustalaj od najnowszej sekcji i Git.
+> **Aktualny priorytet: P0 — REALISTYCZNE POLSKIE ZNAKI DROGOWE 3D.** Stan planu na 19.11.2026. Przed zmianą kodu przeczytaj ten plik, `AGENTS.md` i `docs/roadmap/polskie-znaki-3d.md`. Historyczne sekcje poniżej dokumentują również wcześniejsze plany — **priorytet wyznacza poniższa sekcja**, a stan techniczny zawsze należy potwierdzić w Git i Windows.
+
+## 19.11.2026 — AKTYWNY PLAN P0: polskie znaki 3D i biblioteka assetów
+
+**Decyzja właściciela:** od teraz najważniejsza jest seryjna, realistyczna produkcja **polskich pionowych znaków drogowych 3D** i ich udostępnianie w globalnej bibliotece PrawkoRoadStudio. Jedyny nadrzędny rejestr kolejki, statusów i liczników: [`docs/roadmap/polskie-znaki-3d.md`](docs/roadmap/polskie-znaki-3d.md). Nie zakładać nowego rejestru ani drugiego projektu. Dotychczasowe R7e i test wieloczęściowego prefabrykatu XODR **przechodzą do P1 / PENDING**; nie usuwać ich historii ani potwierdzonych wyników.
+
+**Aktualny zweryfikowany stan produkcji z rejestru (bez podnoszenia statusów):** 0 znaków ✅ Gotowy; cztery pierwsze modele — **A-7, B-20, D-6, B-33 (50 km/h)** — mają źródła Blender, realne meshe i GLB oraz wpisy w globalnej bibliotece, status 🟣 W bibliotece. Rejestr obejmuje 177 pozycji A–D, z czego 173 pozostają do produkcji. Częściowe testy GUI A-7 zapisano w R7d; nie są dowodem na poprawność wszystkich czterech lic. Wszystkie wymagają końcowego audytu prawnego/wizualnego i indywidualnego odbioru w Windows.
+
+**Pierwsze niezakończone zadanie:** porównać kolejno A-7, B-20, D-6, B-33 (50) z aktualnymi oficjalnymi polskimi wzorami i wymiarami (obowiązujące teksty i zmiany, a nie przybliżenia z pamięci). W pierwszej kolejności sprawdzić **D-6: uproszczona sylwetka pieszego**, a dla pozostałych: proporcje i obwódki tarczy, krój cyfr/liter, geometrię piktogramów, materiały i skalę. Faktyczne rozbieżności poprawić w istniejącym skrypcie Blendera i modelach; nie podmieniać ich płaskimi obrazkami, ikonami US ani stockiem. Następnie eksportować do `.glb`, odświeżyć miniatury i wpisy `assets/library/manifest.json` w kategorii `Prawko | Polskie znaki 3D`.
+
+**Warunek odbioru KAŻDEGO znaku:** legalny wzorzec i wymiary zweryfikowane → źródło `.blend` i prawdziwa geometria 3D (tarcza, obrzeże, tył, uchwyty, słupek, materiały) → eksport GLB, walidacja mesh/UV/PBR → globalna biblioteka i miniatura → **rzeczywisty Windows GUI**: drag & drop, zaznaczenie właściwego znaku, przesuwanie XYZ, obrót yaw, Undo/Redo, zapis/ponowne otwarcie odrębnej sceny testowej → wymagane testy/Quality Gate PASS → selektywny commit/push i aktualizacja rejestru. Testy SKIPPED/DISABLED nie są PASS; nie deklarować fizycznej retrorefleksyjności bez pomiarów. **Tylko po pełnym potwierdzeniu zmienić status na ✅ Gotowy i checkbox na [x].**
+
+**Kolejka po zamknięciu P0:** zgodnie z `docs/roadmap/polskie-znaki-3d.md`: D-1, C-12, B-2, B-36, A-17, A-16, B-21/B-22, D-40/D-41, D-42/D-43; przed kolejnymi seriami ustalić szczegóły obowiązujących wariantów i ich liczbę. Pracować przez **PrawkoBridge Issue #353**, nie przez Desktop Commander; sprawdzić lokalne pliki/SHA przed zapisem, chronić niezacommitowane sceny R7e i `project.json`, nie resetować/cleanować repo. Po każdej wykonanej partii: testy, realny GUI, selektywny commit/push i zapis potwierdzonych wyników tutaj oraz w rejestrze znaków.
+
+
 
 ## 19.11.2026 — R7e: poprawka wieloczęściowego prefabrykatu (kod i Qt PASS; fizyczny GUI XODR PENDING)
 
