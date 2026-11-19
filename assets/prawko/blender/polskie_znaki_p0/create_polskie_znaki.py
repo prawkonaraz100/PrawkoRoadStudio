@@ -102,7 +102,7 @@ def r_square(side,r):
     return coords
 def circle_polygon(r,n=96):
     return [(r*math.cos(i*2*math.pi/n),r*math.sin(i*2*math.pi/n)) for i in range(n)]
-def text_mesh(name,value,pos,size,mat,parts,bold=False):
+def text_mesh(name,value,pos,size,mat,parts,bold=False,fit_width=None,fit_height=None):
     bpy.ops.object.text_add(location=pos,rotation=(math.pi/2,0,0))
     o=bpy.context.object;o.name=name;o.data.body=value
     o.data.align_x="CENTER";o.data.align_y="CENTER";o.data.size=size
@@ -113,7 +113,31 @@ def text_mesh(name,value,pos,size,mat,parts,bold=False):
         if os.path.isfile(file):
             o.data.font=bpy.data.fonts.load(file,check_existing=True);break
     bpy.ops.object.convert(target="MESH")
-    attach(bpy.context.object,name,mat,parts)
+    o=bpy.context.object
+    attach(o,name,mat,parts)
+    if fit_width is not None or fit_height is not None:
+        if fit_width is None or fit_height is None: raise ValueError("Provide both target dimensions")
+        # Bake the 90-degree font-plane rotation onto the actual mesh before
+        # calculating or changing glyph bounds, independent of Blender's
+        # delayed evaluated-object world dimensions after CURVE -> MESH.
+        bpy.ops.object.transform_apply(location=False,rotation=True,scale=True)
+        x=[v.co.x for v in o.data.vertices]
+        z=[v.co.z for v in o.data.vertices]
+        if not x or not z: raise RuntimeError("Road-sign text has no mesh vertices")
+        width=max(x)-min(x)
+        height=max(z)-min(z)
+        print("SIGN_TEXT_LOCAL_BOUNDS",name,"width",width,"height",height,flush=True)
+        if width<.05 or height<.05:
+            raise RuntimeError("Road-sign text geometry is not front-facing in X/Z")
+        sx=fit_width/width; sz=fit_height/height
+        for v in o.data.vertices:
+            v.co.x*=sx
+            v.co.z*=sz
+        o.data.update()
+        bpy.context.view_layer.update()
+        if abs(o.dimensions.x-fit_width)>.004 or abs(o.dimensions.z-fit_height)>.004:
+            raise RuntimeError("Sign text mesh fit differs from intended dimensions")
+    return o
 def common(parts,shape):
     galv=material("Hot dip galvanized steel / ISO 1461",(.48,.51,.53),.75,.38)
     steel=material("Steel cut edge RAL 7042",(.28,.30,.31),.7,.46)
@@ -155,14 +179,28 @@ def draw_a7(parts,m):
     inside=rounded_triangle([(-.341,.203),(.341,.203),(0,-.389)],.024)
     polygon("A-7 rounded yellow triangle R24",inside,-.121,.005,m["yellow"],parts)
 def draw_stop(parts,m):
-    polygon("B-20 thin white border",octagon(.374),-.117,.006,m["white"],parts)
-    polygon("B-20 red field inset border",octagon(.352),-.125,.006,m["red"],parts)
-    text_mesh("B-20 raised white STOP lettering","STOP",(0,-.137,Z+.002),.195,m["white"],parts)
+    # Polish B-20 size S: 800 mm across parallel sides of octagon.
+    # Only the 4 mm narrow folded steel edge is visible around the foil.
+    # The white STOP outline remains a real separate reflective foil mesh.
+    polygon("B-20 white octagon with 4 mm uncovered metal lip",
+            octagon(.396),-.117,.006,m["white"],parts)
+    polygon("B-20 red octagon inset behind white perimeter",
+            octagon(.367),-.125,.006,m["red"],parts)
+    text_mesh("B-20 centred white STOP lettering 580 by 205 mm",
+              "STOP",(0,-.138,Z+.002),.24,m["white"],parts,
+              bold=True,fit_width=.580,fit_height=.205)
 def draw_b33(parts,m):
-    polygon("B-33 white disc foil",circle_polygon(.388),-.116,.006,m["white"],parts)
-    polygon("B-33 wide red surround",circle_polygon(.367),-.125,.006,m["red"],parts)
-    polygon("B-33 white central disc",circle_polygon(.281),-.132,.006,m["white"],parts)
-    text_mesh("B-33 black 50 km/h number","50",(0,-.145,Z-.005),.325,m["black"],parts,bold=True)
+    # Polish prohibition sign size S: 800 mm nominal diameter and
+    # 80 mm red surround; thin 8 mm outer white technology perimeter.
+    polygon("B-33 white full diameter 800 mm foil",
+            circle_polygon(.400),-.116,.006,m["white"],parts)
+    polygon("B-33 red surround 80 mm width",
+            circle_polygon(.392),-.125,.006,m["red"],parts)
+    polygon("B-33 white central disc radius 312 mm",
+            circle_polygon(.312),-.132,.006,m["white"],parts)
+    text_mesh("B-33 black 50 centred 520 by 330 mm",
+              "50",(0,-.145,Z-.005),.34,m["black"],parts,bold=True,
+              fit_width=.520,fit_height=.330)
 def d6_art(points):
     """Convert traced reference-art positions to actual 600 mm sign-face coordinates.
 
