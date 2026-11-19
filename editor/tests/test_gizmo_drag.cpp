@@ -635,6 +635,87 @@ TEST(GizmoDrag, ComplexPrefabVerticalMoveKeepsAllPartsTogether) {
   EXPECT_EQ(xodr(scene.document), before);
 }
 
+// Composite props differ from a wide GLB: four distinct OpenDRIVE objects
+// share one assembly instance. Each mouse gizmo edit must move all four,
+// preserve the earlier Z offset, and remain ONE Undo/Redo transaction.
+TEST(GizmoDrag, FourPartPrefabTransformSequenceRemainsAtomicAndSurvivesXodrRoundTrip) {
+  Scene scene;
+  ASSERT_TRUE(scene.document.push_command(edit::place_assembly(
+      scene.document.network(), scene.road, 40.0, -4.0, 0.0, "signal_mast")));
+  std::vector<std::pair<ObjectId, Object>> parts_before;
+  scene.document.network().for_each_object([&](ObjectId id, const Object& object) {
+    if (object.assembly.has_value()) {
+      parts_before.emplace_back(id, object);
+    }
+  });
+  ASSERT_EQ(parts_before.size(), 4U);
+  const ObjectId selected = parts_before.front().first;
+  const auto target_for_part = [&] {
+    return gizmo_target(scene.document.network(), {.object = selected});
+  };
+  const std::string before = xodr(scene.document);
+  const int undo_before = scene.document.undo_stack()->count();
+  GizmoDragSession session(scene.document);
+
+  auto target = target_for_part();
+  ASSERT_TRUE(target.has_value());
+  ASSERT_EQ(session.begin(*target, GizmoHandle::AxisZ, {0.0, 0.0}),
+            GizmoDragStart::Armed);
+  ASSERT_TRUE(session.update(GizmoDragInput{.dz = 0.85}).has_value());
+  ASSERT_TRUE(session.commit());
+
+  target = target_for_part();
+  ASSERT_TRUE(target.has_value());
+  ASSERT_EQ(session.begin(*target, GizmoHandle::PlaneXY,
+                          {target->pivot[0], target->pivot[1]}),
+            GizmoDragStart::Armed);
+  ASSERT_TRUE(session.update(GizmoDragInput{
+      .cursor_world = {target->pivot[0] + 5.0, target->pivot[1] + 1.0}})
+                  .has_value());
+  ASSERT_TRUE(session.commit());
+
+  // Translating the whole assembly must not discard the height from the
+  // preceding gesture; each part keeps its internal relative station/t.
+  for (const auto& [id, original] : parts_before) {
+    const Object* moved = scene.document.network().object(id);
+    ASSERT_NE(moved, nullptr);
+    ASSERT_TRUE(moved->assembly.has_value());
+    EXPECT_NEAR(moved->z_offset, original.z_offset + 0.85, 1e-9);
+    EXPECT_NEAR(moved->s, original.s + 5.0, 1e-7);
+    EXPECT_NEAR(moved->t, original.t + 1.0, 1e-7);
+  }
+
+  target = target_for_part();
+  ASSERT_TRUE(target.has_value());
+  ring_drag(session, *target, std::numbers::pi / 2.0);
+
+  const std::string after = xodr(scene.document);
+  EXPECT_NE(after, before);
+  EXPECT_EQ(scene.document.undo_stack()->count(), undo_before + 3);
+  for (const auto& [id, original] : parts_before) {
+    const Object* moved = scene.document.network().object(id);
+    ASSERT_NE(moved, nullptr);
+    ASSERT_TRUE(moved->assembly.has_value());
+    EXPECT_NEAR(moved->z_offset, original.z_offset + 0.85, 1e-9);
+    EXPECT_NEAR(std::remainder(moved->hdg - original.hdg, 2.0 * std::numbers::pi),
+                std::numbers::pi / 2.0, 1e-8);
+  }
+  const auto reparsed = roadmaker::parse_xodr(after);
+  ASSERT_TRUE(reparsed.has_value());
+  std::size_t restored_parts = 0;
+  reparsed->network.for_each_object([&](ObjectId, const Object& part) {
+    if (!part.assembly.has_value()) return;
+    ++restored_parts;
+    EXPECT_TRUE(std::isfinite(part.z_offset));
+  });
+  EXPECT_EQ(restored_parts, 4U);
+
+  for (int i = 0; i < 3; ++i) scene.document.undo_stack()->undo();
+  EXPECT_EQ(xodr(scene.document), before);
+  for (int i = 0; i < 3; ++i) scene.document.undo_stack()->redo();
+  EXPECT_EQ(xodr(scene.document), after);
+}
+
 // --- roads ---------------------------------------------------------------------
 
 // A road is rotated BY a delta about a pivot, so the DELTA is what snaps —
