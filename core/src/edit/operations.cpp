@@ -10343,7 +10343,11 @@ std::unique_ptr<Command> move_assembly(
                                  .message = "object has a stale road back-reference"});
   }
 
-  const AssemblyAnchor anchor{.s = s, .t = t, .z = 0.0, .hdg = hdg.value_or(anchor_of(*seed).hdg)};
+  const AssemblyAnchor current_anchor = anchor_of(*seed);
+  const AssemblyAnchor anchor{.s = s,
+                              .t = t,
+                              .z = current_anchor.z,
+                              .hdg = hdg.value_or(current_anchor.hdg)};
 
   const std::vector<ObjectId> members = assembly_parts(network, part);
   std::vector<std::pair<ObjectId, Object>> moved;
