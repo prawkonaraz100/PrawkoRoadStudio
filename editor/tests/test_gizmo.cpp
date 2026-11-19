@@ -104,6 +104,45 @@ TEST(Gizmo, HitTestPicksTheNearestArmPadAndRing) {
   EXPECT_EQ(gizmo_hit_test(g, {400.0, 400.0}), GizmoHandle::None); // empty space
 }
 
+TEST(Gizmo, CollidingYAndZProjectionFansOutTheBlueHandle) {
+  constexpr double kW = 800.0;
+  constexpr double kH = 600.0;
+  // This yaw looks along the Y axis: Y and world-up Z project almost
+  // on top of one another. A distinct blue tip must remain draggable.
+  const GizmoScreen g = gizmo_screen(centered_camera(kW / kH), {0.0, 0.0, 0.0}, kW, kH);
+  ASSERT_TRUE(g.valid);
+  EXPECT_GE(std::hypot(g.z_tip[0] - g.y_tip[0], g.z_tip[1] - g.y_tip[1]), 25.0);
+  const auto near_tip = [&](const std::array<double, 2>& tip) {
+    return std::array<double, 2>{
+        g.origin[0] + 0.94 * (tip[0] - g.origin[0]),
+        g.origin[1] + 0.94 * (tip[1] - g.origin[1])};
+  };
+  EXPECT_EQ(gizmo_hit_test(g, near_tip(g.z_tip)), GizmoHandle::AxisZ);
+  EXPECT_EQ(gizmo_hit_test(g, near_tip(g.y_tip)), GizmoHandle::AxisY);
+}
+
+TEST(Gizmo, CollidingXAndZProjectionAlsoSeparatesTheBlueTip) {
+  constexpr double kW = 800.0;
+  constexpr double kH = 600.0;
+  OrbitCamera camera;
+  camera.frame({0.0F, 0.0F, 0.0F}, 40.0F);
+  camera.set_view(static_cast<float>(std::numbers::pi), 1.2F);
+  const GizmoScreen g = gizmo_screen(
+      camera.matrices(static_cast<float>(kW / kH)), {0.0, 0.0, 0.0}, kW, kH);
+  ASSERT_TRUE(g.valid);
+  EXPECT_GE(std::hypot(g.z_tip[0] - g.x_tip[0], g.z_tip[1] - g.x_tip[1]), 25.0);
+  const std::array<double, 2> near_blue{
+      g.origin[0] + 0.94 * (g.z_tip[0] - g.origin[0]),
+      g.origin[1] + 0.94 * (g.z_tip[1] - g.origin[1])};
+  EXPECT_EQ(gizmo_hit_test(g, near_blue), GizmoHandle::AxisZ);
+}
+
+TEST(Gizmo, TipGrabBeatsAnotherAxisShaftWithoutClearingSelection) {
+  GizmoScreen g = fixed_gizmo();
+  g.z_tip = {108.0, 65.0}; // blue tip near the middle of the green Y shaft
+  EXPECT_EQ(gizmo_hit_test(g, {102.0, 64.0}), GizmoHandle::AxisZ);
+}
+
 TEST(Gizmo, HitTestOnAnInvalidGizmoIsNone) {
   GizmoScreen g;
   g.valid = false;

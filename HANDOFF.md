@@ -2,6 +2,16 @@
 
 > Stan gałęzi z 18.11.2026. Przed zmianą kodu przeczytaj ten plik i `AGENTS.md`. Historyczne sekcje poniżej opisują także dawne stany PENDING; aktualny stan ustalaj od najnowszej sekcji i Git.
 
+## 19.11.2026 — R7d: rozdzielenie kolidujących uchwytów Z/X/Y i preferencja strzałek — testy PASS, GUI PENDING
+
+**Dostarczona poprawka (lokalny Windows, po synchronizacji):** 19.11.2026 `/prawko dev sync-ff` run **44436251092** bezpiecznie wyrównał czysty edytor z `feature/realistic-road-surfaces` (`78c9af69 → e2423af`, bez reset/clean i bez dotykania repo `agent/`). `editor/src/viewport/gizmo.cpp` rozsuwa sam ekranowy niebieski uchwyt Z, gdy jego końcówka nachodzi na X lub Y (odległość poniżej 25 px), wybierając stronę o większym prześwicie; światowa geometria i parametry obiektów pozostają bez zmian. Trafienie w końcówkę strzałki (12 px) ma pierwszeństwo przed pobliską linią innej osi, a centralny pad XY zachowuje pierwszeństwo w środku. `editor/tests/test_gizmo.cpp` obejmuje kolizję Y/Z, X/Z i końcówkę Z blisko linii Y.
+
+**Zweryfikowane na Windows:** guarded SHA preflight + zapis dwóch źródeł: run **44436796338** / **44436882624**, po rozszerzeniu X/Z ponownie run **44437588881** / **44437674212**; oba zapisy mają backup w `toolchain/bridge-backups` i `git diff --check` PASS. Zmienione testy zbudowano `DEV_BUILD_QT_TESTS_PASS` run **44437775602**, pełna seria `DEV_QT_PASS` run **44437934376**, native `DEV_VERIFY_PASS` run **44438112168**. Wyniki te dowodzą poprawności C++/Qt, **NIE** fizycznej obsługi nowego EXE myszą.
+
+**GUI / bezpieczeństwo:** przy ponownej próbie w run **44435451505** dotychczasowe okno Windows było już w trybie **Droga**, z inną kamerą i aktywną listą `Prawko | Gotowe drogi`, a nie w stanie testu A-7. Batch w tym trybie wywołał rozpoczęcie drogi (1 waypoint); na screenie występowała gwiazdka niezapisanych zmian. Nie wiadomo, które niezapisane zmiany należą do użytkownika/innej sesji. **Nie wykonano Undo, zapisu ani wymuszonego zamknięcia**, żeby ich nie skasować. Test nowego kodu w GUI oraz rebuild edytora EXE są PENDING, dopóki aktywny stan nie zostanie bezpiecznie rozdzielony od testowego. Nie twierdzić, że wszystkie typy 3D mają GUI PASS lub że zapis/ponowne otwarcie sceny już sprawdzono.
+
+**Następny krok:** po selektywnym commicie/push aktualnego etapu sprawdzić czystość obu repo i nowy SHA. W nowej, osobnej i świadomie testowej scenie na Windows: build-editor przy bezpiecznie zamkniętym EXE, drag A-7, wybór Move, hover na rozdzielonej niebieskiej strzałce, Z offset >0, yaw, Undo/Redo i zapis/odczyt; powtórzyć dla sygnalizatora i złożonego prefabrykatu. Nie nadpisywać `07-pokaz-biblioteki-assetow.xodr` i nie zmieniać statusów `Gotowy` polskich znaków bez osobnego audytu.
+
 ## 19.11.2026 — R7c — realny odbiór Windows GUI po świeżym buildzie (częściowy PASS; oś Z GUI PENDING)
 
 **Baza:** na `feature/realistic-road-surfaces` commit `78c9af69f97f85fba59316d2bd6db39356103910` (kod XYZ, filtr biblioteki, testy i dokumentacja). Nowy Windows EXE po naprawie filtra zbudowano `DEV_BUILD_EDITOR_PASS` run **44428770984**. Dodatkowe testy GUI wykonywano wyłącznie przez prywatne PrawkoBridge, Issue #353, na `07-pokaz-biblioteki-assetow.xodr`; **nie zapisano** tej sceny. Testy Qt/native ze wcześniejszego etapu pozostają udokumentowane poniżej.

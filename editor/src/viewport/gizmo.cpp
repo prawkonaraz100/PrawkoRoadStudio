@@ -88,6 +88,34 @@ GizmoScreen gizmo_screen(const CameraMatrices& camera,
       axis_tip(camera, pivot, {0.0, 1.0, 0.0}, gizmo.origin, width, height, sizes.axis_len);
   gizmo.z_tip =
       axis_tip(camera, pivot, {0.0, 0.0, 1.0}, gizmo.origin, width, height, sizes.axis_len);
+  // The Z and a planar world axis can project to almost the same screen
+  // line. In that camera angle the blue handle is visually occluded and
+  // impossible to grab reliably. Only when their tips overlap, fan the
+  // SCREEN-SPACE Z affordance away from the planar axes. The underlying edit
+  // still moves world Z; no model geometry or transform is changed here.
+  const auto tip_gap = [](const std::array<double, 2>& a,
+                          const std::array<double, 2>& b) {
+    return std::hypot(a[0] - b[0], a[1] - b[1]);
+  };
+  if (std::min(tip_gap(gizmo.z_tip, gizmo.x_tip),
+               tip_gap(gizmo.z_tip, gizmo.y_tip)) < 25.0 &&
+      tip_gap(gizmo.z_tip, gizmo.origin) > 1e-6) {
+    const double ux = (gizmo.z_tip[0] - gizmo.origin[0]) / sizes.axis_len;
+    const double uy = (gizmo.z_tip[1] - gizmo.origin[1]) / sizes.axis_len;
+    const auto fan_tip = [&](double radians) {
+      const double c = std::cos(radians);
+      const double sn = std::sin(radians);
+      return std::array<double, 2>{
+          gizmo.origin[0] + sizes.axis_len * ((c * ux) - (sn * uy)),
+          gizmo.origin[1] + sizes.axis_len * ((sn * ux) + (c * uy))};
+    };
+    const auto left = fan_tip(0.65);
+    const auto right = fan_tip(-0.65);
+    const auto clearance = [&](const std::array<double, 2>& p) {
+      return std::min(tip_gap(p, gizmo.x_tip), tip_gap(p, gizmo.y_tip));
+    };
+    gizmo.z_tip = clearance(left) >= clearance(right) ? left : right;
+  }
   return gizmo;
 }
 
@@ -99,6 +127,29 @@ GizmoHandle gizmo_hit_test(const GizmoScreen& gizmo, std::array<double, 2> curso
   if (std::abs(cursor[0] - gizmo.origin[0]) <= gizmo.pad_half &&
       std::abs(cursor[1] - gizmo.origin[1]) <= gizmo.pad_half) {
     return GizmoHandle::PlaneXY;
+  }
+  // Arrowheads have a small, explicit grab target. A nearby planar
+  // shaft must not steal the blue Z tip even when its centreline is closer.
+  // This is checked before the shaft (and before the yaw ring at radius 58).
+  const std::array<std::pair<GizmoHandle, std::array<double, 2>>, 3> tips{{
+      {GizmoHandle::AxisX, gizmo.x_tip},
+      {GizmoHandle::AxisY, gizmo.y_tip},
+      {GizmoHandle::AxisZ, gizmo.z_tip},
+  }};
+  GizmoHandle nearest_tip = GizmoHandle::None;
+  double nearest_tip_dist = std::max(12.0, tol);
+  for (const auto& [handle, tip] : tips) {
+    if (std::hypot(tip[0] - gizmo.origin[0], tip[1] - gizmo.origin[1]) < 1e-6) {
+      continue;
+    }
+    const double d = std::hypot(cursor[0] - tip[0], cursor[1] - tip[1]);
+    if (d < nearest_tip_dist) {
+      nearest_tip_dist = d;
+      nearest_tip = handle;
+    }
+  }
+  if (nearest_tip != GizmoHandle::None) {
+    return nearest_tip;
   }
   // Then the nearest axis arm within tolerance.
   const std::array<std::pair<GizmoHandle, std::array<double, 2>>, 3> arms{{
