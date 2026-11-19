@@ -124,28 +124,54 @@ def draw_b33(parts,m):
     polygon("B-33 wide red surround",circle_polygon(.367),-.125,.006,m["red"],parts)
     polygon("B-33 white central disc",circle_polygon(.281),-.132,.006,m["white"],parts)
     text_mesh("B-33 black 50 km/h number","50",(0,-.145,Z-.005),.325,m["black"],parts,bold=True)
+def d6_art(points):
+    """Convert traced reference-art positions to actual 600 mm sign-face coordinates.
+
+    The walking person remains real extruded Blender mesh geometry, NOT a
+    texture/billboard. Reference composition: Dz.U. 2019 poz. 2311, fig.
+    5.2.6.1. Precise legal drawing acceptance is still required.
+    """
+    scale = .60 / 512.0
+    return [((px-256)*scale, (256-pz)*scale) for px,pz in points]
+
 def draw_d6(parts,m):
-    polygon("D-6 thin bright perimeter",r_square(.579,.028),-.116,.004,m["white"],parts)
-    polygon("D-6 blue rectangular face",r_square(.555,.024),-.122,.004,m["blue"],parts)
-    # Sign-specific Polish upward white triangular crossing field.
+    polygon("D-6 bright boundary foil",r_square(.579,.028),-.116,.004,m["white"],parts)
+    polygon("D-6 blue rectangular foil",r_square(.555,.024),-.122,.004,m["blue"],parts)
+    # Full-height white triangular field, matching the visual arrangement of
+    # the Polish D-6 drawing rather than a small generic pedestrian icon.
     polygon("D-6 white pedestrian-background triangle",
-            [(-.274,-.232),(.274,-.232),(0,.265)],-.129,.004,m["white"],parts)
-    # Three interrupted stripes at bottom: avoid human legs crossing strips.
-    for k,(x0,x1) in enumerate([(-.235,-.090),(-.055,.055),(.115,.235)]):
-        polygon("D-6 black crossing stripe "+str(k),
-                [(x0,-.180),(x1,-.180),(x1+.014,-.158),(x0+.014,-.158)],
-                -.136,.003,m["black"],parts)
-    cyl("D-6 black circular pedestrian head",(-.004,-.140,Z+.149),.024,.004,m["black"],parts,axis=(0,1,0),n=40)
-    # Author-created faceted silhouette: torso, swinging arms, striding legs.
-    shapes=[
-      [(-.006,.100),(.050,.079),(.083,.021),(.066,-.006),(.028,.036),(.029,-.035),(-.002,-.077),(-.033,-.019)],
-      [(-.033,.061),(-.002,.049),(-.078,-.036),(-.103,-.021)],
-      [(.055,.070),(.087,.015),(.085,-.069),(.065,-.083),(.064,-.002),(.028,.040)],
-      [(-.004,-.060),(.028,-.073),(.119,-.214),(.077,-.238),(.018,-.136),(-.039,-.086)],
-      [(-.024,-.061),(.012,-.073),(-.055,-.153),(-.074,-.222),(-.122,-.213),(-.103,-.194),(-.090,-.155)]
+            d6_art([(9,435),(503,435),(256,9)]),-.129,.004,m["white"],parts)
+    # Left, middle and right pedestrian-crossing dashes; each is a genuine
+    # shallow 3D mesh with a distinct material.
+    stripes=[
+        [(66,367),(75,352),(198,352),(189,367)],
+        [(223,367),(226,352),(295,352),(299,367)],
+        [(360,367),(350,352),(437,352),(447,367)]
     ]
-    for i,poly in enumerate(shapes):
-        polygon("D-6 walking pedestrian silhouette part "+str(i),poly,-.140,.004,m["black"],parts)
+    for k,outline in enumerate(stripes):
+        polygon("D-6 pedestrian crossing stripe "+str(k),
+                d6_art(outline),-.136,.003,m["black"],parts)
+    cyl("D-6 pedestrian circular head",
+        ((255-256)*.60/512.0,-.141,Z+(256-102)*.60/512.0),
+        21*.60/512.0,.004,m["black"],parts,axis=(0,1,0),n=64)
+    # Carefully proportioned connected torso/arms and walking legs.
+    # Non-self-intersecting silhouettes tested before extrusion: no imported
+    # raster, font glyph, decal or foreign-standard traffic symbol.
+    body=[
+        (255,128),(297,142),(340,199),(340,272),(321,284),
+        (319,217),(297,190),(301,264),(291,290),(254,266),
+        (247,182),(190,232),(178,216),(226,162)
+    ]
+    legs=[
+        (274,273),(301,286),(368,401),(339,419),(319,420),
+        (339,398),(273,297),(242,332),(211,418),(187,412),
+        (162,406),(162,400),(190,393),(213,329),(254,263)
+    ]
+    polygon("D-6 continuous walking pedestrian upper silhouette",
+            d6_art(body),-.141,.004,m["black"],parts)
+    polygon("D-6 connected walking pedestrian legs and shoes",
+            d6_art(legs),-.142,.004,m["black"],parts)
+
 def preview(stem,parts):
     bpy.ops.object.select_all(action="DESELECT")
     bpy.ops.object.camera_add(location=(.85,-4.50,3.16))
