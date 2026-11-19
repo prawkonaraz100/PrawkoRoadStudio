@@ -52,6 +52,45 @@ def polygon(name,flatpoints,front_y,depth,mat,parts):
 def octagon(r):
     t=r*(math.sqrt(2)-1)
     return [(-t,r),(t,r),(r,t),(r,-t),(t,-r),(-t,-r),(-r,-t),(-r,t)]
+def rounded_triangle(points,radius,segments=12):
+    """Fabrication-radius corners of a real steel sign face in metres.
+
+    Polish medium-sized warning triangle: theoretical edge b=900 mm,
+    outside construction radius R=54 mm, inner radius r=24 mm.
+    Keep polygon winding and generate tangent circular arcs, not bevelled
+    points cut from the legal footprint.
+    """
+    direction=sum(points[i][0]*points[(i+1)%3][1]-
+                  points[(i+1)%3][0]*points[i][1] for i in range(3))
+    clockwise=direction<0
+    outline=[]
+    for i,vertex in enumerate(points):
+        before=points[(i-1)%3];after=points[(i+1)%3]
+        u1=(before[0]-vertex[0],before[1]-vertex[1])
+        u2=(after[0]-vertex[0],after[1]-vertex[1])
+        n1=math.hypot(*u1);n2=math.hypot(*u2)
+        u1=(u1[0]/n1,u1[1]/n1)
+        u2=(u2[0]/n2,u2[1]/n2)
+        angle=math.acos(max(-1,min(1,u1[0]*u2[0]+u1[1]*u2[1])))
+        tangent=radius/math.tan(angle/2)
+        bisector=(u1[0]+u2[0],u1[1]+u2[1])
+        norm=math.hypot(*bisector)
+        distance=radius/math.sin(angle/2)
+        center=(vertex[0]+distance*bisector[0]/norm,
+                vertex[1]+distance*bisector[1]/norm)
+        p0=(vertex[0]+tangent*u1[0],vertex[1]+tangent*u1[1])
+        p1=(vertex[0]+tangent*u2[0],vertex[1]+tangent*u2[1])
+        a0=math.atan2(p0[1]-center[1],p0[0]-center[0])
+        a1=math.atan2(p1[1]-center[1],p1[0]-center[0])
+        if clockwise:
+            while a1>=a0:a1-=2*math.pi
+        else:
+            while a1<=a0:a1+=2*math.pi
+        for j in range(segments+1):
+            a=a0+(a1-a0)*j/segments
+            outline.append((center[0]+radius*math.cos(a),
+                            center[1]+radius*math.sin(a)))
+    return outline
 def r_square(side,r):
     h=side/2
     centers=[(h-r,h-r,0),(-h+r,h-r,90),(-h+r,-h+r,180),(h-r,-h+r,270)]
@@ -103,7 +142,7 @@ def face_materials():
     }
 def add_back(parts,shape,material,steel):
     if shape=="triangle":
-        o=[(-.45,.260),(.45,.260),(0,-.520)]
+        o=rounded_triangle([(-.45,.260),(.45,.260),(0,-.520)],.054)
     elif shape=="stop":o=octagon(.40)
     elif shape=="circle":o=circle_polygon(.40)
     else:o=r_square(.60,.031)
@@ -111,10 +150,10 @@ def add_back(parts,shape,material,steel):
     polygon("Extruded metal rolled lip",o,-.102,.029,material["rim"],parts)
     return o
 def draw_a7(parts,m):
-    o=[(-.45,.260),(.45,.260),(0,-.520)]
-    polygon("A-7 full red reflector triangle",o,-.116,.012,m["red"],parts)
-    inside=[(-.341,.203),(.341,.203),(0,-.389)]
-    polygon("A-7 proper yellow centre",inside,-.121,.005,m["yellow"],parts)
+    o=rounded_triangle([(-.45,.260),(.45,.260),(0,-.520)],.054)
+    polygon("A-7 900 mm rounded red reflector R54",o,-.116,.012,m["red"],parts)
+    inside=rounded_triangle([(-.341,.203),(.341,.203),(0,-.389)],.024)
+    polygon("A-7 rounded yellow triangle R24",inside,-.121,.005,m["yellow"],parts)
 def draw_stop(parts,m):
     polygon("B-20 thin white border",octagon(.374),-.117,.006,m["white"],parts)
     polygon("B-20 red field inset border",octagon(.352),-.125,.006,m["red"],parts)
